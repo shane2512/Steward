@@ -481,6 +481,30 @@ describe('R12 — price freshness and depeg', () => {
     );
     expect(r.message).toContain('off $1.00');
   });
+  it('denies a payment sized from a broken quote (the micro-USD caps would be meaningless)', () => {
+    const r = R.R12(
+      parsedInput({
+        proposal: payProposal(usdc(50_000)),
+        state: { prices: freshPrice({ microUsd: 1n }) },
+      }),
+    );
+    expect(r.message).toContain('off $1.00');
+  });
+  it('denies a vault withdraw during a depeg but not a risk exit', () => {
+    const depegged = { prices: freshPrice({ microUsd: 900_000n }) };
+    expect(R.R12(parsedInput({ proposal: withdrawProposal(), state: depegged })).result).toBe(
+      'DENY',
+    );
+  });
+  it('still lets an owner sweep run during a depeg', () => {
+    const r = R.R12(
+      parsedInput({
+        proposal: sweepProposal(),
+        state: { prices: freshPrice({ microUsd: 900_000n }) },
+      }),
+    );
+    expect(r.result).toBe('PASS');
+  });
   it('still lets a risk exit run during a depeg', () => {
     const r = R.R12(
       parsedInput({

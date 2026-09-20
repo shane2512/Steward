@@ -11,8 +11,11 @@ import type {
 
 export type Rule = (input: ParsedEvaluationInput) => RuleResult;
 
-export const pass = (code: RuleCode, message?: string): RuleResult =>
-  message === undefined ? { code, result: 'PASS' } : { code, result: 'PASS', message };
+export const pass = (code: RuleCode, message: string): RuleResult => ({
+  code,
+  result: 'PASS',
+  message,
+});
 export const escalate = (code: RuleCode, message: string): RuleResult => ({
   code,
   result: 'ESCALATE',

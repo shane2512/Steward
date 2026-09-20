@@ -108,6 +108,19 @@ describe('evaluate — fail closed (I5)', () => {
     expect(verdict.decision).toBe('DENY');
     expect(verdict.results[0]?.message).toContain('boom');
   });
+  it('denies input whose getters throw something that is not an Error', () => {
+    const hostile = new Proxy(
+      {},
+      {
+        get() {
+          throw 'a bare string';
+        },
+      },
+    ) as EvaluationInput;
+    const verdict = evaluate(hostile);
+    expect(verdict.decision).toBe('DENY');
+    expect(verdict.results[0]?.message).toContain('a bare string');
+  });
   it('denies a self-referential proposal without recursing into it', () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;

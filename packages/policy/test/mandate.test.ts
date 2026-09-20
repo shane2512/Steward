@@ -247,6 +247,10 @@ describe('validatePolicyDraft', () => {
     expect(validatePolicyDraft(draft({ recipients: [alex] })).ok).toBe(true);
   });
 
+  it('accepts a draft with no per-kind thresholds at all', () => {
+    expect(validatePolicyDraft(draft({ approvalThresholdByKind: undefined })).ok).toBe(true);
+  });
+
   it('honours a caller-supplied, tighter set of ceilings', () => {
     const tighter = { ...SYSTEM_CEILINGS, MAX_PER_TX_MICRO_USD: usdc(10) };
     const r = validatePolicyDraft(draft(), tighter);

@@ -8,5 +8,8 @@ export const R00: Rule = (input) => {
   const parsed = zProposal.safeParse(input.proposal);
   return parsed.success
     ? pass('R00', `proposal kind ${parsed.data.kind} is known and well-formed`)
-    : deny('R00', `proposal does not parse: ${parsed.error.issues[0]?.message ?? 'invalid'}`);
+    : deny(
+        'R00',
+        `proposal does not parse: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
+      );
 };

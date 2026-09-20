@@ -12,7 +12,7 @@ import {
   type RuleResult,
   type Verdict,
 } from '@steward/shared';
-import { hashProposal, hashProposalSafe, ZERO_HASH } from './hash';
+import { hashProposal, hashProposalSafe } from './hash';
 import { RULES, type Rule } from './rules';
 
 const EPOCH = new Date(0).toISOString();
@@ -62,11 +62,11 @@ function applyRiskExitOverride(
   results: readonly RuleResult[],
 ): RuleResult[] {
   if (input.proposal.kind !== 'risk_exit') return [...results];
-  const r20 = results.find((r) => r.code === 'R20');
-  if (r20?.result !== 'PASS') return [...results];
+  const r20Passed = results.some((r) => r.code === 'R20' && r.result === 'PASS');
+  if (!r20Passed) return [...results];
   return results.map((r) =>
     r.code === 'R02' && r.result === 'ESCALATE'
-      ? { ...r, result: 'PASS' as const, message: `${r.message ?? ''} (overridden by R20)`.trim() }
+      ? { ...r, result: 'PASS' as const, message: `${r.message} (overridden by R20)` }
       : r,
   );
 }
@@ -107,16 +107,10 @@ function failClosed(input: unknown, message: string): Verdict {
   let evaluatedAt = EPOCH;
   const now = safeField(input, 'now');
   if (now instanceof Date && Number.isFinite(now.getTime())) evaluatedAt = now.toISOString();
-  let proposalHash = ZERO_HASH;
-  try {
-    proposalHash = hashProposalSafe(safeField(input, 'proposal'));
-  } catch {
-    /* keep ZERO_HASH */
-  }
   return {
     decision: 'DENY',
     results: [{ code: 'R00', result: 'DENY', message }],
-    proposalHash,
+    proposalHash: hashProposalSafe(safeField(input, 'proposal')),
     policyVersion: 0,
     walletId: '',
     evaluatedAt,
@@ -131,11 +125,8 @@ export function evaluate(input: EvaluationInput): Verdict {
   try {
     const parsed = zEvaluationInput.safeParse(input);
     if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      return failClosed(
-        input,
-        `evaluation input is invalid: ${issue ? `${issue.path.join('.')}: ${issue.message}` : 'unknown'}`,
-      );
+      const detail = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      return failClosed(input, `evaluation input is invalid: ${detail}`);
     }
     const ev = parsed.data;
     const proposalHash = hashProposal(ev.proposal);

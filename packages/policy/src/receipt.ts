@@ -56,13 +56,18 @@ function mac(receipt: AllowReceipt, key: Uint8Array): Hex {
   return `0x${bytesToHex(hmac(sha256, key, utf8ToBytes(canonicalJson(body(receipt)))))}`;
 }
 
-/** Length-independent, data-independent comparison of two hex MACs. */
+/**
+ * Constant-time string comparison. Both sides are hashed first (the standard digest-compare
+ * trick), so the loop always runs over 32 bytes: neither the content nor the LENGTH of a MAC
+ * changes how long this takes, and there is no early return to time.
+ */
 export function constantTimeEqual(a: string, b: string): boolean {
-  const ab = utf8ToBytes(a);
-  const bb = utf8ToBytes(b);
-  let diff = ab.length ^ bb.length;
-  const n = Math.max(ab.length, bb.length);
-  for (let i = 0; i < n; i++) diff |= (ab[i % ab.length] ?? 0) ^ (bb[i % bb.length] ?? 0);
+  const ha = sha256(utf8ToBytes(a));
+  const hb = sha256(utf8ToBytes(b));
+  const va = new DataView(ha.buffer, ha.byteOffset, ha.byteLength);
+  const vb = new DataView(hb.buffer, hb.byteOffset, hb.byteLength);
+  let diff = 0;
+  for (let i = 0; i < 32; i++) diff |= va.getUint8(i) ^ vb.getUint8(i);
   return diff === 0;
 }
 
@@ -104,7 +109,7 @@ export function signReceipt(
   if (!parsed.success)
     return err({
       code: 'MALFORMED',
-      message: `cannot sign: ${parsed.error.issues[0]?.message ?? 'invalid receipt'}`,
+      message: `cannot sign: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
     });
   return ok({ ...draft, mac: mac(draft, key) });
 }
@@ -132,7 +137,7 @@ export function verifyReceipt(
   if (!parsed.success)
     return err({
       code: 'MALFORMED',
-      message: `receipt does not parse: ${parsed.error.issues[0]?.message ?? 'invalid'}`,
+      message: `receipt does not parse: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
     });
   const r = parsed.data;
 

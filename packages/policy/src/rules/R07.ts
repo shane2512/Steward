@@ -5,7 +5,7 @@
 // This is the rule dust-splitting attacks aim at: the cap is on the SUM over the window, so ten
 // payments of a tenth of the cap hit it exactly like one payment of the cap.
 import { SYSTEM_CEILINGS } from '@steward/shared';
-import { proposalAmountMicroUsd } from '../units';
+import { valueInput } from '../units';
 import { deny, pass, type Rule } from './kit';
 
 const COUNTS_AS_OUTFLOW = ['vault_deposit', 'pay_recipient'] as const;
@@ -14,10 +14,10 @@ export const R07: Rule = (input) => {
   const kind = input.proposal.kind;
   if (!COUNTS_AS_OUTFLOW.some((k) => k === kind)) return pass('R07', `${kind} is not an outflow`);
 
-  const micro = proposalAmountMicroUsd(input);
-  if (!micro.ok) return deny('R07', `cannot value the amount: ${micro.error}`);
+  const valued = valueInput(input);
+  if (!valued.ok) return deny('R07', `cannot value the amount: ${valued.error}`);
 
-  const total = input.ledger.outflowsLast24hMicroUsd + micro.value;
+  const total = input.ledger.outflowsLast24hMicroUsd + valued.value.amountMicroUsd;
   if (total > input.policy.limits.dailyMicroUsd)
     return deny(
       'R07',

@@ -13,18 +13,18 @@ export const R18: Rule = (input) => {
     return deny('R18', `${input.proposal.kind} must not approve anything`);
   if (approvals.length > 1) return deny('R18', `${approvals.length} approvals in one deposit`);
 
-  const approval = approvals[0];
-  if (!approval) return deny('R18', 'approval list is malformed');
   const vault = resolveVault(input.policy, input.proposal.params.vaultId);
   if (!vault) return deny('R18', 'approval targets a vault that is not in the policy');
-  if (!addressEquals(approval.spender, vault.address))
-    return deny('R18', `approval spender ${approval.spender} is not vault ${vault.id}`);
-  if (!input.policy.tokens.some((t) => addressEquals(t.address, approval.token)))
-    return deny('R18', `approval is on token ${approval.token}, which is not a policy token`);
-  if (approval.amount !== input.proposal.params.amount)
-    return deny(
-      'R18',
-      `approval is for ${approval.amount}, not the exact deposit ${input.proposal.params.amount}`,
-    );
+  for (const approval of approvals) {
+    if (!addressEquals(approval.spender, vault.address))
+      return deny('R18', `approval spender ${approval.spender} is not vault ${vault.id}`);
+    if (!input.policy.tokens.some((t) => addressEquals(t.address, approval.token)))
+      return deny('R18', `approval is on token ${approval.token}, which is not a policy token`);
+    if (approval.amount !== input.proposal.params.amount)
+      return deny(
+        'R18',
+        `approval is for ${approval.amount}, not the exact deposit ${input.proposal.params.amount}`,
+      );
+  }
   return pass('R18', `one exact-amount approval to vault ${vault.id}`);
 };

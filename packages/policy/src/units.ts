@@ -82,28 +82,52 @@ export function proposalAmountBaseUnits(proposal: Proposal): bigint | null {
   }
 }
 
-/** The proposal's amount in micro-USD at the oracle price; 0 for amount-less kinds. */
-export function proposalAmountMicroUsd(input: ParsedEvaluationInput): Result<bigint, string> {
-  const amount = proposalAmountBaseUnits(input.proposal);
-  if (amount === null) return ok(0n);
-  const token = usdcToken(input.policy);
-  if (!token) return err('policy has no USDC token');
-  const price = priceOf(input, token.address);
-  if (!price.ok) return err(price.error);
-  return baseUnitsToMicroUsd(amount, token.decimals, price.value.quote);
-}
+/**
+ * Everything the size rules (R06–R10) need, valued ONCE at one oracle quote.
+ *
+ * Deliberately a single fallible step: if the price is missing, zero or the policy has no token,
+ * no number in here exists, and every rule that would have used one denies. Valuing each figure
+ * separately would leave rules asking "what if the amount converted but the balance did not",
+ * which cannot happen and cannot be tested.
+ */
+export type Valuation = {
+  quote: PriceQuote;
+  demoFallback: boolean;
+  /** The proposal's amount in micro-USD; 0 for kinds that carry no amount. */
+  amountMicroUsd: bigint;
+  /** Liquid USDC (agent + treasury). */
+  liquidMicroUsd: bigint;
+  /** Liquid USDC plus every position in a vault the Policy allowlists. */
+  managedMicroUsd: bigint;
+  /** The position in one policy vault, 0 if there is none. */
+  vaultPositionMicroUsd: (vaultId: string) => bigint;
+};
 
-/** Liquid USDC (agent + treasury) in micro-USD. */
-export function liquidMicroUsd(input: ParsedEvaluationInput): Result<bigint, string> {
+export function valueInput(input: ParsedEvaluationInput): Result<Valuation, string> {
   const token = usdcToken(input.policy);
   if (!token) return err('policy has no USDC token');
   const price = priceOf(input, token.address);
   if (!price.ok) return err(price.error);
-  return baseUnitsToMicroUsd(
-    input.state.agentUsdc + input.state.treasuryUsdc,
-    token.decimals,
-    price.value.quote,
+  const quote = price.value.quote;
+  if (quote.microUsd <= 0n) return err('price must be > 0');
+
+  const toMicro = (base: bigint) => toMicroUsd(base, token.decimals, quote.microUsd);
+  const amount = proposalAmountBaseUnits(input.proposal);
+  const liquid = input.state.agentUsdc + input.state.treasuryUsdc;
+  // Only allowlisted vaults count: a stray entry in the state map must not be able to inflate the
+  // denominator R09 divides by.
+  const positions = input.policy.vaults.reduce(
+    (total, v) => total + (input.state.vaultPositions[v.id] ?? 0n),
+    0n,
   );
+  return ok({
+    quote,
+    demoFallback: price.value.demoFallback,
+    amountMicroUsd: amount === null ? 0n : toMicro(amount),
+    liquidMicroUsd: toMicro(liquid),
+    managedMicroUsd: toMicro(liquid + positions),
+    vaultPositionMicroUsd: (vaultId) => toMicro(input.state.vaultPositions[vaultId] ?? 0n),
+  });
 }
 
 /** Deviation from $1.00 in basis points, bigint math (no float, no precision loss). */
