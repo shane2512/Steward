@@ -1,0 +1,10 @@
+node_modules
+.next
+.turbo
+dist
+spikes
+docs
+steward-claude-code-specs
+pnpm-lock.yaml
+packages/db/drizzle
+apps/web/components/ui

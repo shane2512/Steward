@@ -19,3 +19,6 @@ spikes/.ak.out
 spikes/sign/client.js
 spikes/.server.out
 spikes/node_modules/
+*.tsbuildinfo
+next-env.d.ts
+coverage/

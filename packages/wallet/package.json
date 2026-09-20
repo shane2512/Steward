@@ -1,0 +1,17 @@
+{
+  "name": "@steward/wallet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@steward/db": "workspace:*",
+    "@steward/policy": "workspace:*",
+    "@steward/shared": "workspace:*"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@steward/reasoning",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@steward/context": "workspace:*",
+    "@steward/shared": "workspace:*"
+  }
+}
