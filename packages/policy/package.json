@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@steward/shared": "workspace:*"
+    "@steward/shared": "workspace:*",
+    "@noble/hashes": "^2.4.0"
   }
 }

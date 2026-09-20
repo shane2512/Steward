@@ -1,9 +1,10 @@
 // System ceilings — constants, never user-editable (POLICY_ENGINE.md §5, SECURITY §3 L3).
 //
-// Phase 3 owns the final list and `validatePolicyDraft`. Phase 2 needs a subset *now* to bound what a
-// spend permission may grant, so the values below are the POLICY_ENGINE §5 numbers plus three
-// spend-permission-specific bounds. They are deliberately conservative: Phase 3 may tighten them, and
-// must not loosen them without recording a decision.
+// THIS FILE IS THE SINGLE SOURCE OF TRUTH for every ceiling in Steward (D-23). `packages/policy`
+// (`validatePolicyDraft`, rules R06/R07/R14/R19) and `packages/wallet` (spend-permission bounds)
+// both read it; neither re-declares a limit. Phase 3 added the risk-parameter bounds below and
+// loosened nothing. It lives in `shared` rather than `policy` because `packages/wallet` must not
+// import `packages/policy`.
 //
 // I12: all money is bigint micro-USD (6 decimals). 1 USDC == 1_000_000 micro-USD.
 
@@ -20,6 +21,14 @@ export const SYSTEM_CEILINGS = {
   PRICE_MAX_AGE_SEC: 60,
   RECEIPT_TTL_SEC: 120,
   MIN_CONFIDENCE_AUTONOMOUS: 0.6,
+
+  // --- Risk parameters (Phase 3; T16 — a mandate must not be able to disable its own guards) ----
+  /** A depeg threshold wider than 5% would let a genuinely broken stable through R12. */
+  MAX_DEPEG_THRESHOLD_BPS: 500,
+  /** A drawdown threshold wider than 20% would make `risk_exit` never fire. */
+  MAX_VAULT_DRAWDOWN_BPS: 2_000,
+  /** Both risk thresholds must be armed: 0 disables the guard. */
+  MIN_RISK_THRESHOLD_BPS: 1,
 
   // --- Spend Permission bounds (Phase 2; the on-chain authority cap, SECURITY §3 L2) -------------
   /** A permission may never grant more per period than the daily hard cap. */

@@ -3,6 +3,8 @@ import { getAddress, isAddress, type Address } from 'viem';
 import { err, ok, type Result } from './result';
 
 export type { Address };
+/** 0x-prefixed hex string (same shape as viem's `Hex`); re-exported so pure packages need no viem. */
+export type Hex = `0x${string}`;
 
 /** Checksum an address. Strict: mixed-case input must already carry a valid checksum. */
 export function checksum(input: string): Result<Address> {
