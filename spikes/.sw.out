@@ -1,0 +1,10 @@
+Coinbase Smart Wallet (counterfactual): 0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C | deployed: false
+USDC faucet tx: 0xb5c13d5520489c43e628b3f93d5fa9b62d7892cbf7ff02568777dcce90784651
+smart wallet USDC: 1000000
+deployed via factory: 0x961bfaf70215b8e68d208f8c305a530fc8fbe607844fd54dbdafe0203c8eaef0 false
+manager added as owner: 0x0bbeb714c7f66006f39f1d977e85e8c7e514002da10286fc6921ed99ee73f26b
+signature hex chars: 450 (65-byte EOA would be 132) | 6492 wrapped: false
+V-10 viem verifyTypedData (undeployed smart wallet, ERC-6492): true
+approveWithSignature: complete 0xa403d31bb0c3164106d0e1c3cc69f79e01b67cd1392636f38aa61c2c9906dd6c
+isApproved: true
+spend 1 USDC: complete 0xb832ce0a2af4457bbbb3dff3191b23adb53eee15f8f5a86c4f2abe275981386c | smart wallet USDC: 0 | deployed now: true

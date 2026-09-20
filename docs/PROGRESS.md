@@ -3,7 +3,7 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 1 complete, awaiting human "continue"; next Phase 2 requires Opus**
+Phase: **Phase 2 in progress (Opus)**; Phase 1 complete 2026-09-20
 Required model: Phase 2 = Opus
 Last updated: 2026-09-20
 
@@ -74,10 +74,10 @@ Last updated: 2026-09-20
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
 | D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
-| D-2 | 2026-09-20 | PROPOSED (human OK needed, Phase 2): vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
-| D-3 | 2026-09-20 | PROPOSED: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
-| D-4 | 2026-09-20 | PROPOSED spec fix: SERV `models.list()` unusable; validate model via raw `GET /v1/models` (`items[].modelId`); system message required | V-01 finding | none |
-| D-5 | 2026-09-20 | PROPOSED (needs human OK): a wallet that signs via plain ECDSA (EOA / Coinbase Wallet app) cannot grant spend permissions. Onboarding must require a Coinbase Smart Wallet (`smartWalletOnly`) and reject EOAs (detect via signature/1271 path or `getCode`+connector) | Found during V-05 live test | none |
+| D-2 | 2026-09-20 | APPROVED by human 2026-09-20: vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
+| D-3 | 2026-09-20 | APPROVED by human 2026-09-20: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
+| D-4 | 2026-09-20 | APPROVED by human 2026-09-20 (spec fix): SERV `models.list()` unusable; validate model via raw `GET /v1/models` (`items[].modelId`); system message required | V-01 finding | none |
+| D-5 | 2026-09-20 | APPROVED by human 2026-09-20: a wallet that signs via plain ECDSA (EOA / Coinbase Wallet app) cannot grant spend permissions. Onboarding must require a Coinbase Smart Wallet (`smartWalletOnly`) and reject EOAs (detect via signature/1271 path or `getCode`+connector) | Found during V-05 live test | none |
 | D-6 | 2026-09-20 | pnpm 11.25 used instead of pnpm 9 (`packageManager: pnpm@11.25.0`). pnpm 11 blocks dependency build scripts: approved only `esbuild` and `sharp` via `allowBuilds` in pnpm-workspace.yaml (pnpm 11 key; `onlyBuiltDependencies` is the pnpm 9/10 name) | Installed locally; spec version is stale | Install pnpm 9 |
 | D-7 | 2026-09-20 | Deps added (Phase 1): turbo (task runner), typescript, vitest + fast-check (tests/property tests), eslint + typescript-eslint + @eslint/js (lint), prettier, dependency-cruiser (I1/I2/I3 boundaries), zod (boundaries), pino (redacting logs), viem (checksums, SIWE, chain client), @noble/hashes (sha256 canonical hash; policy-pure), drizzle-orm + drizzle-kit + pg (schema/migrations; pg over postgres.js for pg-boss/drizzle parity), pg-boss (queue, no extra infra), next + react + react-dom + tailwindcss + @tailwindcss/postcss + postcss (web skeleton), iron-session (session cookie), clsx + tailwind-merge (shadcn `cn` helper), tsx (run TS in worker/migrate), @types/* | Each per ARCHITECTURE §3 / PHASES 1.x | - |
 | D-8 | 2026-09-20 | SIWE uses viem/siwe (parse/validate/nonce) + injected `publicClient.verifyMessage` verifier; the `siwe` npm package (ethers peer) is NOT added. Nonce lives in the iron-session cookie (5 min TTL, cleared on success), so no nonce table. Domain is taken from the request host, chainId must equal CHAIN_ID. Only EOA-tested (V-10 partial); D-5 EOA rejection NOT implemented (TODO in apps/web/lib/siwe.ts) | Fewer deps, no schema drift from DATA_MODEL | `siwe` package; DB nonce table |
