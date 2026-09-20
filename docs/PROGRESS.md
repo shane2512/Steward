@@ -3,15 +3,15 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: 1 — in progress (Phase 0 closed 2026-09-20)
-Required model: Sonnet (task 1.9 Opus)
+Phase: **Phase 1 complete, awaiting human "continue"; next Phase 2 requires Opus**
+Required model: Phase 2 = Opus
 Last updated: 2026-09-20
 
 ## Phase status
 | Phase | Title | Model | Status | Gate passed | Notes |
 |---|---|---|---|---|---|
 | 0 | Verification spike & repo bootstrap | Sonnet | ✅ | 2026-09-20 | V-10 partial (no real Smart Wallet), V-13 false->MockPriceFeed, V-09 fallback; human approved carrying V-10 to Phase 1.8/7.6 | | |
-| 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ◐ | | |
+| 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ✅ | 2026-09-20 | Gate green: typecheck 9/9, lint clean, check:arch 53 modules/63 deps 0 violations, test 7 files/43 tests |
 | 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ☐ | | |
 | 3 | Policy Engine & mandate validator | Opus | ☐ | | |
 | 4 | SERV reasoning & injection defenses | Opus | ☐ | | |
@@ -30,8 +30,27 @@ Last updated: 2026-09-20
 - [x] 1.6 constraints/indexes
 - [x] 1.7 apps/web + apps/worker skeleton
 - [x] 1.8 SIWE auth
-- [ ] 1.9 (Opus) audit log hash chain
+- [x] 1.9 (Opus) audit log hash chain
 - [x] 1.10 CI
+
+## Phase 1 Exit Gate result (2026-09-20)
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | ✅ 9/9 turbo tasks |
+| `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style" |
+| `pnpm check:arch` | ✅ no dependency violations (53 modules, 63 dependencies cruised) |
+| `pnpm test` | ✅ 7 files / 43 tests passed in 4.27 s (9 of them `packages/db/test/audit.test.ts`) |
+| audit tamper test | ✅ `verifyChain` returns the exact tampered row id + `row_hash_mismatch` |
+| fresh-DB migrations | ✅ `freshTestDb()` drops/creates `steward_test` and applies 0000+0001 on every DB test file; `pnpm db:migrate` also applied 0001 to the dev DB (both triggers present in `\dS+ audit_log`) |
+| `pnpm dev` (web :3000 + worker health job) | ✅ verified in the 1.7/1.8 session; **not re-run** in the 1.9 session |
+
+## Opus self-review — audit design vs I6/I7 (1.9)
+- **I6 (append-only)** — DB-level `audit_log_no_mutation` trigger covers UPDATE, DELETE and (statement-level) TRUNCATE; `REVOKE UPDATE, DELETE, TRUNCATE … FROM PUBLIC` added. Tested for all three. `appendAudit` is the only writer and computes the chain under a per-chain advisory lock, so parallel writers cannot fork it (50-way test: gapless ids, 50 distinct `prev_hash`).
+- **I6 residual risks:** (a) a superuser/table owner can `ALTER TABLE … DISABLE TRIGGER` — exactly what the tamper test does; detection (not prevention) is the control, hence the hash chain. In production the app role must NOT own the table (see D-15). (b) **Tail truncation is undetectable by a pure hash chain** — see Known issues; `verifyChain` returns `head` so an external anchor is a one-line addition later. (c) `id` gaps are possible after a rolled-back transaction (bigserial), so `verifyChain` deliberately checks chain linkage only, not id contiguity.
+- **I5 (fail closed)** — `appendAudit` never throws; every failure (secret in payload, DB error, empty insert) returns `Err` and the caller must abort. Nothing is written when a payload is refused (asserted in the test).
+- **I7 (owner always wins)** — `packages/db/src/audit.ts` imports only `drizzle-orm` + `@steward/shared`; no reasoning/wallet/network imports, so freeze/revoke/sweep can audit with SERV or the worker down (`check:arch` green). **Open design note for Phase 8:** on owner paths, a failed audit write must not silently swallow the owner action — freeze must still apply and the failure must be surfaced/retried, otherwise a broken DB would let I5 override I7. Decide it explicitly in 8.1.
+- **I12 / determinism** — payload is normalized through `canonicalJson` before insert (bigint → decimal string, Date → ISO), so the stored jsonb reads back identical to what was hashed; `created_at` is generated in app code (injectable clock) and hashed as the stored ISO value, so no JS/Postgres precision mismatch.
+- Remaining nit: a payload containing a non-integer float could in principle be renormalized by jsonb; money is bigint (I12) so this cannot affect amounts. Not worth guarding today.
 
 ## Verification log (Phase 0)
 | ID | Result | Evidence (link/file) | Date |
@@ -67,9 +86,16 @@ Last updated: 2026-09-20
 | D-11 | 2026-09-20 | UUID PKs use gen_random_uuid() (v4); Postgres 16 has no native v7. Order by created_at | No extension needed | uuid-ossp / app-side v7 |
 | D-12 | 2026-09-20 | env parsing: empty string treated as unset; SESSION_SECRET >= 32 chars; CHAIN_ID 8453 needs STEWARD_ALLOW_MAINNET (I8); DEMO_MODE only on 84532 (I11). Lookup that changed code: zod 4 `.default()` on a transformed enum takes the OUTPUT type (`.default(false)`) | I8/I11 fail-closed | - |
 | D-13 | 2026-09-20 | Stray CLAUDE.md that appeared at repo root is git-ignored (`/CLAUDE.md`); docs/CLAUDE.md is canonical | Avoid duplicate manual | - |
+| D-14 | 2026-09-20 | Audit rows with no `wallet_id` go on a single **system chain** (`wallet_id IS NULL`, advisory-lock key `'audit:system'`), as DATA_MODEL already states ("global chain for null wallet"). Rejected a sentinel UUID: it would need a fake `wallets` row or break the (deliberately absent) FK, and `IS NULL` indexes fine on `audit_log_wallet_id_idx`. `AUDIT_GENESIS_PREV_HASH` = `0x` + 64 zeros for every chain | One chain per wallet must stay independent so a wallet's chain can be verified/exported alone | Sentinel UUID; one global chain for everything (would serialize all wallets) |
+| D-15 | 2026-09-20 | `row_hash` = sha256(canonicalJson of the **whole row content** — walletId, actor, event, entityType, entityId, payload, createdAt, prevHash) rather than SECURITY §7's `sha256(prev_hash ‖ canonical_json(payload))`: the §7 form leaves actor/event/entity/timestamp mutable without detection. Strict superset, same primitives (`hashCanonical`). Advisory lock uses the two-int form `pg_advisory_xact_lock(0x41554454, hashtext(chainKey))` so it can never collide with the Phase 6 per-wallet loop lock. DB role: the app role should hold only `INSERT, SELECT` on `audit_log` and must not own the table; only `REVOKE … FROM PUBLIC` is in the migration, because in dev/test the app role IS the owner and a GRANT-based setup would break `freshTestDb()` | §7 wording is weaker than I6 intends; docs conflict rule says choose the safer option and record it | Keep §7 exactly (rejected); add roles to the migration (rejected: breaks test setup) |
+| D-16 | 2026-09-20 | `appendAudit` **refuses** (Err `SECRET_IN_PAYLOAD`) payloads whose keys match `private key / secret / mnemonic / seed phrase / passphrase / password / api key / signature / authorization / cookie` instead of scrubbing them; `token` is deliberately NOT in the pattern (USDC token fields are everywhere). Consequence for Phase 5+: log signature **hashes**, never signatures | Fail closed (I5) and fix the call site; a scrubbed row hides that a secret was nearly persisted | Scrub to `[REDACTED]` |
 
 ## Known issues / risks
-- Phase 1 open: 1.9 (audit trigger, audit.ts writer, verifyChain, tamper/concurrency tests) assigned to Opus; Phase 1 NOT complete until done.
+### Audit log (1.9) limitations
+- **Tail truncation is undetectable.** Deleting the last N rows of a chain (with the trigger disabled by a superuser) leaves a chain that still verifies. Mitigation, deferred: `verifyChain` already returns `head` (last `row_hash`) and `rows`; periodically persist `(walletId, rows, head, at)` somewhere the app role cannot rewrite — an anchor row in a separate table owned by another role, a notification/Telegram message, or on-chain — and compare on verify. Cheapest version belongs with `/api/audit/verify` in Phase 8.4.
+- **The trigger only stops the app role, not the DB owner/superuser.** `ALTER TABLE audit_log DISABLE TRIGGER` defeats it (that is exactly how the tamper test works); the hash chain is the detection layer. Production setup (not applied in the migration because dev/test run as the owner): create a separate owner role, and `GRANT INSERT, SELECT ON audit_log TO <app_role>` only — no UPDATE/DELETE/TRUNCATE, no ownership.
+- No retention/rotation and no pagination in `verifyChain` (whole chain is loaded); fine at hackathon volume.
+- A failed audit write currently aborts the caller (I5). Phase 8.1 must decide the owner-path exception so a DB problem cannot block freeze/revoke/sweep (I7).
 - SIWE only tested with EOAs; ERC-1271/6492 path via publicClient.verifyMessage untested with a real Smart Wallet (V-10 partial, D-5 open).
 - `pnpm dev` runs `docker compose up -d --wait` then migrates; needs Docker Desktop running. First `docker pull postgres:16` was flaky (EOF), retried OK.
 - CI workflow (.github/workflows/ci.yml) written but not run remotely.
@@ -79,4 +105,7 @@ Last updated: 2026-09-20
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- Phase 1. Hackathon deadline Sep 28 00:00 UTC (8 days): keep MUST scope tight.
+- **Phase 1 is complete; waiting for the human to say "continue". Phase 2 (wallet layer) requires Opus (`/model opus`).**
+- Phase 2 must also resolve the PROPOSED decisions D-2, D-3 and D-5 with the human.
+- Audit writer API for later phases: `appendAudit(db, { walletId?, actor, event, entityType?, entityId?, payload, createdAt? }) => Promise<Result<AuditRow, AuditError>>` and `verifyChain(db, walletId | null) => Promise<Result<{rows, head}, {rowId, reason, expected, actual}>>`, exported from `@steward/db`. Never insert into `audit_log` directly. Payload must contain no secret-looking keys (D-16).
+- Hackathon deadline Sep 28 00:00 UTC (8 days): keep MUST scope tight.
