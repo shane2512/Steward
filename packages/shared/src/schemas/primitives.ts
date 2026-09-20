@@ -12,6 +12,10 @@ export const zAmount = z
   .union([z.bigint(), z.string().regex(/^\d+$/, 'expected decimal digits')])
   .transform((v) => BigInt(v));
 
-export const zHex = z.string().regex(/^0x[0-9a-fA-F]*$/, 'expected 0x hex') as z.ZodType<`0x${string}`>;
-export const zHash = z.string().regex(/^0x[0-9a-f]{64}$/, 'expected 32-byte lowercase hex') as z.ZodType<`0x${string}`>;
+export const zHex = z
+  .string()
+  .regex(/^0x[0-9a-fA-F]*$/, 'expected 0x hex') as z.ZodType<`0x${string}`>;
+export const zHash = z
+  .string()
+  .regex(/^0x[0-9a-f]{64}$/, 'expected 32-byte lowercase hex') as z.ZodType<`0x${string}`>;
 export const zChainId = z.union([z.literal(84532), z.literal(8453)]);

@@ -38,7 +38,9 @@ export const zProposal = z.discriminatedUnion('kind', [
   variant('vault_withdraw', z.object({ vaultId: z.string(), amount: zAmount }).strict()),
   variant(
     'pay_recipient',
-    z.object({ recipientId: z.string(), amount: zAmount, obligationId: z.string().optional() }).strict(),
+    z
+      .object({ recipientId: z.string(), amount: zAmount, obligationId: z.string().optional() })
+      .strict(),
   ),
   variant('sweep_home', z.object({}).strict()),
   variant(

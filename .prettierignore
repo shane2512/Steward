@@ -8,3 +8,4 @@ steward-claude-code-specs
 pnpm-lock.yaml
 packages/db/drizzle
 apps/web/components/ui
+CLAUDE.md

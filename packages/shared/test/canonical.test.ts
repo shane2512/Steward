@@ -14,7 +14,9 @@ describe('canonical json', () => {
 
   it('sha256 known vector', () => {
     // sha256('{}')
-    expect(hashCanonical({})).toBe('0x44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a');
+    expect(hashCanonical({})).toBe(
+      '0x44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',
+    );
   });
 
   const json: fc.Arbitrary<unknown> = fc.letrec((tie) => ({

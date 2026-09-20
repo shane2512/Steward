@@ -1,8 +1,15 @@
 import { createCoinbaseWalletSDK } from "@coinbase/wallet-sdk";
 const $ = (id: string) => document.getElementById(id)!;
 const log = (m: string) => { $("log").textContent += m + "\n"; };
-const sdk = createCoinbaseWalletSDK({ appName: "Steward spike", preference: { options: "smartWalletOnly" } });
-const provider = sdk.getProvider();
+const found: { info: { name: string; rdns: string }; provider: any }[] = [];
+window.addEventListener("eip6963:announceProvider", (e: any) => found.push(e.detail));
+window.dispatchEvent(new Event("eip6963:requestProvider"));
+await new Promise((r) => setTimeout(r, 800));
+const w = window as any;
+log("EIP-6963 wallets found: " + (found.map((f) => f.info.name + " [" + f.info.rdns + "]").join(", ") || "none") + " | window.ethereum: " + (w.ethereum ? "present" : "absent") + " | window.coinbaseWalletExtension: " + (w.coinbaseWalletExtension ? "present" : "absent"));
+const cb = found.find((f) => /coinbase/i.test(f.info.rdns + f.info.name) && !/smart|keys/i.test(f.info.name))?.provider ?? w.coinbaseWalletExtension ?? found[0]?.provider ?? w.ethereum;
+const provider = cb ?? createCoinbaseWalletSDK({ appName: "Steward spike", preference: { options: "smartWalletOnly" } }).getProvider();
+log("using: " + (cb ? "injected extension" : "Smart Wallet popup (no extension detected)"));
 let account = "";
 const params = await (await fetch("/params")).json();
 const post = (path: string, body: unknown) => fetch(path, { method: "POST", body: JSON.stringify(body) });

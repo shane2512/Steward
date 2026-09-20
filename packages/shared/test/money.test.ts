@@ -22,19 +22,27 @@ describe('money', () => {
 
   it('property: format/parse roundtrip for any bigint >= 0', () => {
     fc.assert(
-      fc.property(fc.bigInt({ min: 0n, max: 10n ** 30n }), fc.integer({ min: 0, max: 18 }), (v, d) => {
-        expect(parseUnits(formatUnits(v, d), d)).toEqual({ ok: true, value: v });
-      }),
+      fc.property(
+        fc.bigInt({ min: 0n, max: 10n ** 30n }),
+        fc.integer({ min: 0, max: 18 }),
+        (v, d) => {
+          expect(parseUnits(formatUnits(v, d), d)).toEqual({ ok: true, value: v });
+        },
+      ),
     );
   });
 
   it('property: micro-USD at $1 price equals base units for 6-dec tokens; monotonic in amount', () => {
     fc.assert(
-      fc.property(fc.bigInt({ min: 0n, max: 10n ** 24n }), fc.bigInt({ min: 0n, max: 10n ** 24n }), (a, b) => {
-        expect(toMicroUsd(a, 6, 1_000_000n)).toBe(a);
-        const [lo, hi] = a <= b ? [a, b] : [b, a];
-        expect(toMicroUsd(lo, 6, 999_000n)).toBeLessThanOrEqual(toMicroUsd(hi, 6, 999_000n));
-      }),
+      fc.property(
+        fc.bigInt({ min: 0n, max: 10n ** 24n }),
+        fc.bigInt({ min: 0n, max: 10n ** 24n }),
+        (a, b) => {
+          expect(toMicroUsd(a, 6, 1_000_000n)).toBe(a);
+          const [lo, hi] = a <= b ? [a, b] : [b, a];
+          expect(toMicroUsd(lo, 6, 999_000n)).toBeLessThanOrEqual(toMicroUsd(hi, 6, 999_000n));
+        },
+      ),
     );
   });
 });

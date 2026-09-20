@@ -8,7 +8,9 @@ export const zPolicy = z.object({
   walletId: z.string(),
   chainId: zChainId,
   treasuryAddress: zAddress,
-  tokens: z.array(z.object({ symbol: z.literal('USDC'), address: zAddress, decimals: z.literal(6) })),
+  tokens: z.array(
+    z.object({ symbol: z.literal('USDC'), address: zAddress, decimals: z.literal(6) }),
+  ),
   vaults: z.array(
     z.object({
       id: z.string(),

@@ -38,7 +38,12 @@ export const spendPermissionStatus = pgEnum('spend_permission_status', [
   'expired',
 ]);
 export const recurrence = pgEnum('recurrence', ['none', 'monthly']);
-export const obligationStatus = pgEnum('obligation_status', ['scheduled', 'paid', 'failed', 'cancelled']);
+export const obligationStatus = pgEnum('obligation_status', [
+  'scheduled',
+  'paid',
+  'failed',
+  'cancelled',
+]);
 export const verdictDecision = pgEnum('verdict_decision', ['ALLOW', 'ESCALATE', 'DENY']);
 export const approvalStatus = pgEnum('approval_status', [
   'pending',
@@ -129,7 +134,9 @@ export const policies = pgTable(
   (t) => [
     primaryKey({ columns: [t.walletId, t.version] }),
     // exactly one active policy per wallet
-    uniqueIndex('policies_one_active_per_wallet').on(t.walletId).where(sql`${t.status} = 'active'`),
+    uniqueIndex('policies_one_active_per_wallet')
+      .on(t.walletId)
+      .where(sql`${t.status} = 'active'`),
   ],
 );
 

@@ -45,16 +45,31 @@ describe('logger redaction', () => {
 });
 
 describe('schemas', () => {
-  const base = { expectedDeltas: [], rationale: 'r', citedFactIds: [], confidence: 0.9, source: 'serv' };
+  const base = {
+    expectedDeltas: [],
+    rationale: 'r',
+    citedFactIds: [],
+    confidence: 0.9,
+    source: 'serv',
+  };
   it('proposal: parses amounts to bigint; rejects unknown kind, extra params, numbers-as-floats', () => {
-    const p = zProposal.parse({ ...base, kind: 'vault_deposit', params: { vaultId: 'v1', amount: '1000000' } });
+    const p = zProposal.parse({
+      ...base,
+      kind: 'vault_deposit',
+      params: { vaultId: 'v1', amount: '1000000' },
+    });
     expect(p.kind === 'vault_deposit' && p.params.amount).toBe(1_000_000n);
     expect(zProposal.safeParse({ ...base, kind: 'transfer_all', params: {} }).success).toBe(false);
     expect(
-      zProposal.safeParse({ ...base, kind: 'pay_recipient', params: { recipientId: 'r', amount: '1', to: USDC } })
-        .success,
+      zProposal.safeParse({
+        ...base,
+        kind: 'pay_recipient',
+        params: { recipientId: 'r', amount: '1', to: USDC },
+      }).success,
     ).toBe(false);
-    expect(zProposal.safeParse({ ...base, kind: 'pull_allowance', params: { amount: 1.5 } }).success).toBe(false);
+    expect(
+      zProposal.safeParse({ ...base, kind: 'pull_allowance', params: { amount: 1.5 } }).success,
+    ).toBe(false);
   });
   it('policy: rejects non-checksummed addresses', () => {
     expect(zPolicy.safeParse({}).success).toBe(false);
