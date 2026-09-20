@@ -15,6 +15,7 @@ export default tseslint.config(
       'packages/db/drizzle/**',
       'apps/web/components/ui/**',
       '**/*.cjs',
+      '**/next-env.d.ts',
     ],
   },
   js.configs.recommended,
