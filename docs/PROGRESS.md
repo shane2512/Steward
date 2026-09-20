@@ -10,11 +10,6 @@ Last updated: 2026-09-20
 ## Phase status
 | Phase | Title | Model | Status | Gate passed | Notes |
 |---|---|---|---|---|---|
-| D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
-| D-2 | 2026-09-20 | PROPOSED (human OK needed, Phase 2): vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
-| D-3 | 2026-09-20 | PROPOSED: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
-| D-5 | 2026-09-20 | PROPOSED (needs human OK): a wallet that signs via plain ECDSA (EOA / Coinbase Wallet app) cannot grant spend permissions. Onboarding must require a Coinbase Smart Wallet (`smartWalletOnly`) and reject EOAs (detect via signature/1271 path or `getCode`+connector) | Found during V-05 live test | none |
-| D-4 | 2026-09-20 | PROPOSED spec fix: SERV `models.list()` unusable; validate model via raw `GET /v1/models` (`items[].modelId`); system message required | V-01 finding | none |
 | 0 | Verification spike & repo bootstrap | Sonnet | ✅ | 2026-09-20 | V-10 partial (no real Smart Wallet), V-13 false->MockPriceFeed, V-09 fallback; human approved carrying V-10 to Phase 1.8/7.6 | | |
 | 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ◐ | | |
 | 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ☐ | | |
@@ -27,16 +22,16 @@ Last updated: 2026-09-20
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
 
 ## Current phase plan (Phase 1)
-- [ ] 1.1 workspace+turbo+tsconfig/eslint/prettier/vitest
-- [ ] 1.2 root scripts
-- [ ] 1.3 dependency-cruiser + violation fixture
-- [ ] 1.4 packages/shared
-- [ ] 1.5 docker-compose + packages/db (all tables)
-- [ ] 1.6 constraints/indexes
-- [ ] 1.7 apps/web + apps/worker skeleton
-- [ ] 1.8 SIWE auth
+- [x] 1.1 workspace+turbo+tsconfig/eslint/prettier/vitest
+- [x] 1.2 root scripts
+- [x] 1.3 dependency-cruiser + violation fixture
+- [x] 1.4 packages/shared
+- [x] 1.5 docker-compose + packages/db (all tables)
+- [x] 1.6 constraints/indexes
+- [x] 1.7 apps/web + apps/worker skeleton
+- [x] 1.8 SIWE auth
 - [ ] 1.9 (Opus) audit log hash chain
-- [ ] 1.10 CI
+- [x] 1.10 CI
 
 ## Verification log (Phase 0)
 | ID | Result | Evidence (link/file) | Date |
@@ -59,8 +54,26 @@ Last updated: 2026-09-20
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
+| D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
+| D-2 | 2026-09-20 | PROPOSED (human OK needed, Phase 2): vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
+| D-3 | 2026-09-20 | PROPOSED: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
+| D-4 | 2026-09-20 | PROPOSED spec fix: SERV `models.list()` unusable; validate model via raw `GET /v1/models` (`items[].modelId`); system message required | V-01 finding | none |
+| D-5 | 2026-09-20 | PROPOSED (needs human OK): a wallet that signs via plain ECDSA (EOA / Coinbase Wallet app) cannot grant spend permissions. Onboarding must require a Coinbase Smart Wallet (`smartWalletOnly`) and reject EOAs (detect via signature/1271 path or `getCode`+connector) | Found during V-05 live test | none |
+| D-6 | 2026-09-20 | pnpm 11.25 used instead of pnpm 9 (`packageManager: pnpm@11.25.0`). pnpm 11 blocks dependency build scripts: approved only `esbuild` and `sharp` via `allowBuilds` in pnpm-workspace.yaml (pnpm 11 key; `onlyBuiltDependencies` is the pnpm 9/10 name) | Installed locally; spec version is stale | Install pnpm 9 |
+| D-7 | 2026-09-20 | Deps added (Phase 1): turbo (task runner), typescript, vitest + fast-check (tests/property tests), eslint + typescript-eslint + @eslint/js (lint), prettier, dependency-cruiser (I1/I2/I3 boundaries), zod (boundaries), pino (redacting logs), viem (checksums, SIWE, chain client), @noble/hashes (sha256 canonical hash; policy-pure), drizzle-orm + drizzle-kit + pg (schema/migrations; pg over postgres.js for pg-boss/drizzle parity), pg-boss (queue, no extra infra), next + react + react-dom + tailwindcss + @tailwindcss/postcss + postcss (web skeleton), iron-session (session cookie), clsx + tailwind-merge (shadcn `cn` helper), tsx (run TS in worker/migrate), @types/* | Each per ARCHITECTURE §3 / PHASES 1.x | - |
+| D-8 | 2026-09-20 | SIWE uses viem/siwe (parse/validate/nonce) + injected `publicClient.verifyMessage` verifier; the `siwe` npm package (ethers peer) is NOT added. Nonce lives in the iron-session cookie (5 min TTL, cleared on success), so no nonce table. Domain is taken from the request host, chainId must equal CHAIN_ID. Only EOA-tested (V-10 partial); D-5 EOA rejection NOT implemented (TODO in apps/web/lib/siwe.ts) | Fewer deps, no schema drift from DATA_MODEL | `siwe` package; DB nonce table |
+| D-9 | 2026-09-20 | audit_log columns follow DATA_MODEL exactly (`id` bigserial, `prev_hash`, `row_hash`, `created_at`, ...); no separate `seq`/`hash` columns: `id` is the chain order. Trigger and writer are task 1.9 | Spec is source of truth | Add seq column |
+| D-10 | 2026-09-20 | Local Postgres host port is 5433 (5432 taken by a local Postgres). DB tests use database `steward_test` on the same server, dropped/recreated per test file; they FAIL (never skip) if Postgres is unreachable | Port conflict; no silent passes | - |
+| D-11 | 2026-09-20 | UUID PKs use gen_random_uuid() (v4); Postgres 16 has no native v7. Order by created_at | No extension needed | uuid-ossp / app-side v7 |
+| D-12 | 2026-09-20 | env parsing: empty string treated as unset; SESSION_SECRET >= 32 chars; CHAIN_ID 8453 needs STEWARD_ALLOW_MAINNET (I8); DEMO_MODE only on 84532 (I11). Lookup that changed code: zod 4 `.default()` on a transformed enum takes the OUTPUT type (`.default(false)`) | I8/I11 fail-closed | - |
+| D-13 | 2026-09-20 | Stray CLAUDE.md that appeared at repo root is git-ignored (`/CLAUDE.md`); docs/CLAUDE.md is canonical | Avoid duplicate manual | - |
 
 ## Known issues / risks
+- Phase 1 open: 1.9 (audit trigger, audit.ts writer, verifyChain, tamper/concurrency tests) assigned to Opus; Phase 1 NOT complete until done.
+- SIWE only tested with EOAs; ERC-1271/6492 path via publicClient.verifyMessage untested with a real Smart Wallet (V-10 partial, D-5 open).
+- `pnpm dev` runs `docker compose up -d --wait` then migrates; needs Docker Desktop running. First `docker pull postgres:16` was flaky (EOF), retried OK.
+- CI workflow (.github/workflows/ci.yml) written but not run remotely.
+- shadcn/ui: minimal init only (components.json, lib/utils.ts, empty components/ui); no components generated yet.
 - Local pnpm is 11.25 (spec says 9); Node 22.13.1, Docker 29.6.2, Foundry 1.5.1 present.
 - Repo root contains duplicate copies of the spec .md files, `steward-claude-code-specs/` and the .zip; `docs/` is canonical. Zip and unpacked folder are git-ignored; root duplicates left untouched pending human OK to delete.
 - No `.env.local` present yet; credentials needed for spikes.
