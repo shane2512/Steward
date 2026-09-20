@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.next/
+out/
+dist/
+broadcast/
+cache/
+*.log
+.turbo/
+# spec bundle (already unpacked into docs/)
+steward-claude-code-specs.zip
+steward-claude-code-specs/
