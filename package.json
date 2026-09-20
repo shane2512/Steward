@@ -19,7 +19,8 @@
     "db:migrate": "pnpm --filter @steward/db migrate",
     "db:generate": "pnpm --filter @steward/db generate",
     "db:seed:demo": "node scripts/not-yet.mjs db:seed:demo 9",
-    "contracts:test": "node scripts/not-yet.mjs contracts:test 2"
+    "contracts:test": "forge test --root contracts",
+    "contracts:build": "forge build --root contracts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

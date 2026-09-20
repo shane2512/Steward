@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/dist/**',
       'spikes/**',
       'docs/**',
+      'contracts/**',
       'steward-claude-code-specs/**',
       'scripts/fixtures/**',
       'packages/db/drizzle/**',
