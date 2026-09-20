@@ -3,16 +3,16 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 2 in progress (Opus)**; Phase 1 complete 2026-09-20
-Required model: Phase 2 = Opus
-Last updated: 2026-09-20
+Phase: **Phase 2 complete (Opus)**, awaiting human "continue"; Phase 1 complete 2026-09-20
+Required model: Phase 3 = Opus
+Last updated: 2026-09-21
 
 ## Phase status
 | Phase | Title | Model | Status | Gate passed | Notes |
 |---|---|---|---|---|---|
 | 0 | Verification spike & repo bootstrap | Sonnet | ✅ | 2026-09-20 | V-10 partial (no real Smart Wallet), V-13 false->MockPriceFeed, V-09 fallback; human approved carrying V-10 to Phase 1.8/7.6 | | |
 | 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ✅ | 2026-09-20 | Gate green: typecheck 9/9, lint clean, check:arch 53 modules/63 deps 0 violations, test 7 files/43 tests |
-| 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ☐ | | |
+| 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 86 modules/152 deps 0 violations, test 16 files/164 tests, contracts:test 16/16. Mocks live on 84532; live spend + revoke done through product code |
 | 3 | Policy Engine & mandate validator | Opus | ☐ | | |
 | 4 | SERV reasoning & injection defenses | Opus | ☐ | | |
 | 5 | Risk gate, executor, confirmer | Opus | ☐ | | |
@@ -20,6 +20,124 @@ Last updated: 2026-09-20
 | 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
+
+## Phase 2 — tasks (all done 2026-09-21)
+- [x] 2.1 `contracts/` Foundry project: MockVault (OZ ERC-4626 over real USDC), MockPriceFeed, 16 tests, deployed to Base Sepolia
+- [x] 2.2 `packages/wallet/src/agentkit.ts`: `buildAgentKit`, action-name drift assertion, D-1 unhandledRejection logger, I8 network guard
+- [x] 2.3 `provisionAgentWallet(userId)`: idempotent, stores address + ref, audits `WALLET_PROVISIONED`
+- [x] 2.4 `spendPermission.ts`: pure encoders / typed data / hash / validation, D-5 EOA rejection, `ensureApprovedOnchain`, `readAllowanceRemaining`, `isRevoked`, `buildSpendCall`
+- [x] 2.5 `actionRegistry.ts`: `buildCalls` for every ProposalKind + `callsHash`, exact-amount approvals, Policy-only address resolution
+- [x] 2.6 Read models: `getBalances`, `getVaultPosition`, `getSharePrice`, `getMockPrice`, `maxAtRisk`
+- [x] 2.7 API: `/api/wallet/provision`, `/api/wallet`, `/api/spend-permission/prepare`, `/api/spend-permission` (GET/POST)
+- [x] 2.8 [SHOULD] anvil fork harness (`packages/wallet/test/fork/`), opt-in via `STEWARD_FORK=1`
+
+## Phase 2 Exit Gate result (2026-09-21)
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
+| `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
+| `pnpm check:arch` | ✅ no dependency violations (86 modules, 152 dependencies cruised) |
+| `pnpm test` | ✅ 16 files / **164 tests passed**; 1 file / 4 tests skipped (the opt-in fork suite) in 30.3 s |
+| `pnpm contracts:test` | ✅ `forge test --root contracts` — 2 suites, **16 passed, 0 failed** (incl. a 256-run share-price fuzz) |
+| fork suite (opt-in) | ✅ `STEWARD_FORK=1 … vitest run packages/wallet/test/fork` — **4/4 passed**: deposit / withdraw / sweep calldata executed against the real deployed MockVault on an anvil fork of Base Sepolia |
+| contracts deployed + verified on-chain | ✅ all 7 on-chain checks OK (below) |
+| live spend-permission flow | ✅ below |
+
+### Contracts on Base Sepolia (84532)
+| Contract | Address | Deploy tx |
+|---|---|---|
+| MockVault | `0x3741f0da6dFFfFD8Be2353e326a49E41a3396485` | `0xf140e9d80d907038118d5d4e4dd3a0538d43ef1e81b7bc5f054afaa1b8c151bb` |
+| MockPriceFeed | `0xea0183F799ffCfE2f5bFd831EBfdc9f064fddf69` | `0x2eddcedbf196f5289dbe1266bf67d8d75e0c8f52f057946a0567d8d028754ff5` |
+| Demo admin (owner of both) | `0xC388F1602dF570289825ac907a1C3D80A2916924` | CDP account `steward-demo-admin`, no key on disk |
+
+On-chain verification printed by `pnpm contracts:deploy`, all OK: MockVault has code (5241 bytes),
+MockPriceFeed has code (1112 bytes), `vault.owner()` == demo admin, `vault.asset()` == USDC,
+`vault.decimals()` == 6 == USDC decimals, `feed.owner()` == demo admin, feed price == $1.00.
+Basescan source verification was not done (optional in 2.1).
+
+### Live end-to-end on Base Sepolia through the new product code (2026-09-21)
+`STEWARD_LIVE=1 pnpm live:spend-permission` → `scripts/live/spend-permission-e2e.ts`.
+Agent wallet `0xE967db385aF313Cc6CA006a745fc929A201F58A2`, owner treasury (Coinbase Smart Wallet)
+`0xE72B889052382487604b7A92E8F7fB1a5937F242`, permission hash
+`0x41b2e2830546d1f824f1068170b1f017fe61dcb2668cc8449108bcae6a2ed52f`.
+
+| Step | Result | Tx |
+|---|---|---|
+| owner smart wallet deployed | ok | `0x1f94ccc92e9d7e6380a992bd04199753f8855086734a6ab78b15e4ce35eb16b6` |
+| manager added as wallet owner | ok, `isOwnerAddress` verified true | `0x4abb2524f1a145090d19b246f3a84d16f9e163e9c886313335f6f17b50333b17` |
+| D-5 owner-account check | `deployed-contract` (signature 450 hex chars ⇒ ERC-1271, not a 132-char EOA sig) | — |
+| `ensureApprovedOnchain` | `approved`, userOp complete | `0x0d40906f6d42532f4cb0a315cf28bc62ddc20534ff3c7e04bf6ec885c286dacc` |
+| `ensureApprovedOnchain` again | `already-approved`, **no second transaction** (idempotent) | — |
+| `buildCalls(pull_allowance)` → spend 1 USDC | treasury 1 → 0 USDC, agent 1 → 2 USDC; allowance remaining 4 USDC | `0x83abf077dd8038ccb8e1220320eaee47cb43a08991552b83298c03ea32e4d6cb` |
+| owner revoke (`execute` → `revoke(permission)`) | `isRevoked` == true | `0xee8b42e745306a2e3cd86fbd0b15f91520a255868c6ee060554a66ad9b1bb206` |
+| post-revoke spend (the same calls) | **rejected** — userOp gas estimation reverts; agent USDC unchanged at 2 | — |
+| `ensureApprovedOnchain` on the revoked permission | refused: "permission is revoked on-chain" | — |
+
+**Owner-wallet caveat (carried from V-10):** the human has no passkey Coinbase Smart Wallet, so the
+live script builds a real Coinbase Smart Wallet via viem `toCoinbaseSmartAccount` whose owner is an
+**ephemeral key generated in memory for that run** — never written to disk, never logged, testnet
+only. The path exercised (EIP-712 → ERC-1271 → `approveWithSignature` → `spend` → `revoke`) is
+identical to a passkey wallet's. Only the passkey **popup UX** stays untested; that is Phase 7.6.
+
+## Phase 2 — Opus review gate (evidence)
+
+**Q1 — Can any code path produce a call to an address not from Policy / treasury / vault / USDC /
+SpendPermissionManager? → NO.**
+`buildCalls` is the only producer of `Call[]`. Every address is resolved from the active Policy
+(`policy.tokens`, `policy.vaults[].address`, `policy.recipients[].address`, `policy.treasuryAddress`)
+plus `ctx.spendPermissionManagerAddress`; proposals carry **IDs only** (I4 / T3). Before returning,
+`assertAllowedTargets` re-checks every call against `allowedTargets(policy, ctx)` and rejects anything
+else with `DISALLOWED_TARGET`, plus any non-zero `value`.
+Evidence — `packages/wallet/test/actionRegistry.test.ts` (28 tests): "the allowlist is exactly
+{tokens, vaults, recipients, treasury, SpendPermissionManager}"; "no kind can produce a call outside
+the allowlist, and none carries native value" (loops all 7 kinds); "an address that appears only in
+proposal-adjacent state never becomes a target" (poisoned `recipientId` → `UNKNOWN_RECIPIENT`).
+
+**Q2 — Are approvals ever > exact amount? Any `maxUint256`? → NO.**
+The only `approve` any kind emits is `vault_deposit`'s, for exactly the deposited amount, to a Policy
+vault. `grep -rniE "maxuint|ffffffffffffffff|type\(uint256\)\.max|increaseAllowance"` over
+`packages/*/src apps/*/app apps/*/lib contracts/src` returns **two comment lines only**
+(`abi.ts:104`, `actionRegistry.ts:163`) — no code. `ERC20_ABI` deliberately omits `increaseAllowance`.
+Evidence — actionRegistry.test.ts: "the only approve in any kind is for exactly the deposited amount"
+(collects every approve across all kinds → `[{spender: VAULT, value: 1_000_000n}]`) and "no call
+encodes the unbounded value …" for `maxUint256` and `2^160−1`. The fork test additionally asserts the
+**residual on-chain allowance is 0** after a real deposit.
+
+**Q3 — Are CDP secrets ever logged or serialized? → NO.**
+`grep -rn "reveal()"` over product code returns 4 hits: the `Secret` class itself, `session.ts`
+(SESSION_SECRET → iron-session), and two in `apps/web/lib/wallet.ts` where the CDP client is built.
+`packages/wallet/src` contains **zero** `reveal()` calls and never touches `process.env`.
+Evidence — `packages/wallet/test/secrets.test.ts` (9 tests): a static scan of every file in
+`packages/wallet/src` for `.reveal()`, for logging/stringifying a credential, for `process.env[`, and
+for an LLM-framework import; plus runtime checks that `Secret` redacts through `toString`,
+`JSON.stringify` and `canonicalJson`, that the parsed env exposes CDP credentials only as `Secret`,
+and that pino redacts `apiKey`/`secret`/`signature` (asserting the raw value never appears in output).
+Signatures are never returned by the API and never enter an audit payload (D-16): the grant audit
+stores the permission, its hash and the account kind only.
+
+**Q4 — Mainnet guard tested? → YES.**
+`assertChainAllowed` refuses 8453 without `STEWARD_ALLOW_MAINNET`, **and still refuses it with the flag
+set**, because `MAINNET_GATE_SIGNED_OFF === false` (D-17). Unknown chain ids are refused too.
+Tests: `chain.test.ts` (incl. 6 unsupported chain ids), `actionRegistry.test.ts` "refuses mainnet even
+with allowMainnet set…", `provision.test.ts` "refuses mainnet (I8) **before touching CDP**" (asserts
+zero CDP calls were made).
+
+### Every function that can broadcast a transaction (Phase 2)
+| Function | What it can emit | Why it is safe | Reachable from anything LLM-facing? |
+|---|---|---|---|
+| `ensureApprovedOnchain` (`packages/wallet/src/spendPermission.ts`) | exactly one `approveWithSignature(permission, ownerSignature)` to the SpendPermissionManager, value 0 | Registers the **owner's own** grant; moves no funds. Refuses if the sender is not the permission's spender, if the permission is revoked, or if it is already approved (idempotent). Fails closed on any RPC error. | No |
+| `scripts/live/deploy-contracts.ts` | CREATE2 deploys of the two mocks via the canonical proxy | Manual, gated behind `STEWARD_LIVE=1`, testnet only, imported by no product module | No |
+| `scripts/live/spend-permission-e2e.ts` | the live flow above | Same gate, manual only | No |
+| `provisionAgentWallet` | **nothing** — `getOrCreateSmartAccount` registers a counterfactual account, deployed by its first user operation | — | No |
+| `buildCalls` / all of `actionRegistry.ts` | **nothing** — returns `Call[]` | Pure | n/a |
+
+`grep -rn "sendTransaction\|sendUserOperation"` over `packages/*/src` + `apps/web` returns exactly two
+lines, both in `spendPermission.ts`: the `TxSender` type declaration and the single call inside
+`ensureApprovedOnchain`. **`executor.ts` does not exist yet** (Phase 5), and no "execute arbitrary
+calls" function was written (PHASES "Do not").
+Nothing LLM-facing exists in this phase: `packages/reasoning` is still an empty stub, `check:arch`
+forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain`,
+`agentkit-vercel-ai-sdk`) is installed anywhere in the workspace (asserted by `secrets.test.ts`).
 
 ## Current phase plan (Phase 1)
 - [x] 1.1 workspace+turbo+tsconfig/eslint/prettier/vitest
@@ -90,7 +208,24 @@ Last updated: 2026-09-20
 | D-15 | 2026-09-20 | `row_hash` = sha256(canonicalJson of the **whole row content** — walletId, actor, event, entityType, entityId, payload, createdAt, prevHash) rather than SECURITY §7's `sha256(prev_hash ‖ canonical_json(payload))`: the §7 form leaves actor/event/entity/timestamp mutable without detection. Strict superset, same primitives (`hashCanonical`). Advisory lock uses the two-int form `pg_advisory_xact_lock(0x41554454, hashtext(chainKey))` so it can never collide with the Phase 6 per-wallet loop lock. DB role: the app role should hold only `INSERT, SELECT` on `audit_log` and must not own the table; only `REVOKE … FROM PUBLIC` is in the migration, because in dev/test the app role IS the owner and a GRANT-based setup would break `freshTestDb()` | §7 wording is weaker than I6 intends; docs conflict rule says choose the safer option and record it | Keep §7 exactly (rejected); add roles to the migration (rejected: breaks test setup) |
 | D-16 | 2026-09-20 | `appendAudit` **refuses** (Err `SECRET_IN_PAYLOAD`) payloads whose keys match `private key / secret / mnemonic / seed phrase / passphrase / password / api key / signature / authorization / cookie` instead of scrubbing them; `token` is deliberately NOT in the pattern (USDC token fields are everywhere). Consequence for Phase 5+: log signature **hashes**, never signatures | Fail closed (I5) and fix the call site; a scrubbed row hides that a secret was nearly persisted | Scrub to `[REDACTED]` |
 
+| D-17 | 2026-09-21 | `MAINNET_GATE_SIGNED_OFF = false` constant in `packages/wallet/src/chain.ts`: I8 needs BOTH `STEWARD_ALLOW_MAINNET=true` AND the Phase 9 gate, so mainnet is refused today even with the env var set. Flipping it is a deliberate one-line code change belonging to the Phase 9 sign-off commit | An env var alone is one typo away from mainnet | Env-var-only guard (rejected) |
+| D-18 | 2026-09-21 | The SpendPermissionManager ABI is **hand-vendored** into `packages/wallet/src/abi.ts` (only the 9 functions we call), because `@coinbase/cdp-sdk` does not export it publicly and the spikes had to reach into `_cjs/spend-permissions/constants.js`. `test/abi.test.ts` compares every vendored fragment against the SDK's copy, so an upstream change breaks the build instead of producing wrong calldata | Reaching into package internals from product code breaks on any patch release | Import the internal path (rejected); fetch the ABI on-chain (overkill) |
+| D-19 | 2026-09-21 | Deps added (Phase 2): `@coinbase/agentkit` + `@coinbase/cdp-sdk` (required by the track; provisioning and user operations), `drizzle-orm`/`pg` in wallet (wallet rows + audit), `tsx`/`viem`/`cdp-sdk` at the root (live scripts), Foundry libs `openzeppelin-contracts@v5.5.0` and `forge-std@v1.11.0` as pinned git submodules. AgentKit's transitive native build scripts (`keccak`, `secp256k1`, `bufferutil`, `utf-8-validate`, `bigint-buffer`, `@coinbase/x402`, `opensea-js`, `@opensea/seaport-js`) are explicitly **not** run (`allowBuilds: <name>: false`) — all are optional accelerations with pure-JS fallbacks, so less arbitrary code runs at install time. The live flow works on the fallbacks (runs print `bigint: Failed to load bindings, pure JS will be used`) | Each per PHASES 2.x | Approving the build scripts (rejected: unnecessary native code) |
+| D-20 | 2026-09-21 | Contracts deploy through the **canonical CREATE2 proxy** `0x4e59b448…4956C`, not as raw creation transactions. Lookup that changed code: CDP's `sendTransaction` rejects a contract-creation tx with `malformed_transaction` / "Malformed unsigned EIP-1559 transaction" in **both** accepted forms (the `TransactionRequestEIP1559` object, which requires `to`, and a self-serialized RLP payload). A proxy call is an ordinary `to`-bearing transaction, so CDP signs it, no private key is ever created locally, addresses are deterministic and redeploys are no-ops | 2.1 requires deploying with no private key on disk | Local key + `forge create` (rejected: holds a key); `cast` with a keystore (same problem) |
+| D-21 | 2026-09-21 | `SYSTEM_CEILINGS` now lives in `packages/shared/src/ceilings.ts` with the POLICY_ENGINE §5 values **plus** four spend-permission bounds (allowance ≤ 1,000,000 USDC per period, period 1 h – 30 d, horizon ≤ 365 d, 300 s clock skew). **Phase 3 owns the final list** and `validatePolicyDraft`; it may tighten these, and must record a decision to loosen any of them | 2.7 needs ceilings before Phase 3 exists | Hardcode them in the route (rejected: untestable, duplicated) |
+| D-22 | 2026-09-21 | `sweep_home` transfers `agentUsdcBalance + Σ redeemableAssets` read just before building. If the share price **falls** between read and execution the transfer reverts and the sweep fails loudly (never a partial or wrong send); if it **rises**, a few base units of dust stay in the agent wallet. Phase 5 may re-read and retry | Fail closed beats sending an amount we cannot back | Sweep in two transactions (rejected for MVP: two receipts, more failure modes) |
+
 ## Known issues / risks
+### Phase 2
+- **RPC read-after-write lag is real and bites.** The load-balanced Base Sepolia endpoint answered `getCode` / `isOwnerAddress` / `isRevoked` from a node a block behind, three separate times. Once it was not cosmetic: `addOwnerAddress` was gas-estimated against a node that still saw an EOA (~22,414 gas) and the transaction **reverted out of gas while still producing a receipt**. `scripts/live/lib.ts` now has `waitForCode` and `confirm` (which throws on a reverted receipt), and every post-write read in the live script is polled. **Phase 5's confirmer must assume the same**: a receipt is not success, and one read is not state.
+- **D-5's EOA rejection is a heuristic, by design.** It proves "smart contract account" (`verifyTypedData` via ERC-1271/6492 plus code present, or a 6492-wrapped signature when counterfactual), not "Coinbase Smart Wallet". Another ERC-1271 wallet passes and would fail later at `spend` — loudly and at zero cost, since the agent pulls nothing. An EIP-7702-delegated EOA has code and passes, which is the correct answer rather than a hole. Documented in the function's docblock.
+- **A spend only works if the owner wallet has the SpendPermissionManager in its owner set.** `approveWithSignature` succeeds without it and `spend` then reverts with `Unauthorized()` (`0x82b42900`). The passkey popup does this for real users; the live script does it explicitly and verifies `isOwnerAddress`. Phase 7.6 must confirm the popup path and surface this as a distinct failure in the UI.
+- `GET /api/wallet` reads its vault position from `MOCK_VAULT_ADDRESS` in env. **Phase 3 must replace that with the vault list from the active Policy.**
+- Basescan source verification of the two mocks was not performed (optional in 2.1); the on-chain property checks stand in for it.
+- The fork suite is **opt-in** (`STEWARD_FORK=1`) so `pnpm test` reports it as 1 file / 4 tests skipped. It was run and passed 4/4 for this gate.
+- No unit test covers `buildAgentKit` itself (it needs live CDP credentials); the live script exercises the same provisioning path, and `assertActionsExist` is unit-tested.
+- `simulateYield` needs the demo admin to hold USDC and to have approved MockVault; `simulateLoss` sends the slice back to the admin, so it can be re-donated. Phase 9's demo scripts must fund the admin from the faucet first.
+
 ### Audit log (1.9) limitations
 - **Tail truncation is undetectable.** Deleting the last N rows of a chain (with the trigger disabled by a superuser) leaves a chain that still verifies. Mitigation, deferred: `verifyChain` already returns `head` (last `row_hash`) and `rows`; periodically persist `(walletId, rows, head, at)` somewhere the app role cannot rewrite — an anchor row in a separate table owned by another role, a notification/Telegram message, or on-chain — and compare on verify. Cheapest version belongs with `/api/audit/verify` in Phase 8.4.
 - **The trigger only stops the app role, not the DB owner/superuser.** `ALTER TABLE audit_log DISABLE TRIGGER` defeats it (that is exactly how the tamper test works); the hash chain is the detection layer. Production setup (not applied in the migration because dev/test run as the owner): create a separate owner role, and `GRANT INSERT, SELECT ON audit_log TO <app_role>` only — no UPDATE/DELETE/TRUNCATE, no ownership.
@@ -105,7 +240,62 @@ Last updated: 2026-09-20
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 1 is complete; waiting for the human to say "continue". Phase 2 (wallet layer) requires Opus (`/model opus`).**
-- Phase 2 must also resolve the PROPOSED decisions D-2, D-3 and D-5 with the human.
+- **Phase 2 is complete; waiting for the human to say "continue". Phase 3 (Policy Engine) requires Opus (`/model opus`).**
+- Do not start Phase 3 before that.
+
+### Interfaces Phase 3+ builds on (exported from `@steward/wallet`)
+```ts
+// action registry (pure) — the single source of calls for both simulation and execution
+buildCalls(proposal: Proposal, policy: Policy, ctx: BuildContext): Result<Call[], BuildError>
+allowedTargets(policy: Policy, ctx: BuildContext): Set<Address>
+callsHash(calls: readonly Call[]): Hex
+type Call = { to: Address; data: Hex; value: bigint }        // value is always 0n
+type BuildContext = { agentWalletAddress; spendPermissionManagerAddress; spendPermission?;
+                      agentUsdcBalance: bigint; vaultPositions: Record<string, VaultPosition>;
+                      allowMainnet: boolean }
+type VaultPosition = { shares: bigint; redeemableAssets: bigint }
+type BuildErrorCode = 'CHAIN_REFUSED' | 'UNKNOWN_KIND' | 'UNKNOWN_VAULT' | 'UNKNOWN_RECIPIENT'
+                    | 'UNKNOWN_TOKEN' | 'MISSING_PERMISSION' | 'PERMISSION_MISMATCH'
+                    | 'INVALID_AMOUNT' | 'NOTHING_TO_DO' | 'DISALLOWED_TARGET'
+
+// provisioning
+provisionAgentWallet(deps: ProvisionDeps, userId): Promise<Result<ProvisionResult, ProvisionError>>
+cdpAccountNames(userId): Result<{ owner: string; smartAccount: string }>
+
+// spend permissions — pure
+buildSpendPermission(input): SpendPermission
+prepareTypedData(p, chainId, manager): SpendPermissionTypedData
+spendPermissionHash(p, chainId, manager): Hex                // == manager.getHash(p), no RPC
+validateSpendPermission(p, constraints): Result<SpendPermission, SpendPermissionIssue[]>
+serializeSpendPermission(p) / parseSpendPermission(unknown): Result<SpendPermission>
+buildSpendCall(p, amount, manager): Result<Call>
+encodeSpend / encodeApproveWithSignature / encodeRevoke / encodeRevokeAsSpender
+
+// spend permissions — I/O
+assertSmartWalletAccount(pc, { typedData, signature }): Promise<Result<OwnerAccountKind>>   // D-5
+readAllowanceRemaining(pc, manager, p): Promise<Result<bigint>>        // F_ALLOWANCE_REMAINING
+readCurrentPeriod / isRevoked / isApproved / isValid
+ensureApprovedOnchain({ publicClient, sender: TxSender, manager, permission, signature })   // BROADCASTS
+
+// read models
+getBalances(pc, { usdc, treasuryAddress, agentWalletAddress }): Promise<Result<Balances>>
+getVaultPosition(pc, { vault, holder }): Promise<Result<{ shares, assets, redeemableAssets }>>
+getSharePrice(pc, vault): Promise<Result<{ sharePrice, shareDecimals, totalAssets }>>
+getMockPrice(pc, feed): Promise<Result<{ microUsd, updatedAt }>>       // DEMO_MODE only (I11)
+maxAtRisk({ agentUsdc, vaultAssets, allowanceRemaining }): bigint
+
+// chain / I8
+assertChainAllowed({ chainId, allowMainnet }): Result<number>
+MAINNET_GATE_SIGNED_OFF: false          // flip only in the Phase 9 sign-off commit
+
+// AgentKit
+buildAgentKit(input): Promise<Result<AgentKitBundle>>   // never hand the bundle to an LLM (I3)
+installUnhandledRejectionLogger(): void                  // D-1; call in every wallet-using process
+```
+Also new in `@steward/shared`: `SYSTEM_CEILINGS` (D-21).
+New in `@steward/db`: `getActiveSpendPermission`, `listSpendPermissions`, `insertSpendPermission`,
+`markSpendPermissionApproved`, `markSpendPermissionRevoked`.
+Phase 5's `executor.ts` will be the **only** module allowed to send proposal calls; it must re-check
+`callsHash` against what the RiskGate simulated.
 - Audit writer API for later phases: `appendAudit(db, { walletId?, actor, event, entityType?, entityId?, payload, createdAt? }) => Promise<Result<AuditRow, AuditError>>` and `verifyChain(db, walletId | null) => Promise<Result<{rows, head}, {rowId, reason, expected, actual}>>`, exported from `@steward/db`. Never insert into `audit_log` directly. Payload must contain no secret-looking keys (D-16).
 - Hackathon deadline Sep 28 00:00 UTC (8 days): keep MUST scope tight.

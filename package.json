@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "docker compose up -d --wait && pnpm db:migrate && turbo run dev --parallel",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck && tsc --noEmit -p scripts/live/tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "test": "vitest run",
     "test:adversarial": "node scripts/not-yet.mjs test:adversarial 4",
@@ -20,18 +20,25 @@
     "db:generate": "pnpm --filter @steward/db generate",
     "db:seed:demo": "node scripts/not-yet.mjs db:seed:demo 9",
     "contracts:test": "forge test --root contracts",
-    "contracts:build": "forge build --root contracts"
+    "contracts:build": "forge build --root contracts",
+    "contracts:deploy": "tsx scripts/live/deploy-contracts.ts",
+    "live:spend-permission": "tsx scripts/live/spend-permission-e2e.ts"
   },
   "devDependencies": {
+    "@coinbase/cdp-sdk": "^1.56.0",
     "@eslint/js": "^10.0.1",
+    "@steward/shared": "workspace:*",
+    "@steward/wallet": "workspace:*",
     "@types/node": "^26.6.2",
     "dependency-cruiser": "^18.3.1",
     "eslint": "^10.11.0",
     "fast-check": "^4.10.1",
     "prettier": "^3.9.8",
+    "tsx": "^4.23.13",
     "turbo": "^2.11.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.0",
+    "viem": "^2.56.8",
     "vitest": "^5.0.1"
   }
 }
