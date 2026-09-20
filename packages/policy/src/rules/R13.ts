@@ -7,6 +7,12 @@ export const R13: Rule = (input) => {
   if (input.proposal.kind !== 'pull_allowance') return pass('R13', 'not a pull');
   const { amount } = input.proposal.params;
   return amount <= input.state.allowanceRemaining
-    ? pass('R13', `pull of ${amount} is within the remaining allowance ${input.state.allowanceRemaining}`)
-    : deny('R13', `pull of ${amount} exceeds the remaining allowance ${input.state.allowanceRemaining}`);
+    ? pass(
+        'R13',
+        `pull of ${amount} is within the remaining allowance ${input.state.allowanceRemaining}`,
+      )
+    : deny(
+        'R13',
+        `pull of ${amount} exceeds the remaining allowance ${input.state.allowanceRemaining}`,
+      );
 };

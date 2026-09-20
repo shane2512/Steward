@@ -24,7 +24,10 @@ export const R12: Rule = (input) => {
   const age = quoteAgeSeconds(quote, input.now);
   if (age < 0) return deny('R12', `price for ${token.symbol} is stamped ${-age}s in the future`);
   if (age > SYSTEM_CEILINGS.PRICE_MAX_AGE_SEC)
-    return deny('R12', `price for ${token.symbol} is ${age}s old (max ${SYSTEM_CEILINGS.PRICE_MAX_AGE_SEC}s)`);
+    return deny(
+      'R12',
+      `price for ${token.symbol} is ${age}s old (max ${SYSTEM_CEILINGS.PRICE_MAX_AGE_SEC}s)`,
+    );
 
   if (DEPEG_SENSITIVE.some((k) => k === input.proposal.kind)) {
     const off = depegBps(quote);

@@ -139,11 +139,7 @@ export function evaluate(input: EvaluationInput): Verdict {
     }
     const ev = parsed.data;
     const proposalHash = hashProposal(ev.proposal);
-    const results = applyOwnerApproval(
-      ev,
-      applyRiskExitOverride(ev, runRules(ev)),
-      proposalHash,
-    );
+    const results = applyOwnerApproval(ev, applyRiskExitOverride(ev, runRules(ev)), proposalHash);
     return {
       decision: decide(results),
       results,

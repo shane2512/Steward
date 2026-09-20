@@ -13,8 +13,14 @@ export const R15: Rule = (input) => {
     case 'AGREE':
       return pass('R15', 'the verifier agrees');
     case 'DISAGREE':
-      return deny('R15', `the verifier disagrees: ${verifier.reasons.join('; ') || 'no reason given'}`);
+      return deny(
+        'R15',
+        `the verifier disagrees: ${verifier.reasons.join('; ') || 'no reason given'}`,
+      );
     default:
-      return escalate('R15', `the verifier is unsure: ${verifier.reasons.join('; ') || 'no reason given'}`);
+      return escalate(
+        'R15',
+        `the verifier is unsure: ${verifier.reasons.join('; ') || 'no reason given'}`,
+      );
   }
 };

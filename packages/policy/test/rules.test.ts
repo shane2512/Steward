@@ -119,7 +119,9 @@ describe('R04 — vault allowlist', () => {
     const r = R.R04(
       parsedInput({
         proposal: depositProposal(),
-        state: { riskTriggers: [{ vaultId: 'v1', trigger: 'vault_drawdown', observed: '-300bps' }] },
+        state: {
+          riskTriggers: [{ vaultId: 'v1', trigger: 'vault_drawdown', observed: '-300bps' }],
+        },
       }),
     );
     expect(r.result).toBe('DENY');
@@ -128,7 +130,9 @@ describe('R04 — vault allowlist', () => {
     const r = R.R04(
       parsedInput({
         proposal: riskExitProposal(),
-        state: { riskTriggers: [{ vaultId: 'v1', trigger: 'vault_drawdown', observed: '-300bps' }] },
+        state: {
+          riskTriggers: [{ vaultId: 'v1', trigger: 'vault_drawdown', observed: '-300bps' }],
+        },
       }),
     );
     expect(r.result).toBe('PASS');
@@ -166,7 +170,13 @@ describe('R06 — per-transaction size', () => {
     const r = R.R06(
       parsedInput({
         proposal: pullProposal(usdc(300_000)),
-        policy: { limits: { perTxMicroUsd: usdc(400_000), dailyMicroUsd: usdc(900_000), maxActionsPerHour: 10 } },
+        policy: {
+          limits: {
+            perTxMicroUsd: usdc(400_000),
+            dailyMicroUsd: usdc(900_000),
+            maxActionsPerHour: 10,
+          },
+        },
       }),
     );
     expect(r.message).toContain('system per-tx ceiling');
@@ -179,7 +189,9 @@ describe('R06 — per-transaction size', () => {
     expect(R.R06(parsedInput({ state: { prices: {} } })).result).toBe('DENY');
   });
   it('denies dust worth 0 micro-USD', () => {
-    const r = R.R06(parsedInput({ proposal: payProposal(1n), state: { prices: freshPrice({ microUsd: 1n }) } }));
+    const r = R.R06(
+      parsedInput({ proposal: payProposal(1n), state: { prices: freshPrice({ microUsd: 1n }) } }),
+    );
     expect(r.message).toContain('worth 0 micro-USD');
   });
   it('ignores kinds with no amount', () => {
@@ -200,7 +212,13 @@ describe('R07 — rolling 24h cap', () => {
       parsedInput({
         proposal: depositProposal(usdc(50_000)),
         // A policy the validator would have rejected: the ceiling is the backstop (I5).
-        policy: { limits: { perTxMicroUsd: usdc(250_000), dailyMicroUsd: usdc(2_000_000), maxActionsPerHour: 10 } },
+        policy: {
+          limits: {
+            perTxMicroUsd: usdc(250_000),
+            dailyMicroUsd: usdc(2_000_000),
+            maxActionsPerHour: 10,
+          },
+        },
         ledger: { outflowsLast24hMicroUsd: usdc(999_000) },
       }),
     );
@@ -219,11 +237,21 @@ describe('R08 — runway buffer', () => {
     expect(R.R08(parsedInput()).result).toBe('PASS');
   });
   it('escalates a payment that eats into the buffer', () => {
-    const r = R.R08(parsedInput({ proposal: payProposal(usdc(4_000)), state: { agentUsdc: usdc(0), treasuryUsdc: usdc(123_000) } }));
+    const r = R.R08(
+      parsedInput({
+        proposal: payProposal(usdc(4_000)),
+        state: { agentUsdc: usdc(0), treasuryUsdc: usdc(123_000) },
+      }),
+    );
     expect(r).toMatchObject({ result: 'ESCALATE' });
   });
   it('denies a deposit that eats into the buffer', () => {
-    const r = R.R08(parsedInput({ proposal: depositProposal(usdc(44_000)), state: { agentUsdc: usdc(50_000), treasuryUsdc: usdc(80_000) } }));
+    const r = R.R08(
+      parsedInput({
+        proposal: depositProposal(usdc(44_000)),
+        state: { agentUsdc: usdc(50_000), treasuryUsdc: usdc(80_000) },
+      }),
+    );
     expect(r.result).toBe('DENY');
   });
   it('ignores kinds that do not reduce liquid USDC', () => {
@@ -247,7 +275,18 @@ describe('R09 — concentration', () => {
     const r = R.R09(
       parsedInput({
         proposal: depositProposal(usdc(44_000)),
-        policy: { vaults: [{ id: 'v1', name: 'v', address: ADDR.vault, asset: ADDR.usdc, kind: 'erc4626', maxAllocationBps: 1_000 }] },
+        policy: {
+          vaults: [
+            {
+              id: 'v1',
+              name: 'v',
+              address: ADDR.vault,
+              asset: ADDR.usdc,
+              kind: 'erc4626',
+              maxAllocationBps: 1_000,
+            },
+          ],
+        },
       }),
     );
     expect(r).toMatchObject({ result: 'ESCALATE' });
@@ -266,7 +305,9 @@ describe('R09 — concentration', () => {
     expect(R.R09(parsedInput({ proposal: p })).result).toBe('ESCALATE');
   });
   it('denies when positions cannot be valued', () => {
-    expect(R.R09(parsedInput({ proposal: depositProposal(), state: { prices: {} } })).result).toBe('DENY');
+    expect(R.R09(parsedInput({ proposal: depositProposal(), state: { prices: {} } })).result).toBe(
+      'DENY',
+    );
   });
   it('denies when the policy has no USDC token', () => {
     const i = parsedInput({ proposal: depositProposal() });
@@ -282,7 +323,9 @@ describe('R10 — approval threshold', () => {
     expect(R.R10(parsedInput()).result).toBe('PASS');
   });
   it('escalates at or above the threshold', () => {
-    expect(R.R10(parsedInput({ proposal: withdrawProposal(usdc(20_000)) }))).toMatchObject({ result: 'ESCALATE' });
+    expect(R.R10(parsedInput({ proposal: withdrawProposal(usdc(20_000)) }))).toMatchObject({
+      result: 'ESCALATE',
+    });
   });
   it('uses the per-kind override when present', () => {
     expect(R.R10(parsedInput({ proposal: depositProposal(usdc(44_000)) })).result).toBe('PASS');
@@ -303,7 +346,9 @@ describe('R11 — simulation parity', () => {
     expect(R.R11(parsedInput({ simulation: null }))).toMatchObject({ result: 'DENY' });
   });
   it('denies a failed simulation', () => {
-    const r = R.R11(parsedInput({ simulation: { ok: false, deltas: [], approvals: [], error: 'reverted' } }));
+    const r = R.R11(
+      parsedInput({ simulation: { ok: false, deltas: [], approvals: [], error: 'reverted' } }),
+    );
     expect(r.message).toContain('reverted');
   });
   it('denies a failed simulation with no error text', () => {
@@ -368,7 +413,9 @@ describe('R11 — simulation parity', () => {
         proposal,
         simulation: {
           ok: true,
-          deltas: [{ token: ADDR.usdc, holder: 'agent', delta: usdc(20_000) - usdc(20_000) / 1_000n }],
+          deltas: [
+            { token: ADDR.usdc, holder: 'agent', delta: usdc(20_000) - usdc(20_000) / 1_000n },
+          ],
           approvals: [],
         },
       }),
@@ -399,26 +446,48 @@ describe('R12 — price freshness and depeg', () => {
     expect(R.R12(parsedInput()).result).toBe('PASS');
   });
   it('denies a stale quote', () => {
-    const r = R.R12(parsedInput({ state: { prices: freshPrice({ publishedAt: new Date(NOW.getTime() - 61_000) }) } }));
+    const r = R.R12(
+      parsedInput({
+        state: { prices: freshPrice({ publishedAt: new Date(NOW.getTime() - 61_000) }) },
+      }),
+    );
     expect(r).toMatchObject({ result: 'DENY' });
   });
   it('passes a quote exactly at the age ceiling', () => {
-    const r = R.R12(parsedInput({ state: { prices: freshPrice({ publishedAt: new Date(NOW.getTime() - 60_000) }) } }));
+    const r = R.R12(
+      parsedInput({
+        state: { prices: freshPrice({ publishedAt: new Date(NOW.getTime() - 60_000) }) },
+      }),
+    );
     expect(r.result).toBe('PASS');
   });
   it('denies a quote stamped in the future', () => {
-    const r = R.R12(parsedInput({ state: { prices: freshPrice({ publishedAt: new Date(NOW.getTime() + 5_000) }) } }));
+    const r = R.R12(
+      parsedInput({
+        state: { prices: freshPrice({ publishedAt: new Date(NOW.getTime() + 5_000) }) },
+      }),
+    );
     expect(r.message).toContain('future');
   });
   it('denies a missing quote', () => {
     expect(R.R12(parsedInput({ state: { prices: {} } })).result).toBe('DENY');
   });
   it('denies taking on a depegged stable', () => {
-    const r = R.R12(parsedInput({ proposal: pullProposal(), state: { prices: freshPrice({ microUsd: 985_000n }) } }));
+    const r = R.R12(
+      parsedInput({
+        proposal: pullProposal(),
+        state: { prices: freshPrice({ microUsd: 985_000n }) },
+      }),
+    );
     expect(r.message).toContain('off $1.00');
   });
   it('still lets a risk exit run during a depeg', () => {
-    const r = R.R12(parsedInput({ proposal: riskExitProposal(), state: { prices: freshPrice({ microUsd: 900_000n }) } }));
+    const r = R.R12(
+      parsedInput({
+        proposal: riskExitProposal(),
+        state: { prices: freshPrice({ microUsd: 900_000n }) },
+      }),
+    );
     expect(r.result).toBe('PASS');
   });
   it('accepts the fenced DEMO parity fallback on testnet', () => {
@@ -426,11 +495,20 @@ describe('R12 — price freshness and depeg', () => {
     expect(r.message).toContain('DEMO parity fallback');
   });
   it('ignores the DEMO fallback on mainnet', () => {
-    const r = R.R12(parsedInput({ demoStableParity: true, chainId: 8453, policy: { chainId: 8453 }, state: { prices: {} } }));
+    const r = R.R12(
+      parsedInput({
+        demoStableParity: true,
+        chainId: 8453,
+        policy: { chainId: 8453 },
+        state: { prices: {} },
+      }),
+    );
     expect(r.result).toBe('DENY');
   });
   it('needs no price for a noop', () => {
-    expect(R.R12(parsedInput({ proposal: noopProposal(), state: { prices: {} } })).result).toBe('PASS');
+    expect(R.R12(parsedInput({ proposal: noopProposal(), state: { prices: {} } })).result).toBe(
+      'PASS',
+    );
   });
   it('denies when the policy has no USDC token', () => {
     const i = parsedInput();
@@ -456,12 +534,20 @@ describe('R14 — rate limit', () => {
     expect(R.R14(parsedInput()).result).toBe('PASS');
   });
   it('denies at the policy limit', () => {
-    expect(R.R14(parsedInput({ ledger: { actionsLastHour: 10 } }))).toMatchObject({ result: 'DENY' });
+    expect(R.R14(parsedInput({ ledger: { actionsLastHour: 10 } }))).toMatchObject({
+      result: 'DENY',
+    });
   });
   it('denies at the system ceiling even if the policy asked for more', () => {
     const r = R.R14(
       parsedInput({
-        policy: { limits: { perTxMicroUsd: usdc(50_000), dailyMicroUsd: usdc(60_000), maxActionsPerHour: 999 } },
+        policy: {
+          limits: {
+            perTxMicroUsd: usdc(50_000),
+            dailyMicroUsd: usdc(60_000),
+            maxActionsPerHour: 999,
+          },
+        },
         ledger: { actionsLastHour: 20 },
       }),
     );
@@ -474,18 +560,24 @@ describe('R15 — shadow verifier', () => {
     expect(R.R15(parsedInput()).result).toBe('PASS');
   });
   it('denies on DISAGREE', () => {
-    const r = R.R15(parsedInput({ verifier: { verdict: 'DISAGREE', reasons: ['not in mandate'] } }));
+    const r = R.R15(
+      parsedInput({ verifier: { verdict: 'DISAGREE', reasons: ['not in mandate'] } }),
+    );
     expect(r).toMatchObject({ result: 'DENY' });
     expect(r.message).toContain('not in mandate');
   });
   it('escalates on UNSURE', () => {
-    expect(R.R15(parsedInput({ verifier: { verdict: 'UNSURE', reasons: [] } })).result).toBe('ESCALATE');
+    expect(R.R15(parsedInput({ verifier: { verdict: 'UNSURE', reasons: [] } })).result).toBe(
+      'ESCALATE',
+    );
   });
   it('escalates when no verifier ran', () => {
     expect(R.R15(parsedInput({ verifier: null })).result).toBe('ESCALATE');
   });
   it('is skipped for deterministic and owner proposals', () => {
-    expect(R.R15(parsedInput({ proposal: riskExitProposal(), verifier: null })).result).toBe('PASS');
+    expect(R.R15(parsedInput({ proposal: riskExitProposal(), verifier: null })).result).toBe(
+      'PASS',
+    );
   });
   it('is skipped for a noop', () => {
     expect(R.R15(parsedInput({ proposal: noopProposal(), verifier: null })).result).toBe('PASS');
@@ -505,10 +597,14 @@ describe('R16 — injection screen', () => {
     expect(R.R16(parsedInput({ screen: flagged }))).toMatchObject({ result: 'DENY' });
   });
   it('escalates a sweep home when injection is suspected', () => {
-    expect(R.R16(parsedInput({ proposal: sweepProposal(), screen: flagged })).result).toBe('ESCALATE');
+    expect(R.R16(parsedInput({ proposal: sweepProposal(), screen: flagged })).result).toBe(
+      'ESCALATE',
+    );
   });
   it('never blocks the safety actions', () => {
-    expect(R.R16(parsedInput({ proposal: riskExitProposal(), screen: flagged })).result).toBe('PASS');
+    expect(R.R16(parsedInput({ proposal: riskExitProposal(), screen: flagged })).result).toBe(
+      'PASS',
+    );
     expect(R.R16(parsedInput({ proposal: noopProposal(), screen: flagged })).result).toBe('PASS');
   });
   it('reports unspecified signals', () => {
@@ -523,12 +619,16 @@ describe('R17 — replay', () => {
   });
   it('denies a proposal hash already in the 24h window', () => {
     const proposal = payProposal();
-    const r = R.R17(parsedInput({ proposal, ledger: { recentProposalHashes: [hashProposal(proposal)] } }));
+    const r = R.R17(
+      parsedInput({ proposal, ledger: { recentProposalHashes: [hashProposal(proposal)] } }),
+    );
     expect(r).toMatchObject({ result: 'DENY' });
   });
   it('ignores noops', () => {
     const proposal = noopProposal();
-    const r = R.R17(parsedInput({ proposal, ledger: { recentProposalHashes: [hashProposal(proposal)] } }));
+    const r = R.R17(
+      parsedInput({ proposal, ledger: { recentProposalHashes: [hashProposal(proposal)] } }),
+    );
     expect(r.result).toBe('PASS');
   });
 });
@@ -544,7 +644,11 @@ describe('R18 — approvals', () => {
   it('denies an approval on a kind that should never approve', () => {
     const r = R.R18(
       parsedInput({
-        simulation: { ok: true, deltas: payProposal().expectedDeltas, approvals: [{ token: ADDR.usdc, spender: ADDR.vault, amount: usdc(1) }] },
+        simulation: {
+          ok: true,
+          deltas: payProposal().expectedDeltas,
+          approvals: [{ token: ADDR.usdc, spender: ADDR.vault, amount: usdc(1) }],
+        },
       }),
     );
     expect(r).toMatchObject({ result: 'DENY' });
@@ -552,7 +656,12 @@ describe('R18 — approvals', () => {
   it('denies two approvals in one deposit', () => {
     const proposal = depositProposal();
     const one = { token: ADDR.usdc, spender: ADDR.vault, amount: proposal.params.amount };
-    const r = R.R18(parsedInput({ proposal, simulation: { ok: true, deltas: proposal.expectedDeltas, approvals: [one, one] } }));
+    const r = R.R18(
+      parsedInput({
+        proposal,
+        simulation: { ok: true, deltas: proposal.expectedDeltas, approvals: [one, one] },
+      }),
+    );
     expect(r.message).toContain('2 approvals');
   });
   it('denies an approval to something that is not the deposit vault', () => {
@@ -560,7 +669,11 @@ describe('R18 — approvals', () => {
     const r = R.R18(
       parsedInput({
         proposal,
-        simulation: { ok: true, deltas: proposal.expectedDeltas, approvals: [{ token: ADDR.usdc, spender: ADDR.attacker, amount: proposal.params.amount }] },
+        simulation: {
+          ok: true,
+          deltas: proposal.expectedDeltas,
+          approvals: [{ token: ADDR.usdc, spender: ADDR.attacker, amount: proposal.params.amount }],
+        },
       }),
     );
     expect(r.message).toContain('is not vault');
@@ -570,7 +683,13 @@ describe('R18 — approvals', () => {
     const r = R.R18(
       parsedInput({
         proposal,
-        simulation: { ok: true, deltas: proposal.expectedDeltas, approvals: [{ token: ADDR.attacker, spender: ADDR.vault, amount: proposal.params.amount }] },
+        simulation: {
+          ok: true,
+          deltas: proposal.expectedDeltas,
+          approvals: [
+            { token: ADDR.attacker, spender: ADDR.vault, amount: proposal.params.amount },
+          ],
+        },
       }),
     );
     expect(r.message).toContain('not a policy token');
@@ -580,7 +699,11 @@ describe('R18 — approvals', () => {
     const r = R.R18(
       parsedInput({
         proposal,
-        simulation: { ok: true, deltas: proposal.expectedDeltas, approvals: [{ token: ADDR.usdc, spender: ADDR.vault, amount: 2n ** 256n - 1n }] },
+        simulation: {
+          ok: true,
+          deltas: proposal.expectedDeltas,
+          approvals: [{ token: ADDR.usdc, spender: ADDR.vault, amount: 2n ** 256n - 1n }],
+        },
       }),
     );
     expect(r.message).toContain('not the exact deposit');
@@ -590,7 +713,11 @@ describe('R18 — approvals', () => {
     const r = R.R18(
       parsedInput({
         proposal,
-        simulation: { ok: true, deltas: proposal.expectedDeltas, approvals: [{ token: ADDR.usdc, spender: ADDR.vault, amount: usdc(10) }] },
+        simulation: {
+          ok: true,
+          deltas: proposal.expectedDeltas,
+          approvals: [{ token: ADDR.usdc, spender: ADDR.vault, amount: usdc(10) }],
+        },
       }),
     );
     expect(r.message).toContain('not in the policy');
@@ -602,7 +729,9 @@ describe('R19 — grounding', () => {
     expect(R.R19(parsedInput()).result).toBe('PASS');
   });
   it('denies an invented fact id', () => {
-    const r = R.R19(parsedInput({ proposal: payProposal(usdc(10), { citedFactIds: ['F_MADE_UP'] }) }));
+    const r = R.R19(
+      parsedInput({ proposal: payProposal(usdc(10), { citedFactIds: ['F_MADE_UP'] }) }),
+    );
     expect(r).toMatchObject({ result: 'DENY' });
   });
   it('escalates low confidence', () => {
@@ -612,12 +741,18 @@ describe('R19 — grounding', () => {
 });
 
 describe('R20 — risk exit override', () => {
-  const triggered = { riskTriggers: [{ vaultId: 'v1', trigger: 'vault_drawdown' as const, observed: '-300 bps' }] };
+  const triggered = {
+    riskTriggers: [{ vaultId: 'v1', trigger: 'vault_drawdown' as const, observed: '-300 bps' }],
+  };
   it('passes when the trigger is real and funds only come home', () => {
-    expect(R.R20(parsedInput({ proposal: riskExitProposal(), state: triggered })).result).toBe('PASS');
+    expect(R.R20(parsedInput({ proposal: riskExitProposal(), state: triggered })).result).toBe(
+      'PASS',
+    );
   });
   it('escalates when no trigger was observed', () => {
-    expect(R.R20(parsedInput({ proposal: riskExitProposal() }))).toMatchObject({ result: 'ESCALATE' });
+    expect(R.R20(parsedInput({ proposal: riskExitProposal() }))).toMatchObject({
+      result: 'ESCALATE',
+    });
   });
   it('escalates when the observed trigger is of another type', () => {
     const r = R.R20(

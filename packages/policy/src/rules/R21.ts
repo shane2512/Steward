@@ -8,7 +8,10 @@ const MAINNET = 8453;
 
 export const R21: Rule = (input) => {
   if (input.policy.chainId !== input.chainId)
-    return deny('R21', `policy is for chain ${input.policy.chainId}, execution is on ${input.chainId}`);
+    return deny(
+      'R21',
+      `policy is for chain ${input.policy.chainId}, execution is on ${input.chainId}`,
+    );
   if (input.chainId === MAINNET && !input.allowMainnet)
     return deny('R21', 'mainnet requires an explicit allowMainnet flag');
   return pass('R21', `chain ${input.chainId} is allowed`);

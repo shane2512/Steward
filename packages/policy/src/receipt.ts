@@ -85,7 +85,10 @@ export function signReceipt(
 
   const ttl = options.ttlSeconds ?? SYSTEM_CEILINGS.RECEIPT_TTL_SEC;
   if (!Number.isInteger(ttl) || ttl <= 0 || ttl > SYSTEM_CEILINGS.RECEIPT_TTL_SEC)
-    return err({ code: 'TTL_TOO_LONG', message: `ttl must be 1..${SYSTEM_CEILINGS.RECEIPT_TTL_SEC}s` });
+    return err({
+      code: 'TTL_TOO_LONG',
+      message: `ttl must be 1..${SYSTEM_CEILINGS.RECEIPT_TTL_SEC}s`,
+    });
 
   const draft: AllowReceipt = {
     proposalHash: verdict.proposalHash,

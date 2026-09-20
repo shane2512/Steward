@@ -44,7 +44,9 @@ export const ruleSentences: Record<RuleCode, string> = {
 /** The mandate as plain English (POLICY_ENGINE §1, used by the onboarding review screen). */
 export function renderPolicyAsSentences(p: PolicyDraft): string[] {
   const s: string[] = [];
-  s.push(`Steward operates on chain ${p.chainId} and sends everything home to ${p.treasuryAddress}.`);
+  s.push(
+    `Steward operates on chain ${p.chainId} and sends everything home to ${p.treasuryAddress}.`,
+  );
   s.push(
     `Keep at least ${usd(p.runwayBufferMicroUsd)} liquid at all times; Steward may move at most ` +
       `${usd(p.limits.perTxMicroUsd)} per action and ${usd(p.limits.dailyMicroUsd)} per day, ` +
@@ -61,16 +63,21 @@ export function renderPolicyAsSentences(p: PolicyDraft): string[] {
       : `Without asking, Steward may: ${p.autonomousKinds.map((k) => KIND_WORDS[k] ?? k).join('; ')}.`,
   );
   for (const v of p.vaults) {
-    s.push(`"${v.name}" (${v.address}) may hold at most ${v.maxAllocationBps / 100}% of managed funds.`);
+    s.push(
+      `"${v.name}" (${v.address}) may hold at most ${v.maxAllocationBps / 100}% of managed funds.`,
+    );
   }
   if (p.vaults.length === 0) s.push('No vaults are approved, so Steward cannot deposit anywhere.');
   for (const r of p.recipients) {
     const schedule = r.schedule
       ? `, scheduled ${usd(r.schedule.amountMicroUsd)} on day ${r.schedule.dayOfMonth} of each month`
       : '';
-    s.push(`"${r.label}" (${r.address}) may receive at most ${usd(r.maxPerTxMicroUsd)} per payment${schedule}.`);
+    s.push(
+      `"${r.label}" (${r.address}) may receive at most ${usd(r.maxPerTxMicroUsd)} per payment${schedule}.`,
+    );
   }
-  if (p.recipients.length === 0) s.push('No recipients are approved, so Steward cannot pay anyone.');
+  if (p.recipients.length === 0)
+    s.push('No recipients are approved, so Steward cannot pay anyone.');
   s.push(
     `Exit a vault automatically if its share price falls ${p.vaultDrawdownBps / 100}% or if USDC ` +
       `moves more than ${p.depegThresholdBps / 100}% away from $1.00.`,

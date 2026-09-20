@@ -28,7 +28,8 @@ export const R09: Rule = (input) => {
     price.value.quote,
   );
   if (!managed.ok || !post.ok) return deny('R09', 'cannot value positions at the oracle price');
-  if (managed.value <= 0n) return escalate('R09', 'managed funds are 0; allocation is unverifiable');
+  if (managed.value <= 0n)
+    return escalate('R09', 'managed funds are 0; allocation is unverifiable');
 
   const vault = input.policy.vaults.find((v) => v.id === vaultId);
   // An unknown vault is R04's DENY; use 0 bps here so this rule cannot silently pass it.

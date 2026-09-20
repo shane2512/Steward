@@ -33,7 +33,11 @@ export const resolveRecipient = (
 ): PolicyRecipient | undefined => policy.recipients.find((r) => r.id === recipientId);
 
 /** Kinds that touch a vault and therefore need R04's contract checks. */
-export const VAULT_KINDS: readonly ProposalKind[] = ['vault_deposit', 'vault_withdraw', 'risk_exit'];
+export const VAULT_KINDS: readonly ProposalKind[] = [
+  'vault_deposit',
+  'vault_withdraw',
+  'risk_exit',
+];
 
 /**
  * Kinds that move value to a holder that is not the owner treasury. `sweep_home` and `noop` are

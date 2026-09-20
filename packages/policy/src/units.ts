@@ -108,7 +108,10 @@ export function liquidMicroUsd(input: ParsedEvaluationInput): Result<bigint, str
 
 /** Deviation from $1.00 in basis points, bigint math (no float, no precision loss). */
 export function depegBps(quote: PriceQuote): bigint {
-  const diff = quote.microUsd > ONE_USD_MICRO ? quote.microUsd - ONE_USD_MICRO : ONE_USD_MICRO - quote.microUsd;
+  const diff =
+    quote.microUsd > ONE_USD_MICRO
+      ? quote.microUsd - ONE_USD_MICRO
+      : ONE_USD_MICRO - quote.microUsd;
   return (diff * 10_000n) / ONE_USD_MICRO;
 }
 

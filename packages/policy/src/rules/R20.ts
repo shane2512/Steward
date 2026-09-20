@@ -17,11 +17,19 @@ export const R20: Rule = (input) => {
   );
   if (!observed) return escalate('R20', `no ${trigger} trigger observed for vault ${vaultId}`);
 
-  const leaves = input.proposal.expectedDeltas.filter((d) => d.holder !== 'agent' && d.delta !== 0n);
+  const leaves = input.proposal.expectedDeltas.filter(
+    (d) => d.holder !== 'agent' && d.delta !== 0n,
+  );
   if (leaves.length > 0)
-    return deny('R20', `risk_exit must only move funds to the agent wallet, not ${leaves[0]?.holder}`);
+    return deny(
+      'R20',
+      `risk_exit must only move funds to the agent wallet, not ${leaves[0]?.holder}`,
+    );
   const outgoing = input.proposal.expectedDeltas.filter((d) => d.delta < 0n);
   if (outgoing.length > 0) return deny('R20', 'risk_exit must not reduce any balance');
 
-  return pass('R20', `${trigger} on vault ${vaultId} authorises an autonomous exit (${observed.observed})`);
+  return pass(
+    'R20',
+    `${trigger} on vault ${vaultId} authorises an autonomous exit (${observed.observed})`,
+  );
 };

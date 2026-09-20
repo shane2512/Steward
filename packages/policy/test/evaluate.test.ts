@@ -65,7 +65,10 @@ describe('evaluate — precedence DENY > ESCALATE > ALLOW', () => {
 
 describe('evaluate — fail closed (I5)', () => {
   it('denies an unknown proposal kind', () => {
-    const bad = { ...input(), proposal: { kind: 'drain', params: {} } } as unknown as EvaluationInput;
+    const bad = {
+      ...input(),
+      proposal: { kind: 'drain', params: {} },
+    } as unknown as EvaluationInput;
     const verdict = evaluate(bad);
     expect(verdict.decision).toBe('DENY');
     expect(verdict.results[0]?.code).toBe('R00');
@@ -162,13 +165,19 @@ describe('evaluate — owner approval lifting', () => {
 
   it('ignores an approval signed by somebody else', () => {
     const base = approvalFor({ proposal: withdrawProposal(usdc(20_000)) });
-    const verdict = evaluate({ ...base, ownerApproval: { ...base.ownerApproval, signer: ADDR.attacker } });
+    const verdict = evaluate({
+      ...base,
+      ownerApproval: { ...base.ownerApproval, signer: ADDR.attacker },
+    });
     expect(verdict.decision).toBe('ESCALATE');
   });
 
   it('ignores an approval for a different proposal', () => {
     const base = approvalFor({ proposal: withdrawProposal(usdc(20_000)) });
-    const verdict = evaluate({ ...base, ownerApproval: { ...base.ownerApproval, proposalHash: HASH_ZERO } });
+    const verdict = evaluate({
+      ...base,
+      ownerApproval: { ...base.ownerApproval, proposalHash: HASH_ZERO },
+    });
     expect(verdict.decision).toBe('ESCALATE');
   });
 
@@ -183,10 +192,16 @@ describe('evaluate — owner approval lifting', () => {
 
   it('does not lift rules that are not liftable', () => {
     // R20's "no trigger observed" escalation IS liftable; R05's unknown recipient is not.
-    const base = input({ proposal: payProposal(usdc(10), { params: { recipientId: 'ghost', amount: usdc(10) } }) });
+    const base = input({
+      proposal: payProposal(usdc(10), { params: { recipientId: 'ghost', amount: usdc(10) } }),
+    });
     const verdict = evaluate({
       ...base,
-      ownerApproval: { signer: ADDR.owner, proposalHash: hashProposal(base.proposal), expiresAt: new Date(NOW.getTime() + 60_000) },
+      ownerApproval: {
+        signer: ADDR.owner,
+        proposalHash: hashProposal(base.proposal),
+        expiresAt: new Date(NOW.getTime() + 60_000),
+      },
     });
     expect(verdict.decision).toBe('DENY');
   });
@@ -240,10 +255,19 @@ describe('every hard rule changes the verdict when its condition is flipped', ()
     ['R01', { state: { frozen: true } }],
     ['R03', { proposal: sweepProposal({ source: 'serv' }) }],
     ['R04', { proposal: depositProposal(), state: { contractHasCode: {} } }],
-    ['R05', { proposal: payProposal(usdc(10), { params: { recipientId: 'ghost', amount: usdc(10) } }) }],
+    [
+      'R05',
+      { proposal: payProposal(usdc(10), { params: { recipientId: 'ghost', amount: usdc(10) } }) },
+    ],
     ['R06', { proposal: payProposal(usdc(6_000)) }],
     ['R07', { ledger: { outflowsLast24hMicroUsd: usdc(59_000) } }],
-    ['R08', { proposal: depositProposal(usdc(44_000)), state: { agentUsdc: usdc(50_000), treasuryUsdc: usdc(80_000) } }],
+    [
+      'R08',
+      {
+        proposal: depositProposal(usdc(44_000)),
+        state: { agentUsdc: usdc(50_000), treasuryUsdc: usdc(80_000) },
+      },
+    ],
     ['R11', { simulation: null }],
     ['R12', { state: { prices: {} } }],
     ['R13', { proposal: pullProposal(usdc(50_001)) }],
@@ -277,7 +301,9 @@ describe('every hard rule changes the verdict when its condition is flipped', ()
   });
 
   it('R19 flipped => DENY', () => {
-    const verdict = evaluate(input({ proposal: payProposal(usdc(10), { citedFactIds: ['F_INVENTED'] }) }));
+    const verdict = evaluate(
+      input({ proposal: payProposal(usdc(10), { citedFactIds: ['F_INVENTED'] }) }),
+    );
     expect(verdict.decision).toBe('DENY');
     expect(codeOf(verdict.results, 'R19')?.result).toBe('DENY');
   });

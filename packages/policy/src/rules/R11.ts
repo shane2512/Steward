@@ -38,7 +38,10 @@ export const R11: Rule = (input) => {
     if (e < 0n !== a < 0n)
       return deny('R11', `simulated delta on ${k} moves the other way: expected ${e}, got ${a}`);
     if (abs(a - e) * 10_000n > abs(e) * tolerance)
-      return deny('R11', `simulated delta on ${k} is ${a}, expected ${e} (tolerance ${tolerance} bps)`);
+      return deny(
+        'R11',
+        `simulated delta on ${k} is ${a}, expected ${e} (tolerance ${tolerance} bps)`,
+      );
   }
   return pass('R11', `simulation matches all ${expected.size} declared deltas`);
 };

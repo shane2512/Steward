@@ -17,13 +17,7 @@ import {
 } from '@steward/shared';
 
 export type PolicyIssueCode =
-  | 'SCHEMA'
-  | 'ABOVE_CEILING'
-  | 'BELOW_FLOOR'
-  | 'INCONSISTENT'
-  | 'DUPLICATE'
-  | 'UNSAFE'
-  | 'MISSING';
+  'SCHEMA' | 'ABOVE_CEILING' | 'BELOW_FLOOR' | 'INCONSISTENT' | 'DUPLICATE' | 'UNSAFE' | 'MISSING';
 
 export type PolicyIssue = {
   /** Dotted path into the draft, e.g. `limits.perTxMicroUsd` or `recipients.2.address`. */
@@ -69,7 +63,12 @@ export function validatePolicyDraft(
   // --- limits -----------------------------------------------------------------------------------
   const { perTxMicroUsd, dailyMicroUsd, maxActionsPerHour } = p.limits;
   if (perTxMicroUsd <= 0n)
-    add('limits.perTxMicroUsd', 'BELOW_FLOOR', 'the per-transaction limit must be > 0', 'Set a limit the agent can actually work within.');
+    add(
+      'limits.perTxMicroUsd',
+      'BELOW_FLOOR',
+      'the per-transaction limit must be > 0',
+      'Set a limit the agent can actually work within.',
+    );
   if (perTxMicroUsd > ceilings.MAX_PER_TX_MICRO_USD)
     add(
       'limits.perTxMicroUsd',
@@ -78,7 +77,12 @@ export function validatePolicyDraft(
       `Lower it to at most ${usd(ceilings.MAX_PER_TX_MICRO_USD)}.`,
     );
   if (dailyMicroUsd <= 0n)
-    add('limits.dailyMicroUsd', 'BELOW_FLOOR', 'the daily limit must be > 0', 'Set a daily limit greater than zero.');
+    add(
+      'limits.dailyMicroUsd',
+      'BELOW_FLOOR',
+      'the daily limit must be > 0',
+      'Set a daily limit greater than zero.',
+    );
   if (dailyMicroUsd > ceilings.MAX_DAILY_MICRO_USD)
     add(
       'limits.dailyMicroUsd',
@@ -124,7 +128,12 @@ export function validatePolicyDraft(
 
   // --- risk parameters --------------------------------------------------------------------------
   if (p.depegThresholdBps < ceilings.MIN_RISK_THRESHOLD_BPS)
-    add('depegThresholdBps', 'BELOW_FLOOR', 'a depeg threshold of 0 disables the depeg guard', 'Use 50 bps (0.5%) unless you have a reason not to.');
+    add(
+      'depegThresholdBps',
+      'BELOW_FLOOR',
+      'a depeg threshold of 0 disables the depeg guard',
+      'Use 50 bps (0.5%) unless you have a reason not to.',
+    );
   if (p.depegThresholdBps > ceilings.MAX_DEPEG_THRESHOLD_BPS)
     add(
       'depegThresholdBps',
@@ -133,7 +142,12 @@ export function validatePolicyDraft(
       `Use at most ${ceilings.MAX_DEPEG_THRESHOLD_BPS} bps.`,
     );
   if (p.vaultDrawdownBps < ceilings.MIN_RISK_THRESHOLD_BPS)
-    add('vaultDrawdownBps', 'BELOW_FLOOR', 'a drawdown threshold of 0 disables the vault guard', 'Use 100 bps (1%) unless you have a reason not to.');
+    add(
+      'vaultDrawdownBps',
+      'BELOW_FLOOR',
+      'a drawdown threshold of 0 disables the vault guard',
+      'Use 100 bps (1%) unless you have a reason not to.',
+    );
   if (p.vaultDrawdownBps > ceilings.MAX_VAULT_DRAWDOWN_BPS)
     add(
       'vaultDrawdownBps',
@@ -151,7 +165,12 @@ export function validatePolicyDraft(
       'Remove sweep_home; the owner triggers it from the Freeze screen.',
     );
   if (new Set(p.autonomousKinds).size !== p.autonomousKinds.length)
-    add('autonomousKinds', 'DUPLICATE', 'autonomousKinds contains duplicates', 'List each kind once.');
+    add(
+      'autonomousKinds',
+      'DUPLICATE',
+      'autonomousKinds contains duplicates',
+      'List each kind once.',
+    );
 
   // --- vaults -----------------------------------------------------------------------------------
   if (p.vaults.length > ceilings.MAX_VAULTS)
@@ -163,9 +182,19 @@ export function validatePolicyDraft(
     );
   p.vaults.forEach((v, i) => {
     if (p.vaults.findIndex((o) => o.id === v.id) !== i)
-      add(`vaults.${i}.id`, 'DUPLICATE', `vault id "${v.id}" is used twice`, 'Vault ids must be unique.');
+      add(
+        `vaults.${i}.id`,
+        'DUPLICATE',
+        `vault id "${v.id}" is used twice`,
+        'Vault ids must be unique.',
+      );
     if (p.vaults.findIndex((o) => addressEquals(o.address, v.address)) !== i)
-      add(`vaults.${i}.address`, 'DUPLICATE', 'this vault address is already allowlisted', 'Remove the duplicate entry.');
+      add(
+        `vaults.${i}.address`,
+        'DUPLICATE',
+        'this vault address is already allowlisted',
+        'Remove the duplicate entry.',
+      );
     if (!p.tokens.some((t) => addressEquals(t.address, v.asset)))
       add(
         `vaults.${i}.asset`,
@@ -174,7 +203,12 @@ export function validatePolicyDraft(
         'Allowlist vaults whose asset is the policy token (USDC).',
       );
     if (v.maxAllocationBps === 0)
-      add(`vaults.${i}.maxAllocationBps`, 'INCONSISTENT', `vault "${v.id}" may hold 0% of funds, so it can never be used`, 'Give it an allocation or remove the vault.');
+      add(
+        `vaults.${i}.maxAllocationBps`,
+        'INCONSISTENT',
+        `vault "${v.id}" may hold 0% of funds, so it can never be used`,
+        'Give it an allocation or remove the vault.',
+      );
   });
 
   // --- recipients -------------------------------------------------------------------------------
@@ -187,7 +221,12 @@ export function validatePolicyDraft(
     );
   p.recipients.forEach((r, i) => {
     if (p.recipients.findIndex((o) => o.id === r.id) !== i)
-      add(`recipients.${i}.id`, 'DUPLICATE', `recipient id "${r.id}" is used twice`, 'Recipient ids must be unique.');
+      add(
+        `recipients.${i}.id`,
+        'DUPLICATE',
+        `recipient id "${r.id}" is used twice`,
+        'Recipient ids must be unique.',
+      );
     // Two labels on one address is how a poisoning attempt looks after it got past the UI (T3).
     if (p.recipients.findIndex((o) => addressEquals(o.address, r.address)) !== i)
       add(
@@ -204,7 +243,12 @@ export function validatePolicyDraft(
         'Use sweep_home to move funds home; do not model the treasury as a payee.',
       );
     if (r.maxPerTxMicroUsd <= 0n)
-      add(`recipients.${i}.maxPerTxMicroUsd`, 'BELOW_FLOOR', `"${r.label}" can never be paid`, 'Set a per-transaction cap greater than zero.');
+      add(
+        `recipients.${i}.maxPerTxMicroUsd`,
+        'BELOW_FLOOR',
+        `"${r.label}" can never be paid`,
+        'Set a per-transaction cap greater than zero.',
+      );
     if (r.maxPerTxMicroUsd > perTxMicroUsd)
       add(
         `recipients.${i}.maxPerTxMicroUsd`,

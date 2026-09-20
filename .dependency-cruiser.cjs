@@ -11,19 +11,19 @@ const forbid = (name, from, to, comment) => ({
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
-    // policy is pure (I2): only shared + zod/@noble/hashes, no node core modules (net/fs/http/crypto/env access).
+    // policy/src is pure (I2): only shared + @noble/hashes, no node core modules (net/fs/http/
+    // crypto/env access). The rules are scoped to `src` so the test suite may use vitest/fast-check.
     forbid(
       'policy-only-shared',
-      pkg('policy'),
+      '^packages/policy/src/',
       '^(packages/(?!policy/|shared/)|apps/)',
       'policy may import only shared',
     ),
     {
       name: 'policy-no-core-or-network-deps',
-      comment:
-        'policy must not use node core modules or npm deps other than zod/@noble/hashes/shared',
+      comment: 'policy must not use node core modules or npm deps other than @noble/hashes/shared',
       severity: 'error',
-      from: { path: pkg('policy') },
+      from: { path: '^packages/policy/src/' },
       to: {
         dependencyTypes: [
           'core',
@@ -35,7 +35,7 @@ module.exports = {
           'npm-no-pkg',
           'npm-unknown',
         ],
-        pathNot: '^node_modules/(zod|@noble/hashes)/',
+        pathNot: '^node_modules/@noble/hashes/',
       },
     },
     forbid(

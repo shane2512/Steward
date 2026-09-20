@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:adversarial": "node scripts/not-yet.mjs test:adversarial 4",
     "test:e2e": "node scripts/not-yet.mjs test:e2e 7",
-    "check:arch": "depcruise apps packages --config .dependency-cruiser.cjs",
+    "check:arch": "depcruise apps packages --config .dependency-cruiser.cjs && node scripts/check-arch-fixture.mjs && node scripts/check-lint-fixture.mjs",
     "check:arch:fixture": "node scripts/check-arch-fixture.mjs",
     "db:migrate": "pnpm --filter @steward/db migrate",
     "db:generate": "pnpm --filter @steward/db generate",
@@ -22,7 +22,8 @@
     "contracts:test": "forge test --root contracts",
     "contracts:build": "forge build --root contracts",
     "contracts:deploy": "tsx scripts/live/deploy-contracts.ts",
-    "live:spend-permission": "tsx scripts/live/spend-permission-e2e.ts"
+    "live:spend-permission": "tsx scripts/live/spend-permission-e2e.ts",
+    "check:lint:fixture": "node scripts/check-lint-fixture.mjs"
   },
   "devDependencies": {
     "@coinbase/cdp-sdk": "^1.56.0",
