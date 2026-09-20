@@ -34,4 +34,10 @@ export default tseslint.config(
     files: ['**/*.mjs', '**/*.js'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
   },
+  {
+    // `noUncheckedIndexedAccess` makes `calls[0]` possibly-undefined; in an assertion-heavy test a
+    // `!` is the readable form and a wrong index fails the test anyway. Product code keeps the rule.
+    files: ['**/test/**/*.ts', 'scripts/live/**/*.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
+  },
 );
