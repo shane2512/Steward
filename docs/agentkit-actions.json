@@ -1,0 +1,135 @@
+[
+  {
+    "name": "WalletActionProvider_get_wallet_details",
+    "description": "\n    This tool will return the details of the connected wallet including:\n    - Wallet address\n    - Network information (protocol family, network ID, chain ID)\n    - Native token balance (ETH for EVM networks, SOL for Solana networks)\n    - Wallet provider name\n    ",
+    "schema": []
+  },
+  {
+    "name": "WalletActionProvider_native_transfer",
+    "description": "\nThis tool will transfer (send) native tokens (ETH for EVM networks, SOL for SVM networks) from the wallet to another onchain address.\n\nIt takes the following inputs:\n- amount: The amount to transfer in whole units (e.g. 4.2 ETH, 0.1 SOL)\n- destination: The address to receive the funds\n",
+    "schema": [
+      "to",
+      "value"
+    ]
+  },
+  {
+    "name": "ERC20ActionProvider_get_balance",
+    "description": "\n    This tool will get the balance of an ERC20 token for a given address. \n    It takes the following inputs:\n    - tokenAddress: The contract address of the token to get the balance for\n    - address: (Optional) The address to check the balance for. If not provided, uses the wallet's address\n    Important notes:\n    - Never assume token or address, they have to be provided as inputs. If only token symbol is provided, use the get_token_address tool to get the token address first\n    ",
+    "schema": [
+      "tokenAddress",
+      "address"
+    ]
+  },
+  {
+    "name": "ERC20ActionProvider_transfer",
+    "description": "\n    This tool will transfer (send) an ERC20 token from the wallet to another onchain address.\n\nIt takes the following inputs:\n- amount: The amount to transfer in whole units (e.g. 10.5 USDC)\n- tokenAddress: The contract address of the token to transfer\n- destinationAddress: The address to send the funds to\nImportant notes:\n- Never assume token or destination addresses, they have to be provided as inputs. If only token symbol is provided, use the get_token_address tool to get the token address first\n",
+    "schema": [
+      "amount",
+      "tokenAddress",
+      "destinationAddress"
+    ]
+  },
+  {
+    "name": "ERC20ActionProvider_approve",
+    "description": "\nThis tool will approve a spender to transfer ERC20 tokens from the wallet.\n\nIt takes the following inputs:\n- amount: The amount to approve in whole units (e.g. 100 for 100 USDC)\n- tokenAddress: The contract address of the token to approve\n- spenderAddress: The spender address to approve\n\nImportant notes:\n- This will overwrite any existing allowance\n- To revoke an allowance, set the amount to 0\n- Ensure you trust the spender address before approving\n- Never assume token addresses, they have to be provided as inputs. If only token symbol is provided, use the get_token_address tool to get the token address first\n",
+    "schema": [
+      "amount",
+      "tokenAddress",
+      "spenderAddress"
+    ]
+  },
+  {
+    "name": "ERC20ActionProvider_get_allowance",
+    "description": "\nThis tool will get the allowance amount for a spender of an ERC20 token.\n\nIt takes the following inputs:\n- tokenAddress: The contract address of the token to check allowance for\n- spenderAddress: The address to check allowance for\n\nImportant notes:\n- Never assume token addresses, they have to be provided as inputs. If only token symbol is provided, use the get_token_address tool to get the token address first\n",
+    "schema": [
+      "tokenAddress",
+      "spenderAddress"
+    ]
+  },
+  {
+    "name": "ERC20ActionProvider_get_erc20_token_address",
+    "description": "\n    This tool will get the contract address for frequently used ERC20 tokens on different networks.\n    It takes the following input:\n    - symbol: The token symbol (e.g. USDC, EURC, CBBTC)\n    ",
+    "schema": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "MorphoActionProvider_deposit",
+    "description": "\nThis tool allows depositing assets into a Morpho Vault. \n\nIt takes:\n- vaultAddress: The address of the Morpho Vault to deposit to\n- assets: The amount of assets to deposit in whole units\n  Examples for WETH:\n  - 1 WETH\n  - 0.1 WETH\n  - 0.01 WETH\n- receiver: The address to receive the shares\n- tokenAddress: The address of the token to approve\n\nImportant notes:\n- Make sure to use the exact amount provided. Do not convert units for assets for this action.\n- Please use a token address (example 0x4200000000000000000000000000000000000006) for the tokenAddress field.\n",
+    "schema": [
+      "assets",
+      "receiver",
+      "tokenAddress",
+      "vaultAddress"
+    ]
+  },
+  {
+    "name": "MorphoActionProvider_withdraw",
+    "description": "\nThis tool allows withdrawing assets from a Morpho Vault. It takes:\n\n- vaultAddress: The address of the Morpho Vault to withdraw from\n- assets: The amount of assets to withdraw in atomic units (wei)\n- receiver: The address to receive the shares\n",
+    "schema": [
+      "vaultAddress",
+      "assets",
+      "receiver"
+    ]
+  },
+  {
+    "name": "PythActionProvider_fetch_price_feed",
+    "description": "Fetch the price feed ID for a given token symbol from Pyth.\n\n    Inputs:\n    - tokenSymbol: The asset ticker/symbol to fetch the price feed ID for (e.g. BTC, ETH, COIN, XAU, EUR, etc.)\n    - quoteCurrency: The quote currency to filter by (defaults to USD)\n    - assetType: The asset type to search for (crypto, equity, fx, metal) - defaults to crypto\n\n    Examples:\n    - Crypto: BTC, ETH, SOL\n    - Equities: COIN, AAPL, TSLA\n    - FX: EUR, GBP, JPY\n    - Metals: XAU (Gold), XAG (Silver), XPT (Platinum), XPD (Palladium)\n    ",
+    "schema": [
+      "tokenSymbol",
+      "quoteCurrency",
+      "assetType"
+    ]
+  },
+  {
+    "name": "PythActionProvider_fetch_price",
+    "description": "Fetch the price of a price feed from Pyth.\n\nInputs:\n- priceFeedID: Price feed ID (string)\n\nImportant notes:\n- Do not assume that a random ID is a Pyth price feed ID. If you are confused, ask a clarifying question.\n- This action only fetches price inputs from Pyth price feeds. No other source.\n- If you are asked to fetch the price from Pyth for a ticker symbol such as BTC, you must first use the pyth_fetch_price_feed_id\naction to retrieve the price feed ID before invoking the pyth_fetch_price action\n",
+    "schema": [
+      "priceFeedID"
+    ]
+  },
+  {
+    "name": "X402ActionProvider_discover_x402_services",
+    "description": "Discover available x402 services. Only services available on the current network will be returned. Optionally filter by a maximum price in whole units of USDC (only USDC payment options will be considered when filter is applied).",
+    "schema": [
+      "facilitator",
+      "maxUsdcPrice",
+      "x402Versions",
+      "keyword"
+    ]
+  },
+  {
+    "name": "X402ActionProvider_make_http_request",
+    "description": "\nMakes a basic HTTP request to an API endpoint. If the endpoint requires payment (returns 402),\nit will return payment details that can be used with retry_http_request_with_x402.\n\nEXAMPLES:\n- Production API: make_http_request(\"https://api.example.com/weather\")\n- Local development: make_http_request(\"http://localhost:3000/api/data\")\n\nIf you receive a 402 Payment Required response, use retry_http_request_with_x402 to handle the payment.\n",
+    "schema": [
+      "url",
+      "method",
+      "headers",
+      "queryParams",
+      "body"
+    ]
+  },
+  {
+    "name": "X402ActionProvider_retry_http_request_with_x402",
+    "description": "\nRetries an HTTP request with x402 payment after receiving a 402 Payment Required response.\nThis should be used after make_http_request returns a 402 response.\n\nEXAMPLE WORKFLOW:\n1. First call make_http_request(\"http://localhost:3000/protected\")\n2. If you get a 402 response, use this action to retry with payment\n3. Pass the entire original response to this action\n\nDO NOT use this action directly without first trying make_http_request!",
+    "schema": [
+      "url",
+      "method",
+      "headers",
+      "queryParams",
+      "body",
+      "selectedPaymentOption"
+    ]
+  },
+  {
+    "name": "X402ActionProvider_make_http_request_with_x402",
+    "description": "\nWARNING: This action automatically handles payments without asking for confirmation!\nOnly use this when explicitly told to skip the confirmation flow.\n\nFor most cases, you should:\n1. First try make_http_request\n2. Then use retry_http_request_with_x402 if payment is required\n\nThis action combines both steps into one, which means:\n- No chance to review payment details before paying\n- No confirmation step\n- Automatic payment processing\n- Assumes payment option is compatible with wallet network\n\nEXAMPLES:\n- Production: make_http_request_with_x402(\"https://api.example.com/data\")\n- Local dev: make_http_request_with_x402(\"http://localhost:3000/protected\")\n\nUnless specifically instructed otherwise, prefer the two-step approach with make_http_request first.",
+    "schema": [
+      "url",
+      "method",
+      "headers",
+      "queryParams",
+      "body"
+    ]
+  }
+]

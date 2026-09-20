@@ -12,3 +12,10 @@ cache/
 # spec bundle (already unpacked into docs/)
 steward-claude-code-specs.zip
 steward-claude-code-specs/
+spikes/.msg.json
+spikes/.perm.json
+spikes/.revoke.json
+spikes/.ak.out
+spikes/sign/client.js
+spikes/.server.out
+spikes/node_modules/
