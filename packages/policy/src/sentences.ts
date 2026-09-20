@@ -1,10 +1,16 @@
 // Task 3.7 — the mandate in English. The UI shows these sentences for review before the owner
 // signs a policy, and again next to every decision, so they must say exactly what the rules do.
-import { formatUnits, type PolicyDraft, type RuleCode } from '@steward/shared';
+import {
+  PROPOSAL_KINDS,
+  formatUnits,
+  type PolicyDraft,
+  type ProposalKind,
+  type RuleCode,
+} from '@steward/shared';
 
 const usd = (v: bigint) => `${formatUnits(v, 6)} USDC`;
 
-const KIND_WORDS: Record<string, string> = {
+const KIND_WORDS: Record<ProposalKind, string> = {
   pull_allowance: 'pull USDC from your treasury within the signed allowance',
   vault_deposit: 'deposit into an approved vault',
   vault_withdraw: 'withdraw from an approved vault',
@@ -53,14 +59,15 @@ export function renderPolicyAsSentences(p: PolicyDraft): string[] {
       `across at most ${p.limits.maxActionsPerHour} actions per hour.`,
   );
   s.push(`Ask you to approve anything worth ${usd(p.approvalThresholdMicroUsd)} or more.`);
-  for (const [kind, threshold] of Object.entries(p.approvalThresholdByKind ?? {})) {
+  for (const kind of PROPOSAL_KINDS) {
+    const threshold = p.approvalThresholdByKind?.[kind];
     if (threshold === undefined) continue;
-    s.push(`For "${KIND_WORDS[kind] ?? kind}", ask you only at ${usd(threshold)} or more.`);
+    s.push(`For "${KIND_WORDS[kind]}", ask you only at ${usd(threshold)} or more.`);
   }
   s.push(
     p.autonomousKinds.length === 0
       ? 'Steward may take no action on its own; everything needs your approval.'
-      : `Without asking, Steward may: ${p.autonomousKinds.map((k) => KIND_WORDS[k] ?? k).join('; ')}.`,
+      : `Without asking, Steward may: ${p.autonomousKinds.map((k) => KIND_WORDS[k]).join('; ')}.`,
   );
   for (const v of p.vaults) {
     s.push(
