@@ -3,8 +3,8 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: 0 — in progress (0.1 done; blocked on human-provided credentials for spikes)
-Required model: Sonnet
+Phase: 1 — in progress (Phase 0 closed 2026-09-20)
+Required model: Sonnet (task 1.9 Opus)
 Last updated: 2026-09-20
 
 ## Phase status
@@ -15,8 +15,8 @@ Last updated: 2026-09-20
 | D-3 | 2026-09-20 | PROPOSED: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
 | D-5 | 2026-09-20 | PROPOSED (needs human OK): a wallet that signs via plain ECDSA (EOA / Coinbase Wallet app) cannot grant spend permissions. Onboarding must require a Coinbase Smart Wallet (`smartWalletOnly`) and reject EOAs (detect via signature/1271 path or `getCode`+connector) | Found during V-05 live test | none |
 | D-4 | 2026-09-20 | PROPOSED spec fix: SERV `models.list()` unusable; validate model via raw `GET /v1/models` (`items[].modelId`); system message required | V-01 finding | none |
-| 0 | Verification spike & repo bootstrap | Sonnet | ◐ | | |
-| 1 | Monorepo foundation, DB, auth | Sonnet | ☐ | | |
+| 0 | Verification spike & repo bootstrap | Sonnet | ✅ | 2026-09-20 | V-10 partial (no real Smart Wallet), V-13 false->MockPriceFeed, V-09 fallback; human approved carrying V-10 to Phase 1.8/7.6 | | |
+| 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ◐ | | |
 | 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ☐ | | |
 | 3 | Policy Engine & mandate validator | Opus | ☐ | | |
 | 4 | SERV reasoning & injection defenses | Opus | ☐ | | |
@@ -26,14 +26,17 @@ Last updated: 2026-09-20
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
 
-## Current phase plan
-- [x] 0.1 git init, .gitignore, .nvmrc, README stub
-- [~] 0.2 spikes (serv, agentkit, usdc done; spend-permission + verify-sig await human signature): serv-smoke, agentkit-smoke, spend-permission-smoke, usdc-and-price, verify-sig (need credentials)
-- [ ] 0.2 docs research: V-09, V-11, V-12, V-14 (+ V-05 docs side)
-- [ ] 0.3 record every result in Verification log
-- [ ] 0.4 stop and ask human if any fallback weakens a security layer (esp. V-05)
-- [ ] 0.5 docs/agentkit-actions.json, docs/addresses.md
-- [ ] 0.6 propose spec diffs as Decisions
+## Current phase plan (Phase 1)
+- [ ] 1.1 workspace+turbo+tsconfig/eslint/prettier/vitest
+- [ ] 1.2 root scripts
+- [ ] 1.3 dependency-cruiser + violation fixture
+- [ ] 1.4 packages/shared
+- [ ] 1.5 docker-compose + packages/db (all tables)
+- [ ] 1.6 constraints/indexes
+- [ ] 1.7 apps/web + apps/worker skeleton
+- [ ] 1.8 SIWE auth
+- [ ] 1.9 (Opus) audit log hash chain
+- [ ] 1.10 CI
 
 ## Verification log (Phase 0)
 | ID | Result | Evidence (link/file) | Date |
@@ -51,7 +54,7 @@ Last updated: 2026-09-20
 | V-11 | VERIFIED (provider exists) | `x402ActionProvider` in AgentKit 0.10.4; supports base-sepolia; actions discover_x402_services, make_http_request, retry | 2026-09-20 |
 | V-10 | PARTIAL | viem `verifyMessage` returned true for an EOA (Coinbase Wallet phone app, 65-byte sig). NOT yet tested with a real Coinbase Smart Wallet (ERC-1271/6492): human could not create a passkey wallet at keys.coinbase.com (only old wallet offered). Carry into Phase 1.8/7.6 with a real Smart Wallet | 2026-09-20 |
 | V-09 | NOT CONFIRMED -> fallback | PromptGuard / Shadow Agents / decision trails appear in OpenServ marketing/console (https://console.openserv.ai/, https://docs.openserv.ai/what-is-serv) but no API parameter or response field is documented in the chat-completions reference. Fallback: own screen + verifier (already designed); Phase 4.11 skipped | 2026-09-20 |
-| V-12 | OPEN | no official rules page found via search; need URL from human | 2026-09-20 |
+| V-12 | VERIFIED | https://www.openserv.ai/hackathon : AgentKit track; hackathon Sep 14-28 2026; submissions close **Sep 28 00:00 UTC**; submission = public X post tagging @openservai (name, concept, images, GitHub/demo links) + submission form; project must be new, functional, demonstrable; judged on creativity, user-readiness, revenue potential; human must enable data collection at console.openserv.ai/settings/organization (prompts shared with OpenServ -> keep secrets/PII out, NFR-5). No explicit OpenServ agent registration requirement found | 2026-09-20 |
 
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
@@ -63,4 +66,4 @@ Last updated: 2026-09-20
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- Human provides Phase 0 prerequisites; then write and run spikes.
+- Phase 1. Hackathon deadline Sep 28 00:00 UTC (8 days): keep MUST scope tight.
