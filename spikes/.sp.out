@@ -1,0 +1,12 @@
+treasury: 0x96E06701D4b606D27efE683fE5F46731E45008a4 | agent: 0xe77C2DcC31444d4D822501B10e58Aa4ab39D8a14
+USDC faucet tx: 0x3b1d8ac2a0de2e29b6161657be6856db924e82fda70e03f5e104b0e47a03878a
+start | treasury USDC: 1 | agent USDC: 0
+createSpendPermission (owner-approved on-chain): complete 0x4fc2d8f67aa47244cf85bd802dec929aadc0daeb73ff8684a7f082ff47871a84
+permission hash: 0xeb6edb56e5ef9ce91386aeb85577b4943b3ec9aa5bca0fde511dcb3f04a40888 | revoked: false
+onchain isApproved: true
+agent spend 1 USDC: complete 0xe6d744046b6c3efc3e11b6e7ef0fb056adbd31e5ec7ff0f4a34c926f20e33bd0
+after spend | treasury USDC: 0 | agent USDC: 1
+owner revoke: complete 0x57caacd5d5f71499a8e3239f2af8745d23a0d0bff526f5542d197f073d13bc92
+onchain isRevoked: true | isValid: false
+post-revoke spend rejected as expected: failed to prepare calls: failed to estimate gas for user operation: useroperation reverted: execution reverted
+end | treasury USDC: 0 | agent USDC: 1
