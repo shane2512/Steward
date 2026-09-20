@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "^1.56.0",
     "@steward/db": "workspace:*",
     "@steward/shared": "workspace:*",
+    "@steward/wallet": "workspace:*",
     "clsx": "^2.1.1",
     "iron-session": "^9.0.1",
     "next": "^15.5.25",

@@ -1,10 +1,11 @@
 // Thin typed repositories. More are added by the phase that needs them.
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from './client';
-import { users, wallets } from './schema';
+import { spendPermissions, users, wallets } from './schema';
 
 export type User = typeof users.$inferSelect;
 export type Wallet = typeof wallets.$inferSelect;
+export type SpendPermissionRow = typeof spendPermissions.$inferSelect;
 
 /** Create the user on first login, else bump last_login_at. ownerAddress must already be checksummed. */
 export async function upsertUserByAddress(db: Db, ownerAddress: string, now: Date): Promise<User> {
@@ -23,4 +24,71 @@ export async function getUserById(db: Db, id: string): Promise<User | undefined>
 
 export async function getWalletByUserId(db: Db, userId: string): Promise<Wallet | undefined> {
   return (await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1))[0];
+}
+
+/** The permission the worker should be using: newest that is still pending or approved on-chain. */
+export async function getActiveSpendPermission(
+  db: Db,
+  walletId: string,
+): Promise<SpendPermissionRow | undefined> {
+  return (
+    await db
+      .select()
+      .from(spendPermissions)
+      .where(
+        and(
+          eq(spendPermissions.walletId, walletId),
+          inArray(spendPermissions.status, ['pending', 'approved_onchain']),
+        ),
+      )
+      .orderBy(desc(spendPermissions.createdAt))
+      .limit(1)
+  )[0];
+}
+
+export async function listSpendPermissions(
+  db: Db,
+  walletId: string,
+): Promise<SpendPermissionRow[]> {
+  return db
+    .select()
+    .from(spendPermissions)
+    .where(eq(spendPermissions.walletId, walletId))
+    .orderBy(desc(spendPermissions.createdAt));
+}
+
+/**
+ * Store an owner-signed permission. The caller must have validated it (ceilings, spender, token) and
+ * verified the signature first — this is a thin writer, not a gate.
+ */
+export async function insertSpendPermission(
+  db: Db,
+  row: {
+    walletId: string;
+    permission: unknown;
+    signature: string;
+    permissionHash: string;
+  },
+): Promise<SpendPermissionRow> {
+  const [inserted] = await db.insert(spendPermissions).values(row).returning();
+  if (!inserted) throw new Error('insertSpendPermission: no row returned');
+  return inserted;
+}
+
+export async function markSpendPermissionApproved(
+  db: Db,
+  id: string,
+  approvedTxHash: string,
+): Promise<void> {
+  await db
+    .update(spendPermissions)
+    .set({ status: 'approved_onchain', approvedTxHash })
+    .where(eq(spendPermissions.id, id));
+}
+
+export async function markSpendPermissionRevoked(db: Db, id: string, at: Date): Promise<void> {
+  await db
+    .update(spendPermissions)
+    .set({ status: 'revoked', revokedAt: at })
+    .where(eq(spendPermissions.id, id));
 }
