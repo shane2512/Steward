@@ -13,10 +13,10 @@ const r = spawnSync(process.execPath, [bin, 'packages', '--config', config, '--n
 });
 process.stdout.write(r.stdout);
 process.stderr.write(r.stderr);
-if (r.status === 0 || !r.stdout.includes('policy-only-shared')) {
-  console.error(
-    'FAIL: dependency-cruiser did NOT flag the deliberate violation (rule policy-only-shared)',
-  );
+const expected = ['policy-only-shared', 'reasoning-no-wallet-db'];
+const missing = expected.filter((rule) => !r.stdout.includes(rule));
+if (r.status === 0 || missing.length > 0) {
+  console.error(`FAIL: dependency-cruiser did NOT flag: ${missing.join(', ') || '(exit 0)'}`);
   process.exit(1);
 }
-console.log(`OK: violation detected (depcruise exit ${r.status})`);
+console.log(`OK: violations detected (${expected.join(', ')}; depcruise exit ${r.status})`);

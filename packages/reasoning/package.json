@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@steward/context": "workspace:*",
-    "@steward/shared": "workspace:*"
+    "@steward/policy": "workspace:*",
+    "@steward/shared": "workspace:*",
+    "openai": "^7.19.0",
+    "zod": "^4.6.5"
   }
 }

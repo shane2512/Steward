@@ -41,8 +41,11 @@ module.exports = {
     forbid(
       'reasoning-no-wallet-db',
       pkg('reasoning'),
-      '^packages/(wallet|db|policy|risk)/',
-      'reasoning: shared + context only (I1/I3)',
+      // D-33: the pure Policy Engine is readable from reasoning (validatePolicyDraft,
+      // ruleSentences, explainVerdict). It has no I/O and cannot move funds; wallet/db/risk stay
+      // forbidden, which is what I1/I3 actually protect.
+      '^packages/(wallet|db|risk)/',
+      'reasoning: shared + context + pure policy helpers only (I1/I3)',
     ),
     forbid(
       'context-no-wallet-db',
