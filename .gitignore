@@ -23,3 +23,7 @@ spikes/node_modules/
 next-env.d.ts
 coverage/
 /CLAUDE.md
+
+# stray tool-output redirects
+*.gate.out
+.gate.out
