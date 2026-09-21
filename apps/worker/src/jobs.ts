@@ -352,7 +352,10 @@ export async function resumeCrashWindow(deps: {
   for (const execution of open) {
     const context = await executionContext(deps.db, execution.walletId);
     if (!context) {
-      log.error({ executionId: execution.id }, 'cannot resume: no wallet/policy for this execution');
+      log.error(
+        { executionId: execution.id },
+        'cannot resume: no wallet/policy for this execution',
+      );
       continue;
     }
 
@@ -371,7 +374,7 @@ export async function resumeCrashWindow(deps: {
       // decision's stored proposal, so the confirmer still checks the MEASURED effect (5.5) rather
       // than trusting a receipt's success flag.
       const deltas = await expectedDeltasOf(deps.db, execution.decisionId);
-      const recipient = await recipientOf(deps.db, execution.decisionId, context);
+      const recipient = await recipientOf(deps.db, execution.decisionId);
       await deps.boss.send(EXEC_CONFIRM_QUEUE, {
         executionId: execution.id,
         token: context.token,
@@ -437,11 +440,7 @@ async function expectedDeltasOf(
 }
 
 /** I4: the recipient address comes from the active Policy by id, never from the proposal. */
-async function recipientOf(
-  db: Db,
-  decisionId: string,
-  _context: ExecutionContext,
-): Promise<Address | undefined> {
+async function recipientOf(db: Db, decisionId: string): Promise<Address | undefined> {
   const decision = await getAgentDecision(db, decisionId);
   if (!decision) return undefined;
   const parsed = zProposal.safeParse(decision.proposal);

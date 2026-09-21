@@ -207,7 +207,9 @@ export async function gather(
       const start = Number(permission.value.start);
       if (period > 0 && Number.isFinite(start)) {
         const elapsed = Math.max(0, Math.floor(now.getTime() / 1000) - start);
-        allowancePeriodEnds = new Date((start + (Math.floor(elapsed / period) + 1) * period) * 1000);
+        allowancePeriodEnds = new Date(
+          (start + (Math.floor(elapsed / period) + 1) * period) * 1000,
+        );
       }
     }
   }
@@ -293,7 +295,11 @@ export async function gather(
 }
 
 /** `BuildContext` for `buildCalls` / the executor. */
-export function buildContextOf(g: Gathered, spendPermissionManagerAddress: Address, allowMainnet: boolean) {
+export function buildContextOf(
+  g: Gathered,
+  spendPermissionManagerAddress: Address,
+  allowMainnet: boolean,
+) {
   return {
     agentWalletAddress: g.agent,
     spendPermissionManagerAddress,

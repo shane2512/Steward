@@ -190,7 +190,11 @@ export function preChecks(input: PreCheckInput): PreCheck {
   if (deployable >= minAction) {
     // Step 1: bring the cash into the agent wallet, within the on-chain allowance. This moves money
     // between two liquid holders, so it cannot break the runway buffer (R08 exempts it).
-    if (input.agentUsdc < deployable && input.allowanceRemaining > 0n && allowed('pull_allowance')) {
+    if (
+      input.agentUsdc < deployable &&
+      input.allowanceRemaining > 0n &&
+      allowed('pull_allowance')
+    ) {
       const amount = min(
         deployable - input.agentUsdc,
         input.allowanceRemaining,
@@ -263,9 +267,7 @@ export function preChecks(input: PreCheckInput): PreCheck {
   const managed = liquid + input.vaults.reduce((s, v) => s + v.positionAssets, 0n);
   const overAllocated =
     managed > 0n &&
-    input.vaults.some(
-      (v) => v.positionAssets * 10_000n > BigInt(v.maxAllocationBps) * managed,
-    );
+    input.vaults.some((v) => v.positionAssets * 10_000n > BigInt(v.maxAllocationBps) * managed);
 
   if (shortOnPayroll)
     return {

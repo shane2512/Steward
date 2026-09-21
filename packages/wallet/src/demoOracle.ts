@@ -62,9 +62,7 @@ export type DemoPriceRefresherOptions = {
  * Build the demo price refresher, or `Err` if the I11 fence does not hold. Constructed once at
  * worker boot so a misconfigured deployment fails at startup, never at the first tick.
  */
-export function demoPriceRefresher(
-  options: DemoPriceRefresherOptions,
-): Result<DemoPriceRefresher> {
+export function demoPriceRefresher(options: DemoPriceRefresherOptions): Result<DemoPriceRefresher> {
   if (!options.demoMode) return err('demo price refresh requires DEMO_MODE=true (I11)');
   if (options.chainId !== BASE_SEPOLIA)
     return err(`demo price refresh is only allowed on chain ${BASE_SEPOLIA} (I11)`);

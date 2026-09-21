@@ -32,11 +32,15 @@ export function publicClientFor(env: Env): PublicClient {
 /** RECEIPT_HMAC_SECRET as bytes. Fails loudly at boot: a worker without it can never execute. */
 export function receiptKeyFor(env: Env): Uint8Array {
   if (!env.RECEIPT_HMAC_SECRET)
-    throw new Error('RECEIPT_HMAC_SECRET is required: the worker cannot verify receipts without it');
+    throw new Error(
+      'RECEIPT_HMAC_SECRET is required: the worker cannot verify receipts without it',
+    );
   return new TextEncoder().encode(env.RECEIPT_HMAC_SECRET.reveal());
 }
 
-export function servClientFor(env: Env): { client: ServClient; proposerModel: string; verifierModel: string } | undefined {
+export function servClientFor(
+  env: Env,
+): { client: ServClient; proposerModel: string; verifierModel: string } | undefined {
   if (!env.SERV_API_KEY) {
     log.warn('SERV_API_KEY is not set: the worker runs in degraded mode (deterministic only)');
     return undefined;

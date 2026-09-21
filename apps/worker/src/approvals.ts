@@ -39,7 +39,8 @@ import { gather } from './gather';
 import { runPipeline, type PipelineDeps, type PipelineOutcome } from './pipeline';
 
 export type ApprovalError = { code: string; message: string };
-const fail = (code: string, message: string): Result<never, ApprovalError> => err({ code, message });
+const fail = (code: string, message: string): Result<never, ApprovalError> =>
+  err({ code, message });
 
 /**
  * Verify an EIP-191 personal-sign signature over the approval message.
@@ -75,7 +76,10 @@ export async function verifyApprovalSignature(
  *   - proposal hash mismatch the decision row was not the one that was signed
  */
 export async function executeApproval(
-  deps: PipelineDeps & { publicClient: PublicClient; priceAdapter?: Parameters<typeof gather>[0]['priceAdapter'] },
+  deps: PipelineDeps & {
+    publicClient: PublicClient;
+    priceAdapter?: Parameters<typeof gather>[0]['priceAdapter'];
+  },
   approvalId: string,
 ): Promise<Result<PipelineOutcome, ApprovalError>> {
   const { db } = deps;
@@ -83,8 +87,7 @@ export async function executeApproval(
 
   const approval = await getApproval(db, approvalId);
   if (!approval) return fail('UNKNOWN_APPROVAL', `approval ${approvalId} not found`);
-  if (approval.status !== 'approved')
-    return fail('NOT_APPROVED', `approval is ${approval.status}`);
+  if (approval.status !== 'approved') return fail('NOT_APPROVED', `approval is ${approval.status}`);
   if (approval.expiresAt.getTime() <= now.getTime())
     return fail('EXPIRED', 'the approval window has closed');
   if (!approval.signature) return fail('NO_SIGNATURE', 'approval carries no signature');
@@ -165,7 +168,9 @@ export async function executeApproval(
   });
   if (!audited.ok) return fail('AUDIT_FAILED', audited.error.message);
 
-  const contextFactIds = Array.isArray((decision.contextSnapshot as { facts?: { id: string }[] })?.facts)
+  const contextFactIds = Array.isArray(
+    (decision.contextSnapshot as { facts?: { id: string }[] })?.facts,
+  )
     ? ((decision.contextSnapshot as { facts: { id: string }[] }).facts ?? []).map((f) => f.id)
     : [];
   const screen = (decision.screen as { injectionSuspected: boolean; signals: string[] } | null) ?? {

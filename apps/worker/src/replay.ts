@@ -12,20 +12,9 @@
 // fact. Replaying from a mutable table would prove nothing.
 //
 // It reads only. It cannot sign a receipt or send anything.
-import {
-  getPolicyVersion,
-  listAuditForEntity,
-  type Db,
-} from '@steward/db';
+import { getPolicyVersion, listAuditForEntity, type Db } from '@steward/db';
 import { evaluate } from '@steward/policy';
-import {
-  err,
-  ok,
-  zEvaluationInput,
-  zPolicy,
-  type Result,
-  type Verdict,
-} from '@steward/shared';
+import { err, ok, zEvaluationInput, zPolicy, type Result, type Verdict } from '@steward/shared';
 
 export type ReplayError = { code: string; message: string };
 const fail = (code: string, message: string): Result<never, ReplayError> => err({ code, message });

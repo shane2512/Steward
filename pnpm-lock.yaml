@@ -98,6 +98,9 @@ importers:
       next:
         specifier: ^15.5.25
         version: 15.5.25(@types/node@26.6.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      pg-boss:
+        specifier: ^12.33.2
+        version: 12.33.2
       react:
         specifier: ^19.3.0
         version: 19.3.0

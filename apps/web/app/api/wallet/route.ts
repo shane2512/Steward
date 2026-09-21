@@ -1,7 +1,7 @@
 // GET /api/wallet — balances, allowance remaining, vault position, max-at-risk, frozen state.
 //
 // Phase 3 replaces the single MOCK_VAULT_ADDRESS below with the vault list from the active Policy.
-import { getActiveSpendPermission } from '@steward/db';
+import { getActiveSpendPermission, listAuditForEntity } from '@steward/db';
 import { getEnv } from '@steward/shared';
 import {
   getBalances,
@@ -60,6 +60,12 @@ export async function GET() {
       : null;
   const vaultAssets = position?.ok ? position.value.assets : 0n;
 
+  // 6.7 — degraded mode. The SERV circuit breaker lives in the worker process, so it publishes its
+  // transitions to the SYSTEM audit chain (SERV is one service, not one wallet's problem) and the UI
+  // reads the latest one. No new column, and the flag is as auditable as every other state change.
+  const servEvents = await listAuditForEntity(owner.db, 'serv', 'serv');
+  const degraded = servEvents.at(-1)?.event === 'SERV_DEGRADED';
+
   return Response.json({
     wallet: {
       id: wallet.id,
@@ -69,6 +75,8 @@ export async function GET() {
       frozen: wallet.frozen,
       breakerOpen: wallet.breakerOpen,
     },
+    /** True when SERV is unavailable: only deterministic proposals run (SERV_REASONING §1). */
+    degraded,
     balances: {
       treasuryUsdc: (balances?.ok ? balances.value.treasuryUsdc : 0n).toString(),
       agentUsdc: (balances?.ok ? balances.value.agentUsdc : 0n).toString(),

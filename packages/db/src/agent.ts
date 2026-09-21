@@ -32,10 +32,7 @@ export async function listActiveWalletIds(db: Db): Promise<string[]> {
   const rows = await db
     .select({ id: wallets.id })
     .from(wallets)
-    .innerJoin(
-      policies,
-      and(eq(policies.walletId, wallets.id), eq(policies.status, 'active')),
-    )
+    .innerJoin(policies, and(eq(policies.walletId, wallets.id), eq(policies.status, 'active')))
     .where(and(eq(wallets.frozen, false), eq(wallets.breakerOpen, false)));
   return rows.map((r) => r.id);
 }
@@ -181,10 +178,7 @@ export async function updateAgentDecision(
   await db.update(agentDecisions).set(patch).where(eq(agentDecisions.id, id));
 }
 
-export async function getAgentDecision(
-  db: Db,
-  id: string,
-): Promise<AgentDecisionRow | undefined> {
+export async function getAgentDecision(db: Db, id: string): Promise<AgentDecisionRow | undefined> {
   return (await db.select().from(agentDecisions).where(eq(agentDecisions.id, id)).limit(1))[0];
 }
 
@@ -209,7 +203,12 @@ export async function listAgentDecisions(
 
 export async function insertVerdict(
   db: Db,
-  row: { decisionId: string; decision: 'ALLOW' | 'ESCALATE' | 'DENY'; results: unknown; policyVersion: number },
+  row: {
+    decisionId: string;
+    decision: 'ALLOW' | 'ESCALATE' | 'DENY';
+    results: unknown;
+    policyVersion: number;
+  },
 ): Promise<VerdictRow> {
   const [inserted] = await db.insert(verdicts).values(row).returning();
   if (!inserted) throw new Error('insertVerdict: no row returned');
@@ -393,8 +392,13 @@ export async function setWalletFrozen(
     .set(
       frozen
         ? { frozen: true, frozenAt: now, frozenReason: reason }
-        : { frozen: false, frozenAt: null, frozenReason: null, breakerOpen: false, breakerFailures: 0 },
+        : {
+            frozen: false,
+            frozenAt: null,
+            frozenReason: null,
+            breakerOpen: false,
+            breakerFailures: 0,
+          },
     )
     .where(eq(wallets.id, walletId));
 }
-

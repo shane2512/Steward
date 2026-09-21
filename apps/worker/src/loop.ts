@@ -126,7 +126,13 @@ export async function runIteration(
     walletId,
   );
   if (!gathered.ok) {
-    await skipAudit(db, walletId, now, `${gathered.error.code}: ${gathered.error.message}`, trigger);
+    await skipAudit(
+      db,
+      walletId,
+      now,
+      `${gathered.error.code}: ${gathered.error.message}`,
+      trigger,
+    );
     return { status: 'failed', code: gathered.error.code, message: gathered.error.message };
   }
   const g = gathered.value;
@@ -236,7 +242,12 @@ export async function runIteration(
     createdAt: now,
   });
   if (!contextAudited.ok)
-    return { status: 'failed', code: 'AUDIT_FAILED', message: contextAudited.error.message, decisionId };
+    return {
+      status: 'failed',
+      code: 'AUDIT_FAILED',
+      message: contextAudited.error.message,
+      decisionId,
+    };
 
   if (pre.kind === 'noop') {
     await appendAudit(db, {
@@ -254,19 +265,23 @@ export async function runIteration(
   // ── the proposal ───────────────────────────────────────────────────────────────────────────────
   let proposal: Proposal;
   let verifier: { verdict: 'AGREE' | 'DISAGREE' | 'UNSURE'; reasons: string[] } | null = null;
-  let screen = { injectionSuspected: false, signals: [] as string[] };
+  let screen: { injectionSuspected: boolean; signals: string[] };
   const servMeta: Record<string, unknown> = { degraded };
 
   if (pre.kind === 'deterministic') {
     proposal = pre.proposal;
     // The screen still runs on the untrusted text even for a deterministic action: R16 must see an
     // injection attempt regardless of who proposed. Heuristics are deterministic and need no SERV.
-    const heuristicOnly = await screenLocal(deps, ctx, degraded, servMeta);
-    screen = heuristicOnly;
+    screen = await screenLocal(deps, ctx, degraded, servMeta);
     ctx = { ...ctx, screen };
   } else {
     if (!deps.serv)
-      return { status: 'failed', code: 'NO_SERV', message: 'discretionary path without a SERV client', decisionId };
+      return {
+        status: 'failed',
+        code: 'NO_SERV',
+        message: 'discretionary path without a SERV client',
+        decisionId,
+      };
 
     screen = await screenLocal(deps, ctx, degraded, servMeta);
     ctx = { ...ctx, screen };
@@ -302,7 +317,12 @@ export async function runIteration(
     createdAt: now,
   });
   if (!proposalAudited.ok)
-    return { status: 'failed', code: 'AUDIT_FAILED', message: proposalAudited.error.message, decisionId };
+    return {
+      status: 'failed',
+      code: 'AUDIT_FAILED',
+      message: proposalAudited.error.message,
+      decisionId,
+    };
 
   if (proposal.kind === 'noop') {
     await updateDecision(db, decisionId, { proposal, screen, servMeta, status: 'noop' });
@@ -336,7 +356,12 @@ export async function runIteration(
       createdAt: now,
     });
     if (!verificationAudited.ok)
-      return { status: 'failed', code: 'AUDIT_FAILED', message: verificationAudited.error.message, decisionId };
+      return {
+        status: 'failed',
+        code: 'AUDIT_FAILED',
+        message: verificationAudited.error.message,
+        decisionId,
+      };
   }
 
   await updateDecision(db, decisionId, { proposal, screen, verifier, servMeta, status: 'noop' });

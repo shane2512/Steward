@@ -96,7 +96,6 @@ export async function runPipeline(
   const buildContext = buildContextOf(g, deps.spendPermissionManagerAddress, deps.allowMainnet);
 
   // ── build + simulate ──────────────────────────────────────────────────────────────────────────
-  let calls: readonly Call[] = [];
   let hash: Hex | null = null;
   let simulation: {
     ok: boolean;
@@ -114,7 +113,7 @@ export async function runPipeline(
       error: `${built.error.code}: ${built.error.message}`,
     });
   } else {
-    calls = built.value;
+    const calls: readonly Call[] = built.value;
     hash = callsHash(calls);
     const recipient = recipientAddressFor(proposal, g);
     const simulated = await simulateProposalCalls({
@@ -190,7 +189,8 @@ export async function runPipeline(
     // reproducibility claim worth anything.
     evaluationInput: serializeEvaluationInput(evaluationInput),
   });
-  if (!verdictAudited) return { status: 'failed', verdict, code: 'AUDIT_FAILED', message: 'VERDICT' };
+  if (!verdictAudited)
+    return { status: 'failed', verdict, code: 'AUDIT_FAILED', message: 'VERDICT' };
 
   // RR-12: the confirmer's breaker only counts *failures*. A rate-limit breach is a refusal, so it
   // would otherwise loop forever without opening the breaker. R14 is the bound; trip it here.
@@ -284,7 +284,12 @@ export async function runPipeline(
     },
   );
   if (!executed.ok)
-    return { status: 'failed', verdict, code: executed.error.code, message: executed.error.message };
+    return {
+      status: 'failed',
+      verdict,
+      code: executed.error.code,
+      message: executed.error.message,
+    };
 
   await updateAgentDecision(db, input.decisionId, { status: 'allowed', proposalHash });
 
@@ -370,7 +375,12 @@ type EvaluationInputLike = Omit<PipelineInput, 'g' | 'decisionId'> & {
   demoStableParity: boolean;
   state: ReturnType<typeof evaluationStateOf>;
   ledger: Gathered['ledger'];
-  simulation: { ok: boolean; deltas: Delta[]; approvals: SimulatedApproval[]; error?: string } | null;
+  simulation: {
+    ok: boolean;
+    deltas: Delta[];
+    approvals: SimulatedApproval[];
+    error?: string;
+  } | null;
 };
 
 const bigint = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v);
