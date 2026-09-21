@@ -328,6 +328,18 @@ describe.skipIf(!FORK)('fork: the Phase 6 decision loop, end to end', () => {
     expect(await usdcBalance(AGENT)).toBe(100n * ONE);
     expect(await shares(AGENT)).toBeGreaterThan(0n);
 
+    // The decision row says what actually happened. (A live run once reported every executed
+    // decision as `noop`, because the post-pipeline timings write clobbered the status.)
+    const [row] = await db
+      .select()
+      .from(schema.agentDecisions)
+      .where(eq(schema.agentDecisions.id, outcome.decisionId));
+    expect(row?.status).toBe('allowed');
+    expect(row?.proposalSource).toBe('deterministic');
+    expect(
+      (row?.servMeta as { timings?: Record<string, number> })?.timings?.['pipeline'],
+    ).toBeTypeOf('number');
+
     // Every step wrote its audit row, in order.
     expect(await eventsFor(outcome.decisionId)).toEqual([
       'CONTEXT',
@@ -475,6 +487,12 @@ describe.skipIf(!FORK)('fork: the Phase 6 decision loop, end to end', () => {
 
     expect(outcome.status, show(outcome)).toBe('denied');
     if (outcome.status !== 'denied') throw new Error('unreachable');
+    const [denied] = await db
+      .select()
+      .from(schema.agentDecisions)
+      .where(eq(schema.agentDecisions.id, outcome.decisionId));
+    expect(denied?.status).toBe('denied');
+    expect(denied?.proposalSource).toBe('serv');
     const codes = outcome.verdict.results.filter((r) => r.result === 'DENY').map((r) => r.code);
     // The DEMO golden table calls for R05 / R16 / R15.
     expect(codes).toContain('R16');

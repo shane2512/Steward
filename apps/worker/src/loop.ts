@@ -232,7 +232,9 @@ export async function runIteration(
     trigger,
     contextSnapshot: JSON.parse(JSON.stringify(ctx, bigintToString)) as unknown,
     contextHash: ctx.snapshotHash,
-    proposalSource: pre.kind === 'deterministic' ? 'deterministic' : 'serv',
+    // A deterministic pre-check and a deterministic NOOP are both our own arithmetic; only the
+    // discretionary path involves a model, and `propose` restamps `source` on its own output (RR-3).
+    proposalSource: pre.kind === 'discretionary' ? 'serv' : 'deterministic',
     status: 'noop',
   }).catch(() => null);
   if (decision === null)
@@ -385,6 +387,8 @@ export async function runIteration(
       };
   }
 
+  // Record the proposal BEFORE the pipeline runs, so a crash mid-pipeline still leaves the decision
+  // row readable. `status` stays `noop` until the pipeline decides what it really is.
   await updateDecision(db, decisionId, { proposal, screen, verifier, servMeta, status: 'noop' });
 
   const outcome = await timings.step('pipeline', () =>
@@ -398,8 +402,10 @@ export async function runIteration(
       ownerApproval: null,
     }),
   );
+  // Only the timings, and deliberately WITHOUT `status`: `runPipeline` has just set the decision to
+  // allowed / escalated / denied, and writing `noop` back here would erase it.
   servMeta['timings'] = timings.all();
-  await updateDecision(db, decisionId, { proposal, screen, verifier, servMeta, status: 'noop' });
+  await updateAgentDecision(db, decisionId, { servMeta });
   log.info(
     { walletId, decisionId, trigger, status: outcome.status, timings: timings.all() },
     'iteration step timings',
