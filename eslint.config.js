@@ -32,7 +32,16 @@ export default tseslint.config(
   },
   {
     files: ['**/*.mjs', '**/*.js'],
-    languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        setTimeout: 'readonly',
+        fetch: 'readonly',
+        WebSocket: 'readonly',
+        Buffer: 'readonly',
+      },
+    },
   },
   {
     // I2 — the Policy Engine is pure: no clock, no randomness, no env, no network, no globals.

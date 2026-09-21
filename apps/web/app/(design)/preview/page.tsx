@@ -31,7 +31,7 @@ function Money({
       <span className={big ? 'text-balance font-bold tracking-[-0.02em] sm:text-balance-lg' : ''}>
         {amount}
       </span>
-      <span className={big ? 'text-[0.62em] font-bold text-muted' : 'text-muted'}>{minor}</span>
+      <span className={big ? 'text-[0.72em] font-bold text-muted' : 'text-muted'}>{minor}</span>
       <span className={big ? 'ml-2 text-small text-muted' : ' text-muted'}> {token}</span>
       {usd ? <span className="block text-small text-muted">({usd})</span> : null}
     </span>
@@ -81,15 +81,22 @@ function Button({
 
 /* --------------------------------------------------------------- components */
 
+/**
+ * The limit line (docs/DESIGN.md §1). `limitPct` is where the wall stands; with
+ * `beyond`, the track continues past it as ground Steward may never reach — which
+ * is what makes the line legible instead of an invisible tick at the track's end.
+ */
 function Meter({
   pct,
   limitPct = 100,
+  beyond = false,
   tone,
   caption,
   valueText,
 }: {
   pct: number;
   limitPct?: number;
+  beyond?: boolean;
   tone: 'seal' | 'warn' | 'stop' | 'ok';
   caption: string;
   valueText: string;
@@ -106,6 +113,9 @@ function Meter({
         aria-valuetext={valueText}
       >
         <div className={`meter-fill ${fill}`} style={{ width: `${pct}%` }} />
+        {beyond ? (
+          <span className="meter-beyond" style={{ left: `${limitPct}%` }} aria-hidden />
+        ) : null}
         <span className="limit-line" style={{ left: `${limitPct}%` }} aria-hidden />
       </div>
       <p className="mt-2 text-small text-muted">{caption}</p>
@@ -132,11 +142,36 @@ function StatusPill({ state }: { state: keyof typeof PILLS }) {
   );
 }
 
+/**
+ * Verdict marks are drawn, not typed: ✓ / ⚠ / ✕ render as colour emoji on some
+ * platforms, which is the wrong register for a policy verdict.
+ */
+function Glyph({ kind }: { kind: keyof typeof VERDICTS }) {
+  const d = {
+    allow: 'M3 8.5 6.5 12 13 4',
+    escalate: 'M8 2.5 14.5 13.5h-13L8 2.5ZM8 6.5v3.2M8 11.6v.1',
+    deny: 'M4 4l8 8M12 4l-8 8',
+    noop: 'M8 8h.01',
+  }[kind];
+  return (
+    <svg viewBox="0 0 16 16" className="size-4" aria-hidden focusable="false">
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={kind === 'noop' ? 3 : 1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const VERDICTS = {
-  allow: { glyph: '✓', color: 'text-ok', edge: '' },
-  escalate: { glyph: '⚠', color: 'text-warn', edge: '' },
-  deny: { glyph: '✕', color: 'text-stop', edge: 'border-l-2 border-stop pl-3 -ml-[2px]' },
-  noop: { glyph: '·', color: 'text-muted', edge: '' },
+  allow: { color: 'text-ok', edge: '' },
+  escalate: { color: 'text-warn', edge: '' },
+  deny: { color: 'text-stop', edge: 'border-l-2 border-stop pl-3 -ml-[2px]' },
+  noop: { color: 'text-muted', edge: '' },
 } as const;
 
 function DecisionRow({
@@ -155,8 +190,8 @@ function DecisionRow({
   const v = VERDICTS[verdict];
   return (
     <div className={`flex min-h-14 gap-3 border-b border-line py-3 last:border-b-0 ${v.edge}`}>
-      <span className={`w-5 shrink-0 text-center ${v.color}`} aria-hidden>
-        {v.glyph}
+      <span className={`flex w-5 shrink-0 justify-center pt-0.5 ${v.color}`}>
+        <Glyph kind={verdict} />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-h3 font-medium">
@@ -183,8 +218,8 @@ function RuleChip({
   const v = VERDICTS[state];
   return (
     <span className="inline-flex items-center gap-2 rounded-sm border border-line-strong px-2 py-1 text-small">
-      <span className={v.color} aria-hidden>
-        {v.glyph}
+      <span className={v.color}>
+        <Glyph kind={state} />
       </span>
       <span className="font-mono text-mono">{code}</span>
       <span className="text-muted">{text}</span>
@@ -206,7 +241,7 @@ function AppHeader() {
   return (
     <header className="glass flex min-h-14 items-center justify-between rounded-md border border-line px-4">
       <span className="text-h3 font-semibold tracking-[-0.02em]">
-        Stewar<span className="border-b-2 border-seal pb-px">d</span>
+        Ste<span className="border-b-2 border-seal pb-px">war</span>d
       </span>
       <div aria-live="polite">
         <StatusPill state="running" />
@@ -229,26 +264,35 @@ function BalanceCard() {
 
         <div className="mt-6">
           <Meter
-            pct={58}
+            pct={50}
+            limitPct={86}
+            beyond
             tone="seal"
-            valueText="4,200 USDC of a 10,000 USDC daily limit remains"
-            caption="Steward can still move 4,200 USDC today, of 10,000."
+            valueText="5,800 USDC of a 10,000 USDC daily limit used; 4,200 USDC remains"
+            caption="5,800 of today’s 10,000 USDC limit used. Steward stops at the line."
           />
         </div>
 
         <p className="mt-4 text-center">
           <span className="tabular inline-flex min-h-8 items-center gap-2 rounded-full border border-line-strong px-3 text-small">
             Maximum at risk 12,400 USDC
-            <span className="text-seal" aria-hidden>
-              ⓘ
-            </span>
+            <svg viewBox="0 0 16 16" className="size-4 text-seal" aria-hidden focusable="false">
+              <circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              <path
+                d="M8 7.2v4M8 4.6v.1"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
           </span>
         </p>
 
+        {/* Freeze lives in the header and only there — one name, one place. */}
         <div className="mt-5 grid grid-cols-3 gap-2">
           <Button>Add funds</Button>
           <Button>Activity</Button>
-          <Button variant="danger-outline">Freeze</Button>
+          <Button>Recipients</Button>
         </div>
       </div>
     </div>
@@ -260,8 +304,8 @@ function ParkedNotice() {
     <Card tone="warn">
       <p className="text-h3 font-medium text-warn">Steward is holding still</p>
       <p className="mt-2 text-small">
-        It can’t pay Acme Design (8,000 USDC) inside today’s limit, and it won’t deploy idle cash
-        while a payment is due. Nothing is wrong with your funds.
+        It can’t pay Northbeam Studio (8,000 USDC) inside today’s limit, and it won’t deploy idle
+        cash while a payment is due. Nothing is wrong with your funds.
       </p>
       <p className="mt-3">
         <a className="text-small font-medium text-seal underline underline-offset-4" href="#s5">
@@ -280,9 +324,9 @@ Expires: 2026-09-21T18:12:00.000Z`;
 
 function ApprovalSheet() {
   return (
-    <div className="rounded-xl bg-ground/60 p-3">
+    <div className="scrim rounded-xl p-3">
       <div className="glass-sheet rounded-xl border border-line-strong p-5 shadow-e2">
-        <h3 className="text-h1 font-bold tracking-[-0.015em]">Pay Acme Design</h3>
+        <h3 className="text-h1 font-bold tracking-[-0.015em]">Pay Northbeam Studio</h3>
         <p className="mt-1">
           <Money amount="8,000" minor=".00" usd="$8,000.00" />
         </p>
@@ -295,7 +339,7 @@ function ApprovalSheet() {
               <span className="tabular text-stop">−8,000.00 USDC</span>
             </div>
             <div className="flex justify-between px-4 py-3 text-small">
-              <span>Acme Design</span>
+              <span>Northbeam Studio</span>
               <span className="tabular text-ok">+8,000.00 USDC</span>
             </div>
           </div>
@@ -354,7 +398,7 @@ function FreezeModal() {
     },
   ];
   return (
-    <div className="rounded-xl bg-ground/60 p-3">
+    <div className="scrim rounded-xl p-3">
       <div className="glass-sheet rounded-xl border border-line-strong p-5 shadow-e2">
         <h3 className="text-h1 font-bold tracking-[-0.015em]">Stop Steward</h3>
         <p className="mt-2 max-w-[68ch] text-body text-muted">
@@ -380,8 +424,12 @@ function FreezeModal() {
           ))}
         </ol>
         <div className="mt-4 flex items-center gap-4 text-small">
-          <span className="text-ok">✓ Frozen at 14:02</span>
-          <span className="text-stop">✕ Revoke failed. Nothing moved.</span>
+          <span className="inline-flex items-center gap-2 text-ok">
+            <Glyph kind="allow" /> Frozen at 14:02
+          </span>
+          <span className="inline-flex items-center gap-2 text-stop">
+            <Glyph kind="deny" /> Revoke failed. Nothing moved.
+          </span>
         </div>
       </div>
     </div>
@@ -408,11 +456,11 @@ export default async function PreviewPage({
   const dark = theme === 'dark';
 
   return (
-    <div data-theme={dark ? 'dark' : 'light'} className="min-h-screen bg-ground text-ink">
+    <div data-theme={dark ? 'dark' : 'light'} className="min-h-dvh bg-ground text-ink">
       <main className="mx-auto w-[min(100%-2rem,440px)] space-y-10 py-8">
         <header>
           <h1 className="text-h1 font-bold tracking-[-0.015em]">
-            Stewar<span className="border-b-2 border-seal pb-px">d</span> design preview
+            Ste<span className="border-b-2 border-seal pb-px">war</span>d design preview
           </h1>
           <p className="mt-2 max-w-[68ch] text-body text-muted">
             Static reference for docs/DESIGN.md. Mock data. {dark ? 'Dark' : 'Light'} theme —{' '}
@@ -461,9 +509,16 @@ export default async function PreviewPage({
                 <p className="text-h3 font-medium">Coinbase Smart Wallet</p>
                 <p className="text-small text-muted">Passkey — no extension</p>
               </div>
-              <span className="text-muted" aria-hidden>
-                ›
-              </span>
+              <svg viewBox="0 0 16 16" className="size-4 text-muted" aria-hidden focusable="false">
+                <path
+                  d="m6 3 5 5-5 5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
           </Card>
           <Card tone="stop">
@@ -520,7 +575,7 @@ export default async function PreviewPage({
             <H>Next up</H>
             <Card>
               <div className="flex justify-between border-b border-line pb-3 text-body">
-                <span>Acme Design</span>
+                <span>Northbeam Studio</span>
                 <span className="tabular">
                   <span className="mr-4 text-muted">1 Oct</span>8,000.00
                 </span>
@@ -545,7 +600,7 @@ export default async function PreviewPage({
             />
             <DecisionRow
               verdict="escalate"
-              title="Waiting for you: pay Acme Design"
+              title="Waiting for you: pay Northbeam Studio"
               time="11:59 · 13 minutes ago"
               amount="8,000.00"
             />

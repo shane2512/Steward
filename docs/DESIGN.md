@@ -13,10 +13,16 @@ Reference research: `docs/design/refs/REFERENCE.md` (Solflare, Coinbase Wallet, 
 Steward is a wallet that operates itself inside a fence the owner drew. Every screen has to answer
 three questions at a glance: **what can it touch, what did it do, how do I stop it.**
 
-So the design's one memorable device is **the limit line**: a hard 1px tick on a capsule track,
-marking the boundary between the money Steward can reach and the money it cannot. It appears on the
-allowance meter, on the runway-vs-buffer bar, and on the maximum-at-risk chip. It is the only
-ornament in the system, and it is not ornament — it is the product's core fact drawn once and reused.
+So the design's one memorable device is **the limit line**: a 2px `ink` wall standing on a capsule
+track, with the track continuing past it as recessed ground Steward may never reach. It marks the
+boundary between the money the agent can touch and the money it cannot, and it appears on the
+allowance meter and on the runway-vs-buffer bar. It is the only ornament in the system, and it is
+not ornament — it is the product's core fact drawn once and reused.
+
+A limit line only earns its place when the limit sits *inside* the range. A meter whose limit is
+simply the end of its own track gets no line: the track end is the line. That is why the allowance
+meter is drawn at **cap × ~1.15**, so the wall is visible and the dead ground beyond it is legible —
+the first version put the tick at 100% and it disappeared into the track's edge.
 
 Everything around it stays quiet: one accent, hairline rules, tabular figures, sentence case, no
 gradients behind text, no decorative cards.
@@ -147,7 +153,7 @@ Two families, both OFL, both loaded through `next/font/google` with `display: sw
 ```
 font-variant-numeric: tabular-nums slashed-zero;
 ```
-`10,000` at full size and `ink`; `.00` at `0.62em` and `muted`; ` USDC` at `small`/`muted`;
+`10,000` at full size and `ink`; `.00` at `0.72em` and `muted`; ` USDC` at `small`/`muted`;
 `($10,000.00)` at `small`/`muted` on the line beneath. Negative amounts take a real minus (−), not
 a hyphen. Base units are formatted from `bigint` — no `number` ever reaches the formatter (I12).
 
@@ -205,8 +211,8 @@ and will go away*. If a surface is permanent or holds dense data, it is solid.
 
 | Surface | Spec |
 |---|---|
-| Sticky app header | `bg: surface/72%`, `backdrop-filter: blur(20px) saturate(160%)`, bottom `1px line`. Transparent (no blur, no border) until `scrollY > 8`. |
-| Bottom sheets / modals (approval sheet, freeze modal, recipient confirmation) | `bg: surface/76%`, `blur(28px) saturate(160%)`, `1px line-strong` inner hairline, `e2`. Scrim `ground/60%` + `blur(2px)`. |
+| Sticky app header (S4's only Freeze entry point) | `bg: surface/72%`, `backdrop-filter: blur(20px) saturate(160%)`, bottom `1px line`. Transparent (no blur, no border) until `scrollY > 8`. |
+| Bottom sheets / modals (approval sheet, freeze modal, recipient confirmation) | `bg: surface/76%`, `blur(28px) saturate(160%)`, `1px line-strong` inner hairline, `e2`. Scrim: the `.scrim` token (`color-mix(in srgb, ground 60%, transparent)`), never a Tailwind opacity modifier — those resolve in oklab and cannot be contrast-checked in sRGB. |
 | The balance card — the single hero surface | `bg: surface/72%`, `blur(24px)`, `1px line`, `e1`, sitting on a soft radial of `seal` at 6% alpha. This is the only place in the product with a coloured wash, and no text below 16px sits on it. |
 | Toasts / the DEMO DATA banner | `bg: surface/80%`, `blur(16px)`. |
 
@@ -242,8 +248,8 @@ Every component below is what Phase 7 builds. Names are the component names to u
 
 | Component | Behaviour |
 |---|---|
-| `BalanceCard` | Glass hero. Label "Treasury" → balance (money rule) → delta line → `AllowanceMeter` → `MaxAtRiskChip` → equal-weight action row (Add funds · Activity · Freeze on mobile). |
-| `AllowanceMeter` | Pill track, filled portion + **limit line** (1px `ink` tick at the cap). Fill `seal`; `warn` ≥80%; `stop` ≥100%. Caption: "Steward can still move 4,200 USDC today of 10,000." `role="meter"` with `aria-valuenow/min/max/valuetext`. |
+| `BalanceCard` | Glass hero. Label "Treasury" → balance (money rule) → delta line → `AllowanceMeter` → `MaxAtRiskChip` → equal-weight action row (Add funds · Activity · Recipients). Freeze is **not** repeated here: it lives in the header and only there, so there is one red control per screen. |
+| `AllowanceMeter` | Pill track drawn at **cap × 1.15**, so the **limit line** stands at ~86% with recessed ground after it. Fill = amount used today; `seal`, `warn` ≥80%, `stop` ≥100%. Caption: "5,800 of today's 10,000 USDC limit used. Steward stops at the line." `role="meter"` with `aria-valuenow/min/max/valuetext`. |
 | `RunwayBar` | Same track, limit line at the buffer floor. Caption names runway in months. |
 | `MaxAtRiskChip` | Pill, `line-strong` border, no fill. "Maximum at risk 12,400 USDC" + info affordance explaining agent balance + vault position + allowance remaining. |
 | `StatusPill` | `running` (dot breathes, `ok`) · `idle` (static dot, `muted`) · `degraded` (`warn`, "Safe mode — scheduled payments and risk exits only") · `frozen` (`stop`, "Frozen") · `parked` (`warn`, RR-14) · `breaker` (`stop`). Lives in an `aria-live="polite"` region; the live region announces the word, not the colour. |
@@ -253,7 +259,7 @@ Every component below is what Phase 7 builds. Names are the component names to u
 | `RuleChip` | `R07` in mono + the rule sentence + glyph. `sm` radius, `line-strong` border, tinted background only for `stop`. Never a bare code without its sentence. |
 | `ApprovalCard` / `ApprovalSheet` | Card on the list, glass sheet when opened (full-screen on mobile). Order: action sentence → amounts → "You'll see these changes" simulation deltas → rationale → triggered `RuleChip`s → expiry countdown → `SigningMessage` → Approve / Reject. |
 | `SigningMessage` | **The literal `message` string from `GET /api/approvals`, rendered verbatim in mono, `pre-wrap`, solid surface, with a copy button.** The UI must never rebuild or reformat it (SECURITY §5). Above it, one line: "This is exactly what your wallet will show you." |
-| `FreezeButton` | Header, right. Outline only: `stop` text + `stop` border, transparent fill, pill, min 44×44. Never filled, never animated, no icon-only version. |
+| `FreezeButton` | Header, right — the product's only Freeze entry point. Outline only: `stop` text + `stop` border, transparent fill, pill, min 44×44. Never filled, never animated, no icon-only version. |
 | `FreezeModal` | Glass, `e2`. Three numbered steps (a genuine sequence): 1 Freeze now · 2 Revoke spending permission · 3 Bring funds home. Each step shows idle / running / done / failed + retry. The step-1 button is the only filled `stop` control in the product. Confirmation text: "Steward is stopped. No further actions will be taken." |
 | `Empty` | Icon-free. One `h2` line + one `body` line + one primary action. "No activity yet. Steward checks your treasury every five minutes and will explain anything it does here." |
 | `ErrorState` | What happened · **whether money moved** · what to do next. Never apologises, never says "Oops". `stop` border on a solid surface. |

@@ -174,6 +174,12 @@
     }
   }
 
+  /* the scrim behind a sheet or modal — an explicit token, not an opacity
+     modifier, so its composite stays measurable in sRGB (docs/DESIGN.md §6) */
+  .scrim {
+    background-color: color-mix(in srgb, var(--st-ground) 60%, transparent);
+  }
+
   /* the one coloured wash in the product: behind the balance card only */
   .seal-wash {
     background-image: radial-gradient(
@@ -193,6 +199,15 @@
   .meter-fill {
     height: 100%;
     border-radius: 999px;
+  }
+  /* the ground Steward may never reach: recessed, past the limit line */
+  .meter-beyond {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0 999px 999px 0;
+    background-color: var(--st-ground);
   }
   /* the wall at the edge of what Steward may touch; never clipped by the track */
   .limit-line {
