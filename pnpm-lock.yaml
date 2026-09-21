@@ -17,9 +17,18 @@ importers:
       '@steward/context':
         specifier: workspace:*
         version: link:packages/context
+      '@steward/db':
+        specifier: workspace:*
+        version: link:packages/db
+      '@steward/policy':
+        specifier: workspace:*
+        version: link:packages/policy
       '@steward/reasoning':
         specifier: workspace:*
         version: link:packages/reasoning
+      '@steward/risk':
+        specifier: workspace:*
+        version: link:packages/risk
       '@steward/shared':
         specifier: workspace:*
         version: link:packages/shared
@@ -35,6 +44,9 @@ importers:
       dependency-cruiser:
         specifier: ^18.3.1
         version: 18.3.1
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@types/pg@8.23.1)(pg@8.23.0)
       eslint:
         specifier: ^10.11.0
         version: 10.11.0(jiti@2.7.0)(supports-color@7.2.0)
