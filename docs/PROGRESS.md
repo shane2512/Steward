@@ -233,6 +233,35 @@ funding rather than to code — the CDP USDC faucet is rate-limited per project,
 per-run owner key stranded that run's USDC at an address whose key was gone (fixed by D-58, then by
 the MockUSDC pair).
 
+### Live run 2 — quiescence, after the churn fixes (2026-09-21)
+
+Same command, same wallet, same demo token pair. The point of this run was **not** to move money
+again — the first run's 50,000 of outflows were still inside R07's rolling 24-hour window, so the
+daily cap legitimately refused everything — but to prove the loop goes **quiet** instead of asking
+the same refused question every 30 seconds.
+
+| | run 1 (before the fixes) | run 2 (after) |
+|---|---|---|
+| iterations | ~100 in 10 min | **2 per minute**, exactly the DEMO cadence |
+| `agent_decisions` rows written | **100** | **1** (the one `pay_recipient` that R07 refused) |
+| audit rows per quiet tick | 2 (`CONTEXT` + `PROPOSAL`) | **1** (`NOOP`) |
+| executions | 6 | 0 — correctly, the daily cap was exhausted |
+
+The `NOOP` rows say exactly why the agent is parked, which is the part that matters:
+
+```
+the only available action (pay_recipient: obligation f5ec7ad7-… due 2026-09-21)
+was already decided in the last 24h; R17 would refuse a repeat
+```
+
+Three separate causes of churn, all fixed at the root and all covered by tests:
+1. a quiet tick no longer writes a decision row at all (DATA_MODEL's own rule — D-59);
+2. the DEMO half-step no longer spawns another half-step (D-59);
+3. PreChecks no longer rebuild a proposal already inside R17's window (RR-14).
+
+None of them touched the policy path. Every tick still ran the full gather and pre-check, and no
+proposal ever reached the executor without a verdict and a receipt.
+
 ## Phase 6 — Opus review gate
 
 **Q1 — Trace one ALLOW and one DENY end to end through the audit rows, and show the decision is
