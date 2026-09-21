@@ -3,8 +3,8 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 2 complete (Opus)**, awaiting human "continue"; Phase 1 complete 2026-09-20
-Required model: Phase 3 = Opus
+Phase: **Phase 3 complete (Opus)**, awaiting human "continue"; Phase 2 complete 2026-09-21
+Required model: Phase 4 = Opus
 Last updated: 2026-09-21
 
 ## Phase status
@@ -13,13 +13,105 @@ Last updated: 2026-09-21
 | 0 | Verification spike & repo bootstrap | Sonnet | ✅ | 2026-09-20 | V-10 partial (no real Smart Wallet), V-13 false->MockPriceFeed, V-09 fallback; human approved carrying V-10 to Phase 1.8/7.6 | | |
 | 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ✅ | 2026-09-20 | Gate green: typecheck 9/9, lint clean, check:arch 53 modules/63 deps 0 violations, test 7 files/43 tests |
 | 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 86 modules/152 deps 0 violations, test 16 files/164 tests, contracts:test 16/16. Mocks live on 84532; live spend + revoke done through product code |
-| 3 | Policy Engine & mandate validator | Opus | ☐ | | |
+| 3 | Policy Engine & mandate validator | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 129 modules/278 deps 0 violations + both violation fixtures fire, test 24 files/508 tests, `packages/policy` **100% branches (411/411)** enforced in its own vitest config |
 | 4 | SERV reasoning & injection defenses | Opus | ☐ | | |
 | 5 | Risk gate, executor, confirmer | Opus | ☐ | | |
 | 6 | Decision loop, scheduler, obligations, risk exits | Opus | ☐ | | |
 | 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
+
+## Phase 3 — tasks (all done 2026-09-21)
+- [x] 3.1 zod schemas finalised in `packages/shared`: `zPolicy` + `zPolicyDraft`, `zProposal`
+  (discriminated union, strict params), `zEvaluationInput`, `zVerdict`, `zAllowReceipt`.
+  `zAmount` is now **non-negative by construction** and `Hex` is exported from shared so pure
+  packages need no viem.
+- [x] 3.2 `SYSTEM_CEILINGS` (shared, single source of truth) + `validatePolicyDraft` returning
+  `PolicyIssue[]` (`path`, `code`, `message`, `suggestion`) — 25 distinct checks, rejects, never clamps.
+- [x] 3.3 R00–R21 as individual pure `(input) => RuleResult` functions in
+  `packages/policy/src/rules/Rxx.ts`, registered in the static ordered array `RULES`. All 22 run on
+  every evaluation; no short circuit (asserted by a test).
+- [x] 3.4 `evaluate()` — precedence DENY > ESCALATE > ALLOW, owner-approval lifting
+  (`APPROVAL_LIFTABLE` = R02, R08, R09, R10, R15, R16, R19, R20; DENY never lifted), R20's documented
+  override of R02, and a fail-closed wrapper that never throws.
+- [x] 3.5 `units.ts`: `baseUnitsToMicroUsd` / `microUsdToBaseUnits` / `valueInput` — bigint only,
+  oracle price always, `$1.00` assumed only via the explicitly-passed DEMO fallback on chain 84532.
+- [x] 3.6 `hashProposal`, `signReceipt`, `verifyReceipt` (HMAC-SHA256 via `@noble/hashes`,
+  constant-time digest compare, TTL / issued-in-future / proposalHash / policyVersion / walletId /
+  callsHash checks).
+- [x] 3.7 `renderPolicyAsSentences(policy)` + `ruleSentences` (23 codes incl. `ENGINE`).
+- [x] 3.8 Mandate templates `startup` (the DEMO.md values), `dao`, `creator` — JSON-safe presets that
+  carry **no addresses**; `policyDraftFromTemplate` validates the result.
+- [x] 3.9 `explainVerdict(verdict)` deterministic fallback text.
+- [x] Purity enforcement: depcruise rules scoped to `packages/policy/src` (only `@steward/shared` +
+  `@noble/hashes`), new eslint rules for that path (`Date.now`, `new Date()`, `Math.random`,
+  `process`/`process.env`, `fetch`, `crypto`, `globalThis`, `setTimeout`, `await`), and a second
+  deliberate-violation fixture (`scripts/fixtures/lint/...`) wired into `pnpm check:arch`.
+
+## Phase 3 Exit Gate result (2026-09-21)
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
+| `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
+| `pnpm check:arch` | ✅ 0 violations (**129 modules, 278 dependencies**); arch fixture detected (`policy-only-shared`); purity fixture detected **10 problems** (5 `no-restricted-syntax`, 5 `no-restricted-globals`) |
+| `pnpm test` | ✅ **24 files / 508 tests passed**, 1 file / 4 skipped (the opt-in Phase 2 fork suite) |
+| `pnpm test:policy` (coverage, part of `pnpm test`) | ✅ 8 files / **344 tests**; **Statements 100% (562/562) · Branches 100% (411/411) · Functions 100% (105/105) · Lines 100% (465/465)** |
+| coverage is *enforced* | ✅ `packages/policy/vitest.config.ts` thresholds 100/100/100/100 — it failed the run at 95.88% branches during development and only passed once the last branch was covered |
+
+Test breakdown (`packages/policy/test`): `rules.test.ts` 122 (positive **and** negative per rule),
+`evaluate.test.ts` 32 (precedence, lifting, fail-closed, hard-rule mutation flips),
+`property.test.ts` 15 (P1–P6 + monotonicity + 2,000 garbage inputs), `receipt.test.ts` 32,
+`golden.test.ts` 10 (the DEMO.md table), `mandate.test.ts` 48, `units.test.ts` 18,
+`adversarial.test.ts` 47.
+
+## Phase 3 — Opus review gate: threat matrix (SECURITY §2, T1–T17)
+
+Every threat maps to deterministic code. **No threat is left resting on the LLM layer**; the three
+residual risks at the bottom are outside the engine's reach, not delegated to reasoning.
+
+| ID | Threat | Rule(s) / mechanism that mitigate it | Test evidence (file › name) |
+|---|---|---|---|
+| T1 | Prompt injection | **R16** (flagged ⇒ DENY for every value-out kind, ESCALATE for sweep, PASS for noop/risk_exit — and R16's DENY is *not* liftable), backed by R05/R04 allowlists, R19 grounding, R15 verifier | `adversarial` › "A16 … a flagged proposal cannot move value even when everything else is perfect"; `golden` › "t=1:30 — the attack memo can never move value"; `rules` › R16 ×5 |
+| T2 | Excessive agency | **R02** (autonomousKinds), **R10** (approval threshold), R06/R07/R08/R14 caps | `adversarial` › "A12 … a kind outside autonomousKinds escalates instead of executing", "… an empty autonomousKinds list cannot be bypassed by claiming source=owner"; `rules` › R02, R10 |
+| T3 | Address poisoning | **R05** (id → Policy address, exact match, no ENS/fuzzy), R04 for vaults; templates contain no addresses; `validatePolicyDraft` rejects duplicate recipient addresses and the treasury as a payee | `adversarial` › "A03 … cannot be paid: ids resolve through the Policy, never through an address" (6 lookalikes incl. zero-width and Cyrillic "е"); `property` › "P1 … holds when a poisoned lookalike is present in state and simulation"; `mandate` › duplicate-address checks |
+| T4 | Malicious contract | **R04** (allowlist + `contractHasCode` + asset is a policy token), **R11** (simulation parity, both directions), R18 | `adversarial` › "A13 … a vault that is not in the policy is denied even with a perfect simulation"; `rules` › R04 ×7, R11 ×11 |
+| T5 | Unlimited approvals | **R18** (≤1 approval, exact amount, only to *this* deposit's allowlisted vault, only on a policy token; any approval on any other kind is a DENY) | `adversarial` › "A17 … cannot smuggle an unlimited approval into a legitimate deposit"; `rules` › R18 ×8 incl. `2^256-1` |
+| T6 | Agent wallet key compromise | Bound, not prevented: **R13** (≤ on-chain allowance), **R01** (freeze/breaker), and the executor cannot act without a valid `AllowReceipt` | `rules` › R13, R01; `receipt` › "refuses a different secret". Residual **RR-2** below |
+| T7 | Owner session hijack | `ownerApproval` is only honoured when `signer == policy.signedBy`, the hash matches the *evaluated* proposal and it has not expired; it can never lift a DENY | `evaluate` › "ignores an approval signed by somebody else", "ignores an approval for a different proposal", "ignores an expired approval"; `property` › P5 ×2. Residual **RR-1** (signature verification is the caller's job) |
+| T8 | SERV wrong / hallucinated reasoning | **R19** (every cited fact must exist; low confidence ⇒ ESCALATE), **R15** (DISAGREE ⇒ DENY, UNSURE/absent ⇒ ESCALATE), **R11** (the simulation, not the rationale, decides what moved) | `adversarial` › "A17 … cannot invent facts", "… cannot understate the deltas of its own transfer", "… cannot claim a confidence above 1 or below 0"; `rules` › R19 ×3, R15 ×7 |
+| T9 | Replay / duplicate execution | **R17** (`hashProposal` over the *action*, so rewording the rationale does not mint a new hash) + receipt `nonce`/TTL/`proposalHash`/`callsHash` | `adversarial` › "A08 … the same action twice in 24h is denied the second time", "… rewording the rationale does not produce a new hash"; `receipt` › callsHash binding, P6 |
+| T10 | Execution loop | **R14** (`min(policy, MAX_ACTIONS_PER_HOUR)`) | `adversarial` › "A18 — the loop"; `rules` › R14 ×3 |
+| T11 | Stale / manipulated prices | **R12** (age ≤ 60 s, future-dated ⇒ DENY, depeg ⇒ DENY for every price-sized kind) + `valueInput` refuses a zero price | `adversarial` › "A05 — stale price at the boundary" (59/60/61 s), "… refuses a quote from the future", "A11 — price scaling" ×2; `units` › valueInput failures |
+| T12 | Depeg / vault exploit | **R20** (pre-authorised exit, only with a real trigger, funds only vault→agent), **R04** (no deposits into a flagged vault), R12/R16 exemptions so the exit is never blocked | `golden` › "t=2:25 — a 3% vault drawdown exits autonomously via R20"; `adversarial` › "A13 … a deposit into a vault that is already flagged is denied", "A16 … but a flagged risk exit still runs" |
+| T13 | Secrets leak via logs/prompts | The engine has no env, no logger, no network and no clock: enforced by `check:arch` (imports) **and** the new eslint purity rules (ambient globals), both with violation fixtures. The receipt key arrives as a `Uint8Array` argument and is never stored, logged or serialised | `pnpm check:arch` output above (both fixtures fire). Residual **RR-2** |
+| T14 | Audit tampering | Out of the engine (Phase 1 hash chain), but the engine makes an audited decision *reproducible*: identical input ⇒ byte-identical verdict, and it never mutates its input | `property` › "P4 … produces byte-identical verdicts for the same input, 1000 times", "does not mutate its input" |
+| T15 | Demo override abuse | The $1.00 parity fallback needs an explicit caller flag **and** chainId 84532, and never overrides a real quote; R21 re-checks the chain and refuses mainnet without `allowMainnet` | `units` › "uses the fenced DEMO parity fallback only on Base Sepolia", "never overrides a real quote with the fallback"; `rules` › R12 demo ×2, R21 ×4 |
+| T16 | Malicious owner instruction | `validatePolicyDraft` rejects (never clamps) anything above a ceiling, and the rules re-check the **system** ceilings themselves, so a policy row that somehow got past the validator still cannot raise a limit | `mandate` › 16-case rejection table + ceiling tests; `rules` › R06 "denies above the system ceiling even if the policy allowed it", R07 "… system daily ceiling", R14 "… system ceiling even if the policy asked for more" |
+| T17 | Permission escalation via received assets | No rule grants authority from a holding. Tokens, vaults and recipients exist only in the Policy; an airdropped token has no policy entry, so it cannot be valued (R06/R12), cannot be a target (R04/R05) and cannot be approved (R18). A phantom vault position is ignored when computing managed funds | `property` › P1 "poisoned lookalike … in state"; `adversarial` › "A13 … a phantom position in state cannot inflate managed funds"; `units` › "ignores positions in vaults the policy does not allowlist" |
+
+**Adjustments made *because* of this review** (both found by the adversarial pass, both now rules):
+1. **R12's depeg check was widened** from "inflows only" to *every kind that is sized from the price*
+   (all but `risk_exit`, `sweep_home`, `noop`). A 1 micro-USD quote made a 50,000 USDC payment read as
+   $0.05 and slid under the per-tx, daily and approval-threshold caps — every limit in the engine is
+   denominated in micro-USD, so a broken quote is a broken cap, not merely a wobbly token (D-29).
+2. **R09 now counts only allowlisted vault positions** as managed funds, so a stray `vaultPositions`
+   entry cannot inflate the denominator and hide a concentrated deposit (D-30).
+
+**Residual risks (recorded, not delegated to the LLM):**
+- **RR-1 — the engine trusts that `ownerApproval.signer` was cryptographically verified.** It checks
+  the signer equals `policy.signedBy`, that the hash is for *this* proposal and that it has not
+  expired, but it cannot verify an EIP-191/ERC-1271 signature without I/O. Phase 6.4 / 7.6 must
+  verify the signature **before** building the `EvaluationInput`.
+- **RR-2 — key material lives outside the engine.** A compromised backend holding the HMAC receipt
+  key can mint receipts for proposals the engine allowed. Bounded by the on-chain spend permission
+  (SECURITY §3 L2) and by freeze/revoke; the engine's contribution is that a receipt is useless for a
+  different proposal, policy version, wallet, call set or time window.
+- **RR-3 — `proposal.source` is data, not proof.** R15 skips the verifier for
+  `source ∈ {deterministic, owner}` (per spec) and R03 requires `source='owner'` for a sweep. A
+  compromised proposer that forges `source='owner'` therefore skips R15 — but it still faces every
+  hard rule, and R02 deliberately does **not** exempt owner-sourced proposals (D-26), so such a
+  proposal escalates to the human instead of executing. Phases 4/6 must set `source` in code, never
+  from model output.
 
 ## Phase 2 — tasks (all done 2026-09-21)
 - [x] 2.1 `contracts/` Foundry project: MockVault (OZ ERC-4626 over real USDC), MockPriceFeed, 16 tests, deployed to Base Sepolia
@@ -215,7 +307,37 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | D-21 | 2026-09-21 | `SYSTEM_CEILINGS` now lives in `packages/shared/src/ceilings.ts` with the POLICY_ENGINE §5 values **plus** four spend-permission bounds (allowance ≤ 1,000,000 USDC per period, period 1 h – 30 d, horizon ≤ 365 d, 300 s clock skew). **Phase 3 owns the final list** and `validatePolicyDraft`; it may tighten these, and must record a decision to loosen any of them | 2.7 needs ceilings before Phase 3 exists | Hardcode them in the route (rejected: untestable, duplicated) |
 | D-22 | 2026-09-21 | `sweep_home` transfers `agentUsdcBalance + Σ redeemableAssets` read just before building. If the share price **falls** between read and execution the transfer reverts and the sweep fails loudly (never a partial or wrong send); if it **rises**, a few base units of dust stay in the agent wallet. Phase 5 may re-read and retry | Fail closed beats sending an amount we cannot back | Sweep in two transactions (rejected for MVP: two receipts, more failure modes) |
 
+| D-23 | 2026-09-21 | **`packages/shared/src/ceilings.ts` is the single source of truth for every ceiling.** Phase 3 kept all eight POLICY_ENGINE §5 values and all five spend-permission bounds Phase 2 added (D-21) **unchanged — nothing was loosened** — and added three risk-parameter bounds (`MAX_DEPEG_THRESHOLD_BPS` 500, `MAX_VAULT_DRAWDOWN_BPS` 2000, `MIN_RISK_THRESHOLD_BPS` 1). `packages/policy` (validator + R06/R07/R14/R19) and `packages/wallet` (`validateSpendPermission`) both read that one file; neither re-declares a limit. It stays in `shared` rather than moving to `policy` because `wallet` must not import `policy` (check:arch) | One list, one place; wallet needed a subset before policy existed | Duplicate the numbers in each package (rejected: they would drift) |
+| D-24 | 2026-09-21 | `validatePolicyDraft` returns `Result<PolicyDraft, PolicyIssue[]>`, not `Result<Policy, …>` as POLICY_ENGINE §1 writes it: a *draft* is by definition unsigned, so `version`, `walletId`, `createdAt`, `signedBy` and `signature` are optional in `zPolicyDraft` and required in `zPolicy`. `evaluate()` only ever accepts a full, signed `Policy` | Templates and `compileMandate` (Phase 4) must produce something validatable before anyone signs it; a placeholder signature in a template would be a lie | Fake signature fields in templates (rejected) |
+| D-25 | 2026-09-21 | **`hashProposal` hashes the action, not the prose**: `{kind, params, expectedDeltas, source}`, deliberately excluding `rationale`, `citedFactIds` and `confidence`. Otherwise an attacker replays an identical transfer past R17 by rewording the rationale. `expectedDeltas` is included because it is the only thing that distinguishes two `sweep_home` proposals (which carry no params) | R17/I10 are only as strong as what the hash covers | Hash the whole proposal (rejected: R17 becomes trivially bypassable) |
+| D-26 | 2026-09-21 | **R02 exempts only `noop` and `sweep_home`** (the latter is already hard-gated to `source='owner'` by R03). An owner-sourced *payment* still needs to be an autonomous kind or get an approval. Spec is silent; this is the safer reading and it bounds RR-3 (a forged `source='owner'` escalates instead of executing) | SECURITY > POLICY_ENGINE conflict rule: choose the safer option | Exempt every `source='owner'` proposal (rejected) |
+| D-27 | 2026-09-21 | **`AllowReceipt` carries an optional `callsHash`**, and `verifyReceipt` takes an expectation object (`{proposalHash, policyVersion?, walletId?, callsHash?}`) instead of a bare hash. POLICY_ENGINE §7 lists neither, but a `sweep_home` proposal hashes the same whatever the balances were when the calls were built, so without binding the calls a receipt for one sweep authorises another. Phase 5's executor must pass `callsHash` | The receipt is the executor's only gate; bind it to the exact bytes | Bare-hash signature (rejected: leaves the sweep hole) |
+| D-28 | 2026-09-21 | `EvaluationInput` gains four fields POLICY_ENGINE §4 does not list: `chainId` and `allowMainnet` (R21 explicitly requires the flag), `demoStableParity` (I11 fallback, fenced to 84532), and `simulation.approvals` (R18 cannot check approvals it cannot see; the risk gate extracts them from the calls it simulated). `Verdict` gains `walletId` (a receipt needs it and the verdict is what gets signed) and `RuleResult` gains `lifted` (audit trail for owner approvals) | Each is required by a rule the spec mandates | Infer them from context (rejected: guessing is not fail-closed) |
+| D-29 | 2026-09-21 | **R12's depeg check applies to every kind sized from the price**, not just inflows: `pull_allowance`, `vault_deposit`, `vault_withdraw`, `pay_recipient`. Only `risk_exit`, `sweep_home` and `noop` are exempt (they are the *response* to a depeg and move whole positions, not price-sized amounts). Found by adversarial case A11: at a 1 micro-USD quote, 50,000 USDC reads as $0.05 and passes every cap | Every limit is in micro-USD, so a broken quote is a broken limit | Spec-literal "inflows only" (rejected: leaves the hole) |
+| D-30 | 2026-09-21 | **R09 counts only allowlisted vault positions** towards managed funds (`policy.vaults` drives the sum, not `Object.values(state.vaultPositions)`), so a phantom entry cannot inflate the denominator. All bps maths is `position * 10_000 > bps * managed` in bigint — no division, no rounding window (I12) | Adversarial case A13 | Sum the whole state map (rejected) |
+| D-31 | 2026-09-21 | The size rules share one `valueInput(input)` valuation (amount, liquid, managed, per-vault position) computed from a **single** price lookup. Previously each rule converted separately, which produced branches like "the amount converted but the balance did not" that cannot happen and cannot be tested — and 100% branch coverage is a gate, so untestable code is a defect, not a safety margin | One failure mode, all of it tested | Per-rule conversions with `/* v8 ignore */` (rejected: ignoring coverage hides real gaps) |
+| D-32 | 2026-09-21 | Dep added: `@vitest/coverage-v8` (dev, root) — the only way to enforce TESTING.md's 100%-branch gate for `packages/policy`; thresholds live in `packages/policy/vitest.config.ts` and **fail** the run. `pnpm test` now runs the normal suite and then that coverage run. Also: `pnpm check:arch` now additionally runs both deliberate-violation fixtures (imports **and** purity lint), so the enforcement itself is checked on every gate | The engine is the security core; an unexercised rule path is an unknown rule path | Report coverage without thresholds (rejected: advisory gates are not gates) |
+
 ## Known issues / risks
+### Phase 3
+- **The engine cannot verify a signature** (RR-1). `ownerApproval` is trusted to have been verified by
+  the caller; Phase 6.4 must do that before calling `evaluate`, and Phase 7.6 owns the signing UX.
+- **`proposal.source` is data** (RR-3). Phases 4/6 must set it in code — never from model output.
+- **`simulation.approvals` must actually be populated** by Phase 5's risk gate from the `Call[]` it
+  simulated, otherwise R18 sees an empty list and passes. The rule is correct; the plumbing is a
+  Phase 5 obligation, and `buildCalls` already emits exactly one exact-amount approve per deposit.
+- **R11 needs a simulation for every non-`noop` kind** (`simulation: null` ⇒ DENY). The decision loop
+  must simulate before evaluating, including for deterministic and owner-sourced proposals.
+- **`evaluate` does not run `validatePolicyDraft`** on the policy it is handed; it assumes the stored
+  policy was validated at activation. The rules independently re-check the *system* ceilings (T16), so
+  a bad stored policy cannot raise a limit, but it could still be internally inconsistent.
+- `packages/wallet`'s `GET /api/wallet` still reads its vault position from `MOCK_VAULT_ADDRESS` in
+  env (carried from Phase 2). Phase 4+ should read the vault list from the active Policy.
+- The `x402` block in `Policy` is parsed but no rule reads it yet (X01–X03 are the Phase 8.8 stretch).
+- Rolling-window inputs (`outflowsLast24hMicroUsd`, `actionsLastHour`, `recentProposalHashes`) are
+  supplied by the caller; their correctness is a Phase 5/6 DB concern. R07/R14/R17 are only as good as
+  those numbers, and the ledger query must use the same 24h/1h windows the rules assume.
+
 ### Phase 2
 - **RPC read-after-write lag is real and bites.** The load-balanced Base Sepolia endpoint answered `getCode` / `isOwnerAddress` / `isRevoked` from a node a block behind, three separate times. Once it was not cosmetic: `addOwnerAddress` was gas-estimated against a node that still saw an EOA (~22,414 gas) and the transaction **reverted out of gas while still producing a receipt**. `scripts/live/lib.ts` now has `waitForCode` and `confirm` (which throws on a reverted receipt), and every post-write read in the live script is polled. **Phase 5's confirmer must assume the same**: a receipt is not success, and one read is not state.
 - **D-5's EOA rejection is a heuristic, by design.** It proves "smart contract account" (`verifyTypedData` via ERC-1271/6492 plus code present, or a 6492-wrapped signature when counterfactual), not "Coinbase Smart Wallet". Another ERC-1271 wallet passes and would fail later at `spend` — loudly and at zero cost, since the agent pulls nothing. An EIP-7702-delegated EOA has code and passes, which is the correct answer rather than a hole. Documented in the function's docblock.
@@ -240,8 +362,48 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 2 is complete; waiting for the human to say "continue". Phase 3 (Policy Engine) requires Opus (`/model opus`).**
-- Do not start Phase 3 before that.
+- **Phase 3 is complete; waiting for the human to say "continue". Phase 4 (SERV reasoning & injection
+  defenses) requires Opus (`/model opus`).**
+- Do not start Phase 4 before that.
+
+### Public API of `packages/policy` (what Phases 4–6 call)
+```ts
+// evaluation
+evaluate(input: EvaluationInput): Verdict                      // never throws, never defaults to ALLOW
+runRules(input: ParsedEvaluationInput, rules?): RuleResult[]    // exported for testing the catalogue
+RULES: readonly Rule[]                                          // R00..R21, static order
+APPROVAL_LIFTABLE: readonly RuleCode[]                          // R02,R08,R09,R10,R15,R16,R19,R20
+
+// hashing + receipts
+hashProposal(p: Proposal): Hex                                  // sha256 of {kind,params,expectedDeltas,source}
+hashProposalSafe(p: unknown): Hex                               // never throws; ZERO_HASH on garbage
+signReceipt(v: Verdict, key: Uint8Array, now: Date, nonce: string,
+            opts?: { callsHash?: Hex; ttlSeconds?: number }): Result<AllowReceipt, ReceiptError>
+verifyReceipt(r: unknown, expected: ReceiptExpectation, key: Uint8Array, now: Date): Result<true, ReceiptError>
+type ReceiptExpectation = { proposalHash: Hex; policyVersion?: number; walletId?: string; callsHash?: Hex }
+constantTimeEqual(a: string, b: string): boolean
+
+// mandate
+validatePolicyDraft(draft: unknown, ceilings?: SystemCeilings): Result<PolicyDraft, PolicyIssue[]>
+type PolicyIssue = { path: string; code: PolicyIssueCode; message: string; suggestion: string }
+MANDATE_TEMPLATES / MANDATE_TEMPLATE_NAMES                      // 'startup' | 'dao' | 'creator'
+policyDraftFromTemplate(name, binding: TemplateBinding): Result<PolicyDraft, PolicyIssue[]>
+
+// explanation (UI + Phase 4's explain fallback)
+renderPolicyAsSentences(p: PolicyDraft): string[]
+ruleSentences: Record<RuleCode, string>
+explainVerdict(v: Verdict): string
+
+// money (bigint only)
+valueInput(input): Result<Valuation, string>                    // amount/liquid/managed/position in micro-USD
+baseUnitsToMicroUsd(amount, decimals, quote) / microUsdToBaseUnits(micro, decimals, quote)
+proposalAmountBaseUnits(p) / priceOf(input, token) / depegBps(quote) / quoteAgeSeconds(quote, now)
+usdcToken(policy) / byAddress(record, address) / ONE_USD_MICRO
+```
+New in `@steward/shared`: `zPolicyDraft`/`PolicyDraft`, `zEvaluationInput`/`EvaluationInput`,
+`zDelta`, `zPriceQuote`, `zRiskTrigger`, `zSimulatedApproval`, `RULE_CODES`/`RuleCode`, `zSignedAmount`,
+`Hex`, and three new ceilings (D-23). `Verdict` now carries `walletId`; `RuleResult` carries `lifted`;
+`AllowReceipt` carries an optional `callsHash` (D-27).
 
 ### Interfaces Phase 3+ builds on (exported from `@steward/wallet`)
 ```ts
