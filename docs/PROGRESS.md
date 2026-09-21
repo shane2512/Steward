@@ -124,6 +124,87 @@ Two real bugs were found by these suites and fixed, both worth naming:
    worker at startup — found by the first live run, fixed with an idempotent `createQueue`, and
    covered by an assertion in the fork crash-window test.
 
+### Live unattended run on Base Sepolia (2026-09-21) — `STEWARD_LIVE=1 pnpm live:loop 10`
+
+**Duration achieved: 10 minutes**, unattended, through the **real worker** — `registerJobs()` with
+pg-boss cron, the per-wallet advisory lock, the real ContextBuilder, the real PreChecks, the real
+Policy Engine, real `eth_simulateV1`, real AllowReceipts, the real executor sending real user
+operations through CDP, and the real confirmer. The script sets the world up and then only watches;
+it proposes, evaluates and sends nothing itself.
+
+Funding note: Circle's testnet USDC comes from a CDP faucet that is rate-limited per project and was
+exhausted, so this run used the **DEMO MockUSDC pair** that DEMO.md prescribes for exactly this case
+(`docs/addresses.md`), pointed at with shell overrides rather than an edit to `.env.local`. That let
+the run use DEMO.md's real "Startup Operating" numbers instead of faucet dust.
+
+| | |
+|---|---|
+| agent wallet (CDP smart account) | `0x75cDd4056a7f7479bBaAB2376a93d3aBe2Bb7dCa` |
+| owner treasury (Coinbase Smart Wallet) | `0x9Ab29F890D6172A501f3Ff57ddE930d5Fa757289` |
+| wallet id | `cd30b339-64bd-4b09-bfde-33b809ac7aa4` |
+| policy version | `1789983699` |
+| spend permission hash | `0x4951c9c4933c38bcc58c2eab8602f6f1fc0d004639c8877d889dcf9396216fc4` |
+| token / vault | MockUSDC `0x1ba0af42256425d1F9Eb03aA804048593E23926a` / MockVault `0xc1eb5AF474e99Dd78e8137bd9164A522C60A7Be1` |
+| policy (DEMO.md "Startup Operating") | treasury 200,000 · buffer 120,000 · per-tx 50,000 · daily 60,000 · approval threshold 15,000 (60,000 for `vault_deposit` / `pull_allowance`) · allowance 50,000/day · payroll Alex 3,000 + Priya 2,500 due today |
+
+**Six autonomous actions, all confirmed, in the first 180 seconds** — every one simulated with
+`eth_simulateV1`, judged ALLOW by the real `evaluate()` with all 22 rules PASS, issued a real
+`AllowReceipt` bound to the calls hash, executed by `executor.ts` and confirmed by the confirmer
+against the **measured** on-chain deltas:
+
+| t | Action | Amount | Tx |
+|---|---|---|---|
+| t+45s | `pull_allowance` | 3,000 | `0xe7e52ce42830c2cd512ceeceea8419602c7cda59ebe9d86805a95601eae7cd1e` |
+| t+75s | `pay_recipient` Alex | 3,000 | `0x79653b128511c6807ae1a6c2ec8ded8261388125e56d9cc00c0adca387542326` |
+| t+105s | `pull_allowance` | 2,500 | `0x5fc74d42bc24e856dfed42a52a6317fbeb07c7b3da40c27b13a19e08417e5c02` |
+| t+135s | `pay_recipient` Priya | 2,500 | `0x83521e59754d62de4b8b7445eae0f4cb26b9d30598ff178ea8a042d44430e0f1` |
+| t+165s | `pull_allowance` | 44,500 | `0x2a8a99ec1735d500bfde1baf3a1e28eae8041f5c604c1e9f9614ca03eed5933d` |
+| t+180s | `vault_deposit` → v1 | 44,500 | `0x40fb85dbee42b85a57e37937742fb8e20c929bf175eb3f80e055953c38d78743` |
+
+The arithmetic is the agent's, not the script's: with payroll due it funded and paid first
+(PreChecks priority b before c), then computed `200,000 − 5,500 paid = 194,500 liquid`,
+`194,500 − 120,000 buffer = 74,500 deployable`, and pulled `min(74,500, allowance remaining 44,500,
+per-tx 50,000)` = **44,500** — the audit row reads
+`"reason": "74500000000 base units deployable above the buffer"` — before depositing it. That is
+DEMO.md's "pull → deposit → payroll" beat, in the safer order (RR-15).
+
+After the sixth action the loop correctly went quiet: every subsequent tick recorded a deterministic
+NOOP — `"nothing idle above the buffer, nothing due, no risk events, allocations within caps"` —
+and **made no SERV call at all**, which is the SERV §7 budget rule working.
+
+Also exercised for real in this run:
+- **`resumeCrashWindow` on boot** found the Phase 5 live run's unresolved `sweep_home` row,
+  reconciled it to `timeout` (UNCERTAIN) and **did not resend it**. The breaker counter was not
+  touched, because a timeout is uncertainty, not a failure.
+- **6.6 blocking** — every tick that arrived while an execution was still `submitted` wrote
+  `SKIPPED: execution … is still submitted` instead of proposing.
+- **DEMO `price.refresh`** re-published the MockPriceFeed quote every minute, so R12's 60-second
+  freshness rule passed on every priced action. Without it the Phase 5 quote was 41,828 s old and
+  every one of these would have failed closed.
+- **6.9 step timings** — e.g. `{"gather":2239,"pipeline":4848}` ms.
+
+**Two bugs this run found**, both fixed and now covered by the fork suite:
+1. `resumeCrashWindow` sent to `exec.confirm` before `registerJobs` had created the queue, which
+   killed the worker at boot (found on the first attempt; fixed with an idempotent `createQueue`).
+2. Every executed decision was recorded as `status: 'noop'`, because the post-pipeline write that
+   stores the 6.9 timings passed `status` and overwrote what `runPipeline` had just set. A
+   deterministic NOOP was also mislabelled `proposal_source: 'serv'`. Both are reporting bugs —
+   nothing moved that should not have — but they would have made the Phase 7 timeline lie.
+
+Closing numbers from the run's own report (`ran for 603s`):
+
+| | |
+|---|---|
+| executions created this run | **6, all `confirmed`** (the 10th row is Phase 5's `sweep_home`, reconciled to `timeout` on boot) |
+| audit chain | **OK — 245 rows**, head `0x2b170e157aa7b3dcae048019dfb2aa25cf5893d75f11c4f2a1fd05ac7d11832c` |
+| NFR-4 replay | **6/6 decisions replayed identically** (every decision that reached a verdict) |
+| end state | agent 0 · vault shares 44,500,000,000 · treasury 150,000 mUSDC |
+
+Earlier attempts, recorded because Phase 9 will hit the same wall: two runs were lost to testnet
+funding rather than to code — the CDP USDC faucet is rate-limited per project, and a random
+per-run owner key stranded that run's USDC at an address whose key was gone (fixed by D-58, then by
+the MockUSDC pair).
+
 ## Phase 6 — Opus review gate
 
 **Q1 — Trace one ALLOW and one DENY end to end through the audit rows, and show the decision is
