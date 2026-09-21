@@ -133,7 +133,8 @@ function panel(d: DecisionDetail, tab: DetailTab, explorerBase: string): React.R
             )}
           </p>
           <p className="text-muted">
-            {SOURCE_WORDS[d.decision.proposalSource] ?? 'The source of this proposal was not recorded.'}
+            {SOURCE_WORDS[d.decision.proposalSource] ??
+              'The source of this proposal was not recorded.'}
           </p>
           {d.decision.rationale ? (
             <p className="text-ink">
@@ -159,7 +160,9 @@ function panel(d: DecisionDetail, tab: DetailTab, explorerBase: string): React.R
                   : 'A second, independent check was unsure.'}
             </p>
           )}
-          {d.decision.verifier?.note ? <p className="text-muted">{d.decision.verifier.note}</p> : null}
+          {d.decision.verifier?.note ? (
+            <p className="text-muted">{d.decision.verifier.note}</p>
+          ) : null}
         </Section>
       );
     case 'Policy checks':
@@ -167,7 +170,8 @@ function panel(d: DecisionDetail, tab: DetailTab, explorerBase: string): React.R
         <Section>
           {d.verdict ? (
             <p className="text-muted">
-              Checked against policy v{d.verdict.policyVersion}. These are the rules that decided it.
+              Checked against policy v{d.verdict.policyVersion}. These are the rules that decided
+              it.
             </p>
           ) : null}
           <PolicyChecks checks={d.verdict?.checks ?? []} />
@@ -193,7 +197,8 @@ function panel(d: DecisionDetail, tab: DetailTab, explorerBase: string): React.R
             </>
           ) : (
             <p className="text-deny">
-              The simulation failed{d.simulation.error ? `: ${d.simulation.error}` : ''}. Nothing was sent.
+              The simulation failed{d.simulation.error ? `: ${d.simulation.error}` : ''}. Nothing
+              was sent.
             </p>
           )}
         </Section>
@@ -239,7 +244,15 @@ export function DecisionDetailView({
   const onKey = (e: KeyboardEvent, i: number) => {
     const n = DETAIL_TABS.length;
     const next =
-      e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : null;
+      e.key === 'ArrowRight'
+        ? (i + 1) % n
+        : e.key === 'ArrowLeft'
+          ? (i + n - 1) % n
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? n - 1
+              : null;
     if (next === null) return;
     e.preventDefault();
     setTab(DETAIL_TABS[next] as DetailTab);

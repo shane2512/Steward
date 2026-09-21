@@ -17,6 +17,13 @@ const config: NextConfig = {
     '@steward/reasoning',
     '@steward/context',
   ],
-  serverExternalPackages: ['pg', 'pino'],
+  serverExternalPackages: ['pg', 'pino', '@coinbase/cdp-sdk'],
+  // The CDP SDK drags in Solana/x402 packages whose versions do not line up when webpack bundles
+  // them. It only ever runs on the server, so keep it (and them) out of the bundle.
+  webpack: (cfg, { isServer }) => {
+    if (isServer)
+      cfg.externals = [...(cfg.externals ?? []), '@coinbase/cdp-sdk', /^@x402\//, /^@solana/];
+    return cfg;
+  },
 };
 export default config;

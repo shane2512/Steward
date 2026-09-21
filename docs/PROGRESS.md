@@ -3,7 +3,7 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 6 complete (Opus)**; Phase 7 design pass done (Opus), awaiting human "continue" for the Phase 7 build
+Phase: **Phase 7 in progress**: tasks 7.1-7.5 built (Sonnet, 2026-09-22); 7.6 and 7.8 (Opus), 7.7, 7.9, 7.10 remain
 Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8)
 Last updated: 2026-09-21
 
@@ -1195,6 +1195,49 @@ Screenshots: `docs/design/shots/` (390px and 1280px, light and dark).
 3. **Public Sans** is a reasoned pick, not a reflex one, but it is competent rather than
    characterful at balance size. A display-only second face was considered and cut.
 
+## Phase 7 - build, part 1 (Sonnet, tasks 7.1-7.5, 2026-09-22)
+
+- [x] 7.1 Layout shell: dark-default tokens verified in both themes, glass header, tab bar / left rail, DEMO, frozen, safe-mode, paused and stale banners (`lib/status.ts`), skip link, focus-trap hook. The global Freeze button opens `FreezeModal`, which renders the extension point `components/freeze/FreezeFlow.tsx` ("Freeze flow arrives in task 7.8").
+- [x] 7.2 S1 landing, S2 connect (wagmi `coinbaseWallet({ preference: 'smartWalletOnly' })`, SIWE via the existing routes, pure state machine `lib/connectMachine.ts`: connecting, wrong network + auto-switch, rejected + retry, unsupported wallet).
+- [x] 7.3 S3 wizard, resumable from `GET /api/onboarding`. Steps 1-3 built (`POST /api/mandate/compile`). Steps 4-5 render `SignStepSlot` placeholders.
+- [x] 7.4 S4 dashboard from `GET /api/dashboard` (polled every 8 s), limit-line meter, parked notice (RR-14), fund sheet, stale indicator, skeletons, plain-language errors.
+- [x] 7.5 S5 timeline from `GET /api/decisions` (cursor) and `GET /api/decisions/:id`, six tabs, "Why was this blocked?", Basescan link.
+- [ ] 7.6-7.10 NOT started (7.6 and 7.8 are Opus). Phase 7 is not complete.
+
+Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean, `pnpm check:arch` 0 violations (all fixtures fire), `pnpm test` 49 files passed / 889 tests (26 skipped; 3 skipped files are the fork/live suites) plus policy 344 tests at 100% branches, `pnpm test:adversarial` guarantee holds (benign FP 0/12).
+
+### New API contracts (all owner-session, zod-validated, no secrets out)
+
+| Route | Notes |
+|---|---|
+| `GET /api/config` | public: `{ demoMode, chainId, explorerBase }`; `demoMode` only when `DEMO_MODE` and chain 84532 |
+| `GET /api/dashboard` | wallet, balances, allowance (chain-read), vault, max-at-risk, policy limits, pending approvals, 7-day obligations, last 5 decisions, blocked count, `paused` (no agent audit row for 10 min), `parked` (RR-14, from the latest NOOP audit), `degraded` |
+| `GET /api/onboarding` | `{ step 1-5 or 'done', agentWalletAddress, mandate, spendPermissionStatus, activePolicyVersion }` derived from rows |
+| `POST /api/mandate/compile` | `{ text, template }` (strict) returns `{ compiled, sentences, issues, assumptions, questions, source: serv or template, mandateId }`. Stores a mandate row and a `MANDATE_COMPILED` audit row. Falls back to the chosen template when SERV is down or absent |
+| `GET /api/decisions`, `/:id` | now plain language (title, one-line explanation, checks with `ruleSentences`, simulation, tx). The raw context snapshot and audit payloads are no longer returned |
+| `GET /api/wallet` | same shape plus allowance total and period; logic moved to `lib/walletState.ts` |
+| `POST /api/auth/verify` | now also creates the wallet row on first sign-in (`ensureWalletForUser`, treasury = the owner's smart wallet). Nothing created it before |
+
+`@steward/shared/client` (browser-safe subset: no env, no pino) is new. New db helpers: `insertMandate`, `getLatestMandate`, `latestAgentAudit`, `countDeniedVerdicts`, `getActivePolicyBody`, `ensureWalletForUser`.
+
+### Dev-only fixtures (how to view authenticated screens)
+
+`DEMO_MODE=true pnpm --filter @steward/web dev`, then open `/app?fixture=1` (also `frozen`, `safe`, `paused`, `quiet`, `onboarding`; `?fixture=0` clears it). The server honours it only when `NODE_ENV !== 'production'` AND `DEMO_MODE` AND chain 84532 (`lib/fixtureGate.ts`, tested). It is a read-route data switch: canned fake data instead of a DB read, no session granted, and no write route looks at it. Screenshots: `node scripts/app-shots.mjs` writes `docs/design/shots/app/` (7 screens x 390/1280 px x dark/light).
+
+### Extension points left for Opus
+
+- **7.6:** `apps/web/components/onboarding/SignStepSlot.tsx` (props documented in the file: `step 'spend-limit'|'policy'`, `mandate`, `agentWalletAddress`, `spendPermissionStatus`, `onSigned`), rendered by `OnboardingFlow.tsx` at steps 4 and 5. Still to build: spend-permission typed-data signing, policy prepare/activate signing, approval signature (S6), recipient-add signature (S8), server-side verification, replay/expiry. The client never rebuilds a message: the approval `message` comes verbatim from `GET /api/approvals`.
+- **7.8:** `apps/web/components/freeze/FreezeFlow.tsx` (props `frozen`, `onDone`, `onClose`). The modal frame and the header button already exist; "Freeze now" is disabled in the shell.
+
+### Known issues (Phase 7 part 1)
+
+- **Connect is untested with a real passkey Smart Wallet** (none available). The wiring follows the wagmi docs and installed types; the state machine, config and screen are unit-tested with mocks. The "unsupported wallet" state comes from classifying connector errors (`classifyConnectError`); an EOA that somehow signed in would still be refused at spend-permission time by `assertSmartWalletAccount` (D-5).
+- `/api/mandate/compile` has no rate limit (Phase 8.2) and each call costs a SERV request.
+- `/preview` keeps its own inline copies of the primitives; `components/ui` holds the extracted versions.
+- Onboarding "Continue" after a compile relies on the refetch that follows the compile response; if it has not landed, the click is a no-op.
+- Approvals, Recipients, Settings and Policy tabs are placeholders (task 7.7). The landing page has no live "attacks blocked" counter (needs an unauthenticated stat).
+- In `next dev`, the first hit of a route that imports `@steward/wallet` takes 30-60 s to compile.
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
@@ -1271,6 +1314,13 @@ Screenshots: `docs/design/shots/` (390px and 1280px, light and dark).
 | D-68 | 2026-09-22 | **Fonts are Figtree + Geist Mono, both OFL, via `next/font/google`**, replacing Public Sans + IBM Plex Mono (supersedes D-61) | Figtree has the single-storey `g`, tall x-height and geometric-humanist build of the reference's FK Grotesk (commercial, so unusable) and is variable. Public Sans is a different register and no longer matches the reference | Plus Jakarta Sans, Outfit (rejected: double-storey `g`, further from the reference); licensing FK Grotesk (out of scope) |
 | D-69 | 2026-09-22 | **A `--minor` token (`#626974` dark / `#858D9B` light) for the dimmed minor units of the balance figure**, rather than reusing `--line` | The reference dims the decimals to near-invisibility. At `--line` that is 1.3:1; at `--minor` it is 3.3:1, which is the AA floor for text at 44px/700. The cents stay legible to anyone who looks for them | reusing `--line` (rejected: fails even the large-text floor), `aria-hidden` on the decimals (rejected: makes the announced amount wrong) |
 | D-70 | 2026-09-22 | **Still no new dependency.** The preview's icons are inline SVG paths built from one 1.75px-stroke geometric family | `design-taste-frontend` and `tastemaker` both discourage hand-rolled icons, but adding Phosphor or Iconify to ship a design-only preview page is a production dependency for a reference artifact. Recorded as the reason the anti-slop score is held at 8 | `@phosphor-icons/react` (deferred: revisit if the Phase 7 build needs an icon set for real screens) |
+| D-71 | 2026-09-22 | **No new icon dependency.** Icons stay the one hand-drawn 1.75px family, now shared from `components/icons.tsx` | The brief allowed Phosphor "if insufficient"; the set covers every glyph used and D-70 stands | Phosphor (rejected: more weight for no missing glyph) |
+| D-72 | 2026-09-22 | **New deps: `wagmi` + `@tanstack/react-query` (connect; react-query also drives all polling, so no SWR), `jsdom` + `@testing-library/react` + `@testing-library/dom` (component tests), workspace links to `@steward/policy` and `@steward/reasoning` (compile route)** | One data hook for the whole app; V-14 mandates wagmi | SWR (rejected: second cache) |
+| D-73 | 2026-09-22 | **APY is `null` on the real dashboard** ("Vault rate not reported"); only fixtures show one | No rate source is wired; inventing a number is the fake precision DESIGN forbids | Hard-coded mock rate (rejected) |
+| D-74 | 2026-09-22 | **The browser never imports `@steward/policy` or the `@steward/shared` root** (they pull env/pino); rule sentences and explanations are produced by the routes, and the client imports `@steward/shared/client` | Keeps server code out of the bundle; sentences come from the same table as the engine | Copy of `ruleSentences` in the client (rejected: drift) |
+| D-75 | 2026-09-22 | **`serverExternalPackages` + webpack externals for `@coinbase/cdp-sdk`, `@x402`, `@solana`** in `next.config.ts` | Bundling the SDK fails on a mismatched `@solana/kit`; any route importing `@steward/wallet` returned 500 in `next dev` (no earlier phase ran a wallet route in Next). It only runs server-side | Pinning the solana packages |
+| D-76 | 2026-09-22 | **A wallet row is created at first sign-in**, treasury = the owner's smart wallet | Nothing created it, so provision returned NO_WALLET for every real user | Create it in the provision route |
+| D-77 | 2026-09-22 | **A frozen dashboard disables Approvals and Add funds but keeps Recipients and Activity reachable**; "attacks blocked" counts all DENY verdicts | Read-only screens must stay open while frozen; a DENY is the engine's own "blocked" | Disable the whole action row |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks

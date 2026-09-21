@@ -18,6 +18,11 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams()
 
 import { ActivityScreen } from '../components/activity/ActivityScreen';
 
+function need<T>(v: T | null | undefined): T {
+  if (v == null) throw new Error('missing fixture');
+  return v;
+}
+
 const wrap = (ui: ReactNode) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
@@ -64,7 +69,9 @@ describe('timeline list', () => {
   it('applyFilter is exact on the verdict', () => {
     const all = page1.decisions;
     expect(applyFilter(all, 'all')).toHaveLength(all.length);
-    expect(applyFilter(all, 'ESCALATE').every((i) => i.verdict?.decision === 'ESCALATE')).toBe(true);
+    expect(applyFilter(all, 'ESCALATE').every((i) => i.verdict?.decision === 'ESCALATE')).toBe(
+      true,
+    );
   });
 
   it('paginates by cursor: "Load older activity" appends the next page and then goes away', async () => {
@@ -76,19 +83,23 @@ describe('timeline list', () => {
     expect(screen.getByText('Pay Mara Okonjo')).toBeTruthy(); // page 1 is kept
     const cursorCall = mocks.apiGet.mock.calls.find((c) => String(c[0]).includes('cursor='));
     expect(cursorCall?.[0]).toMatch(/cursor=[^&]+/);
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Load older activity' })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Load older activity' })).toBeNull(),
+    );
   });
 
   it('empty and error states use plain language', async () => {
     mocks.apiGet.mockImplementation(async (path: string) => {
-      if (path.startsWith('/api/config')) return { demoMode: false, chainId: 84532, explorerBase: 'x' };
+      if (path.startsWith('/api/config'))
+        return { demoMode: false, chainId: 84532, explorerBase: 'x' };
       return { decisions: [], nextCursor: null };
     });
     wrap(<ActivityScreen />);
     await screen.findByText('No activity yet');
     cleanup();
     mocks.apiGet.mockImplementation(async (path: string) => {
-      if (path.startsWith('/api/config')) return { demoMode: false, chainId: 84532, explorerBase: 'x' };
+      if (path.startsWith('/api/config'))
+        return { demoMode: false, chainId: 84532, explorerBase: 'x' };
       throw new ApiError(500, 'error', 'x');
     });
     wrap(<ActivityScreen />);
@@ -111,7 +122,9 @@ describe('expanding a decision', () => {
       'Simulation',
       'Transaction',
     ]);
-    expect(screen.getByRole('tab', { name: 'Policy checks' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Policy checks' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
     expect(mocks.apiGet.mock.calls.some((c) => c[0] === '/api/decisions/fx-1')).toBe(true);
   });
 
@@ -127,8 +140,8 @@ describe('expanding a decision', () => {
 
 describe('DecisionDetailView', () => {
   const EXPLORER = 'https://sepolia.basescan.org';
-  const denied = fixtureDecisionDetail('fx-3')!;
-  const allowed = fixtureDecisionDetail('fx-1')!;
+  const denied = need(fixtureDecisionDetail('fx-3'));
+  const allowed = need(fixtureDecisionDetail('fx-1'));
 
   it('policy checks: every rule code with a mark AND a word, blocked first, sentence from the table', () => {
     render(<DecisionDetailView detail={denied} explorerBase={EXPLORER} />);
@@ -136,14 +149,18 @@ describe('DecisionDetailView', () => {
     const items = within(list).getAllByRole('listitem');
     expect(items[0]?.textContent).toContain('R-05');
     expect(items[0]?.textContent).toContain('Blocked');
-    expect(items[0]?.textContent).toContain('The recipient is on your allowlist, matched by exact address.');
+    expect(items[0]?.textContent).toContain(
+      'The recipient is on your allowlist, matched by exact address.',
+    );
     expect(items.at(-1)?.textContent).toContain('Passed');
     for (const li of items) expect(li.querySelector('svg')).toBeTruthy();
   });
 
   it('a denied decision has a "Why was this blocked?" section and says nothing moved', () => {
     render(<DecisionDetailView detail={denied} explorerBase={EXPLORER} />);
-    const why = screen.getByRole('heading', { name: 'Why was this blocked?' }).closest('section')!;
+    const why = screen
+      .getByRole('heading', { name: 'Why was this blocked?' })
+      .closest('section') as HTMLElement;
     expect(why.textContent).toMatch(/Nothing moved/);
     cleanup();
     render(<DecisionDetailView detail={allowed} explorerBase={EXPLORER} />);
@@ -151,13 +168,20 @@ describe('DecisionDetailView', () => {
   });
 
   it('sortChecks puts failures before passes and keeps order otherwise', () => {
-    const s = sortChecks(denied.verdict!.checks);
+    const s = sortChecks(need(denied.verdict).checks);
     expect(s.map((c) => c.result)).toEqual(['DENY', 'DENY', 'PASS']);
   });
 
   it('every tab renders plain text, never raw JSON', () => {
     render(<DecisionDetailView detail={allowed} explorerBase={EXPLORER} />);
-    for (const name of ['Context', 'Proposal', 'Verifier', 'Policy checks', 'Simulation', 'Transaction']) {
+    for (const name of [
+      'Context',
+      'Proposal',
+      'Verifier',
+      'Policy checks',
+      'Simulation',
+      'Transaction',
+    ]) {
       fireEvent.click(screen.getByRole('tab', { name }));
       const text = screen.getByRole('tabpanel').textContent ?? '';
       expect(text.length).toBeGreaterThan(10);
@@ -183,7 +207,9 @@ describe('DecisionDetailView', () => {
     cleanup();
     render(<DecisionDetailView detail={denied} explorerBase={EXPLORER} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Transaction' }));
-    expect(screen.getByRole('tabpanel').textContent).toMatch(/No transaction was sent. Nothing moved./);
+    expect(screen.getByRole('tabpanel').textContent).toMatch(
+      /No transaction was sent. Nothing moved./,
+    );
   });
 
   it('tabs are keyboard operable: arrows move and select, roving tabindex', () => {
@@ -191,10 +217,12 @@ describe('DecisionDetailView', () => {
     const active = screen.getByRole('tab', { name: 'Policy checks' });
     active.focus();
     fireEvent.keyDown(active, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: 'Simulation' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Simulation' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Simulation' }));
     expect(screen.getByRole('tab', { name: 'Context' }).getAttribute('tabindex')).toBe('-1');
-    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Home' });
     expect(screen.getByRole('tab', { name: 'Context' }).getAttribute('aria-selected')).toBe('true');
   });
 });

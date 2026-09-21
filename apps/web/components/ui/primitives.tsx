@@ -245,10 +245,10 @@ export function StatusPill({ state, label }: { state: PillState; label?: string 
       role="status"
       aria-live="polite"
       data-state={state}
-      className="inline-flex min-h-9 items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5"
+      className="inline-flex min-h-9 min-w-0 items-center gap-2 rounded-full bg-surface-2 px-2.5 py-1.5"
     >
       <span className={`size-2 rounded-full ${dot}`} aria-hidden="true" />
-      <span className="text-small font-medium text-ink">{label ?? p.label}</span>
+      <span className="truncate text-[13px] font-medium whitespace-nowrap text-ink">{label ?? p.label}</span>
     </span>
   );
 }

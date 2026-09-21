@@ -44,7 +44,8 @@ function DetailLoader({
   panelId?: string;
 }) {
   const q = useApi(`/api/decisions/${encodeURIComponent(id)}`, zDecisionDetail);
-  if (q.data) return <DecisionDetailView detail={q.data} explorerBase={explorerBase} panelId={panelId} />;
+  if (q.data)
+    return <DecisionDetailView detail={q.data} explorerBase={explorerBase} panelId={panelId} />;
   if (q.error)
     return (
       <div className="-mx-4">

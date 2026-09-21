@@ -29,10 +29,18 @@ const results = [
 describe('decisionTitle', () => {
   it('names recipients and vaults from the owner labels, never from the model', () => {
     expect(
-      decisionTitle({ kind: 'pay_recipient', params: { recipientId: 'r1', amount: '1' } }, labels, 'allowed'),
+      decisionTitle(
+        { kind: 'pay_recipient', params: { recipientId: 'r1', amount: '1' } },
+        labels,
+        'allowed',
+      ),
     ).toBe('Pay Mara Okonjo');
     expect(
-      decisionTitle({ kind: 'vault_deposit', params: { vaultId: 'v1', amount: '1' } }, labels, 'allowed'),
+      decisionTitle(
+        { kind: 'vault_deposit', params: { vaultId: 'v1', amount: '1' } },
+        labels,
+        'allowed',
+      ),
     ).toBe('Deposit to Aave USDC');
   });
   it('an unknown recipient is called what it is', () =>
@@ -59,7 +67,11 @@ describe('proposalAmount', () => {
 describe('checksFrom / oneLine / whyBlocked', () => {
   it('attaches the engine sentence for every rule code', () => {
     const c = checksFrom(results);
-    expect(c.map((x) => x.sentence)).toEqual([ruleSentences.R05, ruleSentences.R10, ruleSentences.R07]);
+    expect(c.map((x) => x.sentence)).toEqual([
+      ruleSentences.R05,
+      ruleSentences.R10,
+      ruleSentences.R07,
+    ]);
     expect(c[0]?.message).toBe('not on the allowlist');
     expect(c[2]?.message).toBeNull();
   });
@@ -73,7 +85,9 @@ describe('checksFrom / oneLine / whyBlocked', () => {
     expect(oneLine('ESCALATE', checksFrom([results[1]]), 'escalated')).toBe(
       `Needs you: ${ruleSentences.R10}`,
     );
-    expect(oneLine('ALLOW', checksFrom([results[2]]), 'allowed')).toBe('Allowed. All 1 checks passed.');
+    expect(oneLine('ALLOW', checksFrom([results[2]]), 'allowed')).toBe(
+      'Allowed. All 1 checks passed.',
+    );
   });
   it('no verdict: explains why in words', () => {
     expect(oneLine(null, [], 'noop')).toMatch(/Nothing to do/);
@@ -96,7 +110,12 @@ describe('toDecisionItem', () => {
         status: 'denied',
         proposal: { kind: 'pay_recipient', params: { recipientId: 'r1', amount: '900000000' } },
         createdAt: new Date('2026-09-22T10:00:00Z'),
-        verdict: { decision: 'DENY', policyVersion: 3, evaluatedAt: new Date('2026-09-22T10:00:01Z'), results },
+        verdict: {
+          decision: 'DENY',
+          policyVersion: 3,
+          evaluatedAt: new Date('2026-09-22T10:00:01Z'),
+          results,
+        },
       },
       labels,
     );
@@ -120,13 +139,18 @@ describe('detail helpers never surface raw blobs', () => {
     expect(f).toEqual([{ label: 'treasury usdc', value: '4,380 USDC' }]);
     expect(JSON.stringify(f)).not.toMatch(/IGNORE/);
     expect(contextFacts('junk')).toEqual([]);
-    expect(contextFacts({ facts: Array.from({ length: 99 }, (_, i) => ({ id: `f${i}`, value: 'v' })) })).toHaveLength(24);
+    expect(
+      contextFacts({ facts: Array.from({ length: 99 }, (_, i) => ({ id: `f${i}`, value: 'v' })) }),
+    ).toHaveLength(24);
   });
   it('screen and verifier are summarised in words', () => {
     expect(screenView({ injectionSuspected: true, signals: ['x'] })?.clean).toBe(false);
     expect(screenView({ injectionSuspected: false })?.note).toMatch(/No instructions/);
     expect(screenView(null)).toBeNull();
-    expect(verifierView({ verdict: 'AGREE', reasons: ['ok'] })).toEqual({ agrees: true, note: 'ok' });
+    expect(verifierView({ verdict: 'AGREE', reasons: ['ok'] })).toEqual({
+      agrees: true,
+      note: 'ok',
+    });
     expect(verifierView({ verdict: 'DISAGREE' })?.agrees).toBe(false);
     expect(verifierView({ verdict: 'UNSURE' })?.agrees).toBeNull();
     expect(verifierView(undefined)).toBeNull();
@@ -135,7 +159,9 @@ describe('detail helpers never surface raw blobs', () => {
     expect(simDeltas([{ holder: 'agent', token: 'USDC', delta: '-900000000' }])).toEqual([
       { holder: 'agent', token: 'USDC', delta: '-900 USDC' },
     ]);
-    expect(simDeltas([{ holder: 'recipient', token: 'USDC', delta: '1500000' }])[0]?.delta).toBe('+1.5 USDC');
+    expect(simDeltas([{ holder: 'recipient', token: 'USDC', delta: '1500000' }])[0]?.delta).toBe(
+      '+1.5 USDC',
+    );
     expect(simDeltas('junk')).toEqual([]);
   });
 });

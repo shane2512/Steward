@@ -6,7 +6,11 @@ import { useEffect, type RefObject } from 'react';
 const FOCUSABLE =
   'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+export function useFocusTrap(
+  ref: RefObject<HTMLElement | null>,
+  open: boolean,
+  onClose: () => void,
+) {
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
