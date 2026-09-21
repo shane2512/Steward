@@ -68,7 +68,6 @@ import {
   publicClient as rawPublicClient,
   requireLive,
   SPEND_PERMISSION_MANAGER as MANAGER,
-  USDC,
   waitFor,
   waitForCode,
 } from './lib';
@@ -86,12 +85,19 @@ const env = getEnv();
 const cdp = cdpClient();
 const pc = rawPublicClient();
 const VAULT = getAddress(env.MOCK_VAULT_ADDRESS ?? '0x3741f0da6dFFfFD8Be2353e326a49E41a3396485');
+/**
+ * The policy token. `env.USDC_ADDRESS` so a DEMO run can point at the MockUSDC pair
+ * (`deploy-demo-token.ts`) with a shell override instead of an edit to `.env.local` — which is what
+ * DEMO.md prescribes when the faucet limit is too small. I11 already fences DEMO_MODE to 84532.
+ */
+const TOKEN = getAddress(env.USDC_ADDRESS);
 const ALEX = getAddress('0x1111111111111111111111111111111111111111');
+const PRIYA = getAddress('0x2222222222222222222222222222222222222222');
 
 const step = (n: string, s: string) =>
   console.log(`\n── ${n}. ${s} ${'─'.repeat(Math.max(0, 62 - s.length))}`);
 const usdc = (a: Address) =>
-  pc.readContract({ address: USDC, abi: erc20Abi, functionName: 'balanceOf', args: [a] });
+  pc.readContract({ address: TOKEN, abi: erc20Abi, functionName: 'balanceOf', args: [a] });
 const vaultShares = (a: Address) =>
   pc.readContract({
     address: VAULT,
@@ -170,7 +176,7 @@ if ((await usdc(treasury)) < TARGET_TREASURY) {
       network: NETWORK,
       calls: [
         {
-          to: USDC,
+          to: TOKEN,
           data: encodeFunctionData({
             abi: erc20Abi,
             functionName: 'transfer',
@@ -233,12 +239,31 @@ if (!(await managerIsOwner())) {
 }
 if (!(await waitFor(managerIsOwner))) throw new Error('manager is not an owner of the treasury');
 
+/**
+ * The demo policy, as RATIOS of the funded treasury rather than absolute numbers.
+ *
+ * DEMO.md's "Startup Operating" values are 200,000 treasury / 120,000 buffer / 50,000 per-tx /
+ * 60,000 daily / 15,000 approval threshold (60,000 for vault_deposit and pull_allowance) /
+ * 50,000 allowance, with payroll of 3,000 and 2,500. Expressing them as percentages means the same
+ * run works whether the treasury holds 200,000 demo tokens or the 3 USDC a rate-limited faucet
+ * gives us, and the shape of the decisions is identical either way.
+ */
+const pct = (bps: bigint) => (treasuryUsdc * bps) / 10_000n;
+const BUFFER = pct(6_000n); // 120,000 / 200,000
+const PER_TX = pct(2_500n); //  50,000
+const DAILY = pct(3_000n); //  60,000
+const THRESHOLD = pct(750n); //  15,000
+const THRESHOLD_LOW_RISK = pct(3_000n); //  60,000 for vault_deposit + pull_allowance
+const ALLOWANCE = pct(2_500n); //  50,000
+const PAYROLL_ALEX = pct(150n); //   3,000
+const PAYROLL_PRIYA = pct(125n); //   2,500
+
 const nowSec = Math.floor(Date.now() / 1000);
 const permission: SpendPermission = buildSpendPermission({
   account: treasury,
   spender: agent,
-  token: USDC,
-  allowance: 2n * ONE,
+  token: TOKEN,
+  allowance: ALLOWANCE,
   periodSeconds: 86_400,
   start: nowSec,
   end: nowSec + 6 * 3_600,
@@ -247,7 +272,7 @@ const permission: SpendPermission = buildSpendPermission({
 const valid = validateSpendPermission(permission, {
   ownerAddress: treasury,
   agentWalletAddress: agent,
-  usdcAddress: USDC,
+  usdcAddress: TOKEN,
   now: nowSec,
 });
 if (!valid.ok) throw new Error(`validateSpendPermission: ${JSON.stringify(valid.error)}`);
@@ -295,26 +320,32 @@ const policy = {
   walletId: '',
   chainId: CHAIN_ID,
   treasuryAddress: treasury,
-  tokens: [{ symbol: 'USDC', address: USDC, decimals: 6 }],
+  tokens: [{ symbol: 'USDC', address: TOKEN, decimals: 6 }],
   vaults: [
     {
       id: 'v1',
       name: 'Steward Demo USDC Vault',
       address: VAULT,
-      asset: USDC,
+      asset: TOKEN,
       kind: 'erc4626',
       maxAllocationBps: 10_000,
     },
   ],
   recipients: [
-    { id: 'alex', label: 'Alex (contractor)', address: ALEX, maxPerTxMicroUsd: ONE / 2n },
+    { id: 'alex', label: 'Alex (contractor)', address: ALEX, maxPerTxMicroUsd: PER_TX },
+    { id: 'priya', label: 'Priya (designer)', address: PRIYA, maxPerTxMicroUsd: PER_TX },
   ],
-  limits: { perTxMicroUsd: ONE, dailyMicroUsd: 5n * ONE, maxActionsPerHour: 20 },
-  // Scaled-down demo policy: the shape of DEMO.md's "Startup Operating" at faucet amounts.
-  runwayBufferMicroUsd: ONE / 2n,
-  approvalThresholdMicroUsd: 5n * ONE, // nothing should escalate on this run
+  limits: { perTxMicroUsd: PER_TX, dailyMicroUsd: DAILY, maxActionsPerHour: 20 },
+  runwayBufferMicroUsd: BUFFER,
+  approvalThresholdMicroUsd: THRESHOLD,
+  // DEMO.md: moving into an allowlisted vault, or pulling within the allowance the owner already
+  // signed on-chain, is lower risk than paying it out.
+  approvalThresholdByKind: {
+    vault_deposit: THRESHOLD_LOW_RISK,
+    pull_allowance: THRESHOLD_LOW_RISK,
+  },
   depegThresholdBps: 100,
-  vaultDrawdownBps: 500,
+  vaultDrawdownBps: 100,
   autonomousKinds: ['pull_allowance', 'vault_deposit', 'pay_recipient', 'risk_exit', 'noop'],
   createdAt: new Date().toISOString(),
   signedBy: treasury,
@@ -370,7 +401,7 @@ await db
     walletId,
     name: 'Steward Demo USDC Vault',
     address: VAULT,
-    assetAddress: USDC,
+    assetAddress: TOKEN,
     kind: 'erc4626',
     maxAllocationBps: 10_000,
   })
@@ -387,24 +418,34 @@ await db.insert(schema.spendPermissions).values({
   approvedTxHash: approveTxHash,
 });
 
-const [recipient] = await db
-  .insert(schema.recipients)
-  .values({ walletId, label: 'Alex (contractor)', address: ALEX, maxPerTx: ONE / 2n })
-  .onConflictDoUpdate({
-    target: [schema.recipients.walletId, schema.recipients.address],
-    set: { status: 'active' },
-  })
-  .returning();
+const seedRecipient = async (id: string, label: string, address: Address, amount: bigint) => {
+  const [row] = await db
+    .insert(schema.recipients)
+    .values({ walletId, label, address, maxPerTx: PER_TX })
+    .onConflictDoUpdate({
+      target: [schema.recipients.walletId, schema.recipients.address],
+      set: { status: 'active', label, maxPerTx: PER_TX },
+    })
+    .returning();
+  await db.insert(schema.obligations).values({
+    walletId,
+    recipientId: row!.id,
+    amount,
+    dueDate: today,
+    recurrence: 'monthly',
+  });
+  console.log(`  obligation ${label}: ${formatUnits(amount, 6)} due ${today} (policy id ${id})`);
+};
+
 const today = new Date().toISOString().slice(0, 10);
 await db.delete(schema.obligations).where(eq(schema.obligations.walletId, walletId));
-await db.insert(schema.obligations).values({
-  walletId,
-  recipientId: recipient!.id,
-  amount: ONE / 5n, // 0.2 USDC
-  dueDate: today,
-  recurrence: 'monthly',
-});
-console.log(`wallet ${walletId} · policy v${policy.version} · obligation 0.2 USDC due ${today}`);
+await seedRecipient('alex', 'Alex (contractor)', ALEX, PAYROLL_ALEX);
+await seedRecipient('priya', 'Priya (designer)', PRIYA, PAYROLL_PRIYA);
+console.log(
+  `wallet ${walletId} · policy v${policy.version} · treasury ${formatUnits(treasuryUsdc, 6)} · ` +
+    `buffer ${formatUnits(BUFFER, 6)} · perTx ${formatUnits(PER_TX, 6)} · ` +
+    `allowance ${formatUnits(ALLOWANCE, 6)} · threshold ${formatUnits(THRESHOLD, 6)}`,
+);
 
 // ── 4. refresh the demo oracle once, then start the worker ───────────────────────────────────────
 step('4', 'demo oracle + the worker');
