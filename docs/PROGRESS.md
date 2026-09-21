@@ -242,9 +242,9 @@ the same refused question every 30 seconds.
 
 | | run 1 (before the fixes) | run 2 (after) |
 |---|---|---|
-| iterations | ~100 in 10 min | **13 in 10 min** — the cron + half-step cadence, nothing more |
+| iterations | ~100 in 10 min | **22 in 10 min** — the cron + half-step cadence, nothing more |
 | `agent_decisions` rows written | **100** | **1** (the one `pay_recipient` that R07 refused) |
-| audit rows per quiet tick | 2 (`CONTEXT` + `PROPOSAL`) | **1** (`NOOP`) |
+| audit rows per quiet tick | 2 (`CONTEXT` + `PROPOSAL`) | **1** (`NOOP`) — 21 of them |
 | executions | 6 | 0 — correctly: the daily cap was already exhausted |
 
 The `NOOP` rows say exactly why the agent is parked, which is the part that matters:
