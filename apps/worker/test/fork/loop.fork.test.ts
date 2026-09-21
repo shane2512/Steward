@@ -772,6 +772,50 @@ describe.skipIf(!FORK)('fork: the Phase 6 decision loop, end to end', () => {
     await drainConfirms();
   }, 240_000);
 
+  // ── quiescence (the defect the first live run exposed) ────────────────────────────────────────
+
+  it('goes QUIESCENT once the work is done: 8 further ticks, no decision rows, nothing sent', async () => {
+    await dealAgent(300n * ONE);
+    await addRecipientAndObligation(20n * ONE, '2026-09-01');
+
+    // Run the demo steps to completion: pay the obligation, then deploy the idle cash.
+    for (let i = 0; i < 4; i++) {
+      const outcome = await runIteration(loopDeps(), walletId, 'schedule');
+      if (outcome.status === 'noop') break;
+      expect(outcome.status, show(outcome)).toBe('executed');
+      await drainConfirms();
+    }
+
+    const executionsAfterWork = await db.select().from(schema.executions);
+    const decisionsAfterWork = await db.select().from(schema.agentDecisions);
+    const auditAfterWork = await db.select().from(schema.auditLog);
+    expect(executionsAfterWork.length).toBeGreaterThan(0);
+    const sentAfterWork = sent;
+
+    // Now tick repeatedly with nothing left to do. This is the demo cadence running unattended.
+    for (let i = 0; i < 8; i++) {
+      const outcome = await runIteration(loopDeps(), walletId, 'schedule');
+      expect(outcome.status, show(outcome)).toBe('noop');
+      // DATA_MODEL: a decision row exists only for an iteration that reached reasoning or a
+      // deterministic proposal. A tick with nothing to do reached neither.
+      if (outcome.status === 'noop') expect(outcome.decisionId).toBeNull();
+    }
+
+    // The point of the test: no churn.
+    expect(sent).toBe(sentAfterWork);
+    expect(await db.select().from(schema.executions)).toHaveLength(executionsAfterWork.length);
+    expect(await db.select().from(schema.agentDecisions)).toHaveLength(decisionsAfterWork.length);
+
+    // Exactly one audit row per quiet tick — a bounded, honest record, not two rows per tick.
+    const auditNow = await db.select().from(schema.auditLog);
+    expect(auditNow.length - auditAfterWork.length).toBe(8);
+    for (const row of auditNow.slice(auditAfterWork.length)) expect(row.event).toBe('NOOP');
+
+    // And the chain still verifies.
+    const chain = await verifyChain(db, walletId);
+    expect(chain.ok, chain.ok ? '' : show(chain.error)).toBe(true);
+  }, 300_000);
+
   // ── NFR-4 ──────────────────────────────────────────────────────────────────────────────────────
 
   it('NFR-4 — an ALLOW replays identically from the stored snapshot and policy version', async () => {

@@ -28,7 +28,7 @@ import { approvalMessage, APPROVAL_TTL_MS, type Policy, type Proposal } from '@s
 import { freshTestDb } from '../../../packages/db/test/helpers';
 import { runIteration, type DecisionLoopDeps } from '../src/loop';
 import { tryWalletLock, withWalletLock, LOOP_LOCK_NAMESPACE } from '../src/lock';
-import { addOneMonth } from '../src/jobs';
+import { addOneMonth, zLoopTickJob } from '../src/jobs';
 import {
   cancelApprovalsForPolicyChange,
   executeApproval,
@@ -570,6 +570,34 @@ describe('6.5 — obligations.scan', () => {
       { walletId, recipientId: recipient!.id, amount: ONE, dueDate: '2026-12-01' },
     ]);
     expect(await listObligationsDue(db, walletId, '2026-09-21')).toHaveLength(1);
+  });
+});
+
+describe('6.5 — the DEMO half-step is ONE-SHOT', () => {
+  // The first live run produced ~100 iterations in 10 minutes instead of 20: the half-step handler
+  // queued another half-step, so every cron tick started a self-perpetuating chain and the chains
+  // accumulated one per minute. `half: true` is the flag that stops it, so the payload schema has
+  // to carry it and the cron tick has to be distinguishable from the half-step.
+  it('the tick payload distinguishes a cron tick from a half-step', () => {
+    const cron = zLoopTickJob.parse({});
+    expect(cron.half).toBeUndefined();
+    const half = zLoopTickJob.parse({ half: true });
+    expect(half.half).toBe(true);
+    // A wallet-scoped tick (what /api/agent/run enqueues) never spawns a half-step either.
+    expect(zLoopTickJob.parse({ walletId: '11111111-2222-4333-8444-555555555555' }).walletId).toBe(
+      '11111111-2222-4333-8444-555555555555',
+    );
+  });
+
+  it('the guard only re-queues for a cron tick, so the cadence is exactly 2 per minute', () => {
+    // The condition as the handler evaluates it.
+    const spawns = (data: { walletId?: string; half?: boolean }) => {
+      const p = zLoopTickJob.parse(data);
+      return !p.walletId && p.half !== true;
+    };
+    expect(spawns({})).toBe(true); // cron tick -> one half-step
+    expect(spawns({ half: true })).toBe(false); // half-step -> nothing (the fix)
+    expect(spawns({ walletId: '11111111-2222-4333-8444-555555555555' })).toBe(false);
   });
 });
 

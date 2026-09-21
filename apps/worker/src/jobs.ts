@@ -63,7 +63,13 @@ export const zLoopRunJob = z.object({
     .enum(['schedule', 'balance', 'obligation', 'risk', 'owner', 'approval'])
     .default('schedule'),
 });
-export const zLoopTickJob = z.object({ walletId: z.string().uuid().optional() }).default({});
+export const zLoopTickJob = z
+  .object({
+    walletId: z.string().uuid().optional(),
+    /** True on the DEMO half-step, which must NOT queue another one (see the handler). */
+    half: z.boolean().optional(),
+  })
+  .default({});
 export const zApprovalJob = z.object({ approvalId: z.string().uuid() });
 
 const DAY_MS = 86_400_000;
@@ -166,13 +172,18 @@ export async function registerJobs(deps: JobDeps): Promise<void> {
       for (const walletId of walletIds) {
         await boss.send(LOOP_RUN_QUEUE, { walletId, trigger: 'schedule' });
       }
-      // DEMO_MODE wants a 30 s cadence and cron stops at a minute, so each cron tick queues the
-      // half-step itself. `singletonKey` keeps at most one half-step pending, so a slow iteration
-      // cannot build a backlog.
-      if (env.DEMO_MODE && !parsed.data.walletId) {
+      // DEMO_MODE wants a 30 s cadence and cron's floor is one minute, so each CRON tick queues
+      // exactly one half-step at +30 s.
+      //
+      // `half: true` is what makes it one-shot, and it is load-bearing: without it the half-step's
+      // own handler queued another half-step, so every cron tick started a self-perpetuating chain
+      // and the chains accumulated one per minute. The first live run produced ~100 iterations in
+      // 10 minutes instead of 20. (`singletonKey` did not save us: on a standard-policy pg-boss
+      // queue it is not a uniqueness constraint.)
+      if (env.DEMO_MODE && !parsed.data.walletId && parsed.data.half !== true) {
         await boss.send(
           LOOP_TICK_QUEUE,
-          {},
+          { half: true },
           { startAfter: DEMO_TICK_SECONDS, singletonKey: 'demo-half-step' },
         );
       }

@@ -84,7 +84,8 @@ export type DecisionOutcome =
   /** Another iteration holds the lock. Nothing happened; this is not an error. */
   | { status: 'locked' }
   | { status: 'skipped'; reason: string }
-  | { status: 'noop'; decisionId: string; reason: string }
+  /** `decisionId` is null when the tick had nothing to do and so created no decision row. */
+  | { status: 'noop'; decisionId: string | null; reason: string }
   | { status: 'failed'; code: string; message: string; decisionId?: string }
   | ({ decisionId: string } & PipelineOutcome);
 
@@ -227,13 +228,42 @@ export async function runIteration(
     untrusted: g.untrusted,
   });
 
+  // QUIESCENCE. DATA_MODEL is explicit that `agent_decisions` holds "one per loop iteration THAT
+  // REACHED reasoning or a deterministic proposal". A tick with nothing to do reached neither, so it
+  // gets ONE audit row and no decision row — otherwise a 30-second demo cadence writes a decision
+  // every tick forever, the timeline fills with rows that say nothing happened, and the append-only
+  // chain grows without bound. The first live run produced 100 decisions in 10 minutes this way.
+  //
+  // Nothing is hidden by this: the tick is still recorded, with the context hash that proves what
+  // the agent was looking at when it decided to do nothing.
+  if (pre.kind === 'noop') {
+    const audited = await appendAudit(db, {
+      walletId,
+      actor: 'agent',
+      event: 'NOOP',
+      entityType: 'wallet',
+      entityId: walletId,
+      payload: {
+        contextHash: ctx.snapshotHash,
+        trigger,
+        reason: pre.reason,
+        degraded,
+        policyVersion: g.policyVersion,
+      },
+      createdAt: now,
+    });
+    if (!audited.ok)
+      return { status: 'failed', code: 'AUDIT_FAILED', message: audited.error.message };
+    return { status: 'noop', decisionId: null, reason: pre.reason };
+  }
+
   const decision = await insertAgentDecision(db, {
     walletId,
     trigger,
     contextSnapshot: JSON.parse(JSON.stringify(ctx, bigintToString)) as unknown,
     contextHash: ctx.snapshotHash,
-    // A deterministic pre-check and a deterministic NOOP are both our own arithmetic; only the
-    // discretionary path involves a model, and `propose` restamps `source` on its own output (RR-3).
+    // Only the discretionary path involves a model; `propose` restamps `source` on its own
+    // output (RR-3).
     proposalSource: pre.kind === 'discretionary' ? 'serv' : 'deterministic',
     status: 'noop',
   }).catch(() => null);
@@ -265,19 +295,6 @@ export async function runIteration(
       message: contextAudited.error.message,
       decisionId,
     };
-
-  if (pre.kind === 'noop') {
-    await appendAudit(db, {
-      walletId,
-      actor: 'agent',
-      event: 'PROPOSAL',
-      entityType: 'decision',
-      entityId: decisionId,
-      payload: { kind: 'noop', source: 'deterministic', reason: pre.reason },
-      createdAt: now,
-    });
-    return { status: 'noop', decisionId, reason: pre.reason };
-  }
 
   // ── the proposal ───────────────────────────────────────────────────────────────────────────────
   let proposal: Proposal;
