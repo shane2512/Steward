@@ -50,6 +50,9 @@ const schema = z.object({
   USDC_ADDRESS: address.default('0x036CbD53842c5426634e7929541eC2318f3dCF7e'),
   SPEND_PERMISSION_MANAGER_ADDRESS: address.default('0xf85210B21cC50302F477BA56686d2019dC9b67Ad'),
   MOCK_VAULT_ADDRESS: address.optional(),
+  // Phase 5: the I11 demo price source (docs/addresses.md). Optional: absent means no oracle, which
+  // the Policy Engine treats as a DENY (R12) unless the fenced demo parity applies.
+  MOCK_PRICE_FEED_ADDRESS: address.optional(),
   DEMO_MODE: bool.default(false),
   STEWARD_ALLOW_MAINNET: bool.default(false),
   TELEGRAM_BOT_TOKEN: secret().optional(),

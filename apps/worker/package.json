@@ -12,7 +12,10 @@
   "dependencies": {
     "@steward/db": "workspace:*",
     "@steward/shared": "workspace:*",
-    "pg-boss": "^12.33.2"
+    "pg-boss": "^12.33.2",
+    "@steward/wallet": "workspace:*",
+    "viem": "^2.56.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "tsx": "^4.23.13"
