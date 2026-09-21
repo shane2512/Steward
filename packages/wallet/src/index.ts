@@ -10,6 +10,7 @@ export * from './agentkit';
 export * from './calls';
 export * from './chain';
 export * from './confirmer';
+export * from './demoOracle';
 export * from './errors';
 export * from './executor';
 export * from './provision';

@@ -10,9 +10,11 @@ import {
   walletActionProvider,
   type Action,
 } from '@coinbase/agentkit';
-import type { CdpClient, EvmServerAccount } from '@coinbase/cdp-sdk';
-import { createLogger, err, ok, type Result } from '@steward/shared';
+import { CdpClient, type EvmServerAccount } from '@coinbase/cdp-sdk';
+import { createLogger, err, ok, type Address, type Hex, type Result } from '@steward/shared';
+import { getAddress } from 'viem';
 import { assertChainAllowed, CDP_NETWORK_ID } from './chain';
+import type { TxSender } from './executor';
 
 const log = createLogger('wallet');
 
@@ -113,3 +115,71 @@ export async function buildAgentKit(input: BuildAgentKitInput): Promise<Result<A
 
 /** Narrow the CDP client surface this package uses, so tests can supply a tiny fake. */
 export type CdpAccounts = Pick<CdpClient['evm'], 'getOrCreateAccount' | 'getOrCreateSmartAccount'>;
+
+/**
+ * Build a CDP client. This module is one of the three places `check:arch`
+ * (`cdp-only-in-wallet-bootstrap`) allows a send-capable Coinbase client to be constructed, so the
+ * worker asks for one here instead of importing the SDK itself (I1).
+ */
+export function createCdpClient(creds: {
+  apiKeyId: string;
+  apiKeySecret: string;
+  walletSecret: string;
+}): CdpClient {
+  return new CdpClient(creds);
+}
+
+/** The CDP surface a `TxSender` needs. Narrow so a test can supply a two-method fake. */
+export type CdpUserOps = Pick<
+  CdpClient['evm'],
+  'getOrCreateAccount' | 'getOrCreateSmartAccount' | 'sendUserOperation' | 'waitForUserOperation'
+>;
+
+/**
+ * The production `TxSender`: the agent's CDP smart account, sending one batched user operation.
+ *
+ * This only *builds* the port. Nothing here decides to send: `executor.execute()` is still the only
+ * caller, and it only gets there with a verified AllowReceipt (Phase 5 review gate Q1/Q2).
+ */
+export async function cdpTxSender(input: {
+  cdp: CdpUserOps;
+  /** `cdpAccountNames(userId)` output — the owner account and smart-account names (D-3). */
+  names: { owner: string; smartAccount: string };
+  network: 'base-sepolia' | 'base';
+}): Promise<Result<TxSender>> {
+  let address: Address;
+  let smartAccount: Awaited<ReturnType<CdpUserOps['getOrCreateSmartAccount']>>;
+  try {
+    const owner = await input.cdp.getOrCreateAccount({ name: input.names.owner });
+    smartAccount = await input.cdp.getOrCreateSmartAccount({
+      name: input.names.smartAccount,
+      owner,
+    });
+    address = getAddress(smartAccount.address);
+  } catch (e) {
+    return err(`CDP smart account unavailable: ${String(e)}`);
+  }
+
+  return ok({
+    getAddress: () => address,
+    async send(calls) {
+      const op = await input.cdp.sendUserOperation({
+        smartAccount,
+        network: input.network,
+        calls: calls.map((c) => ({ to: c.to, data: c.data, value: c.value })),
+      });
+      const result = (await input.cdp.waitForUserOperation({
+        smartAccountAddress: address,
+        userOpHash: op.userOpHash,
+      })) as { status: string; transactionHash?: string };
+      // A non-complete status is a failure, not a hash: throwing keeps the executor's retry
+      // classification in charge (5.6) rather than recording a phantom success.
+      if (result.status !== 'complete')
+        throw new Error(`user operation ${op.userOpHash} status ${result.status}`);
+      return {
+        userOpHash: op.userOpHash as Hex,
+        ...(result.transactionHash ? { txHash: result.transactionHash as Hex } : {}),
+      };
+    },
+  });
+}

@@ -15,9 +15,15 @@
     "pg-boss": "^12.33.2",
     "@steward/wallet": "workspace:*",
     "viem": "^2.56.8",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@steward/context": "workspace:*",
+    "@steward/policy": "workspace:*",
+    "@steward/reasoning": "workspace:*",
+    "@steward/risk": "workspace:*",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "tsx": "^4.23.13"
+    "tsx": "^4.23.13",
+    "@types/pg": "^8.23.1"
   }
 }
