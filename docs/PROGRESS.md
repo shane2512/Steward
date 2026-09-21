@@ -16,7 +16,7 @@ Last updated: 2026-09-21
 | 3 | Policy Engine & mandate validator | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 129 modules/278 deps 0 violations + both violation fixtures fire, test 24 files/508 tests, `packages/policy` **100% branches (411/411)** enforced in its own vitest config |
 | 4 | SERV reasoning & injection defenses | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 153 modules/371 deps 0 violations + all three violation fixtures fire, test 32 files/621 tests (policy still 100% branches), `pnpm test:adversarial` **60 cases, guarantee 48/48 (100%), benign FP 0/12 (0%)**, live SERV smoke recorded (request ids below). 4.11 skipped (V-09 not confirmed) |
 | 5 | Risk gate, executor, confirmer | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch 170 modules/430 deps 0 violations + all **four** violation fixtures fire, test 35 files/673 tests (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, fork suite **2 files / 9 tests** (opt-in), and a LIVE Base Sepolia run: pull → deposit → payment → sweep, all through `executor.ts` (tx hashes below) |
-| 6 | Decision loop, scheduler, obligations, risk exits | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch **193 modules / 526 deps** 0 violations with **no rule changes** + all four fixtures fire, test **37 files / 729 tests** (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, Phase 6 fork suite **16/16** (opt-in), and a LIVE unattended Base Sepolia run through the real worker (below) |
+| 6 | Decision loop, scheduler, obligations, risk exits | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch **193 modules / 528 deps** 0 violations with **no rule changes** + all four fixtures fire, test **37 files / 735 tests** (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, Phase 6 fork suite **17/17** (opt-in), and a LIVE unattended Base Sepolia run through the real worker (below) |
 | 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
@@ -87,15 +87,15 @@ Last updated: 2026-09-21
 |---|---|
 | `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
 | `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
-| `pnpm check:arch` | ✅ 0 violations (**193 modules, 526 dependencies**), **no rule changes**; all four fixtures fire (`policy-only-shared`, `reasoning-no-wallet-db`, `owner-path-no-reasoning`, `cdp-only-in-wallet-bootstrap`); purity lint fixture 10 problems |
-| `pnpm test` | ✅ **37 files / 731 tests passed**, 3 files / 26 skipped (the three opt-in fork suites); `packages/policy` still **100% branches (411/411)**, 8 files / 344 tests |
+| `pnpm check:arch` | ✅ 0 violations (**193 modules, 528 dependencies**), **no rule changes**; all four fixtures fire (`policy-only-shared`, `reasoning-no-wallet-db`, `owner-path-no-reasoning`, `cdp-only-in-wallet-bootstrap`); purity lint fixture 10 problems |
+| `pnpm test` | ✅ **37 files / 735 tests passed**, 3 files / 26 skipped (the three opt-in fork suites); `packages/policy` still **100% branches (411/411)**, 8 files / 344 tests |
 | `pnpm test:adversarial` | ✅ unchanged — 60 cases, guarantee **48/48 (100%)**, benign FP **0/12**, screen recall 35/40 |
 | Phase 6 fork suite (opt-in) | ✅ `STEWARD_FORK=1 npx vitest run apps/worker/test/fork` — **17/17 passed** |
 | Phase 5 fork suite (opt-in) | ✅ still 2 files / 9 tests — all three fork files together: **3 files / 26 tests** |
 | `pnpm contracts:test` | ✅ **21/21** (16 carried + 5 for the new MockUSDC) |
 | live unattended run | ✅ see "Live unattended run" below |
 
-New Phase 6 test files: `apps/worker/test/prechecks.test.ts` (**26**, pure — no network, no db),
+New Phase 6 test files: `apps/worker/test/prechecks.test.ts` (**30**, pure — no network, no db),
 `apps/worker/test/loop.test.ts` (**32**, real Postgres), `apps/worker/test/fork/loop.fork.test.ts`
 (**17**, opt-in fork + real Postgres).
 
