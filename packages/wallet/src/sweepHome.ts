@@ -134,8 +134,11 @@ export async function sweepHome(
   const proposal: Proposal = {
     kind: 'sweep_home',
     params: {},
+    // The agent's NET balance change is only the USDC it already held: the redeemed assets arrive
+    // and leave inside the same batch, so they cancel. The treasury receives the whole sum. R11
+    // compares measured balance deltas, so these have to be the net figures, not the gross flow.
     expectedDeltas: [
-      { token: usdcAddress, holder: 'agent', delta: -total },
+      { token: usdcAddress, holder: 'agent', delta: -balances.value.agentUsdc },
       { token: usdcAddress, holder: 'treasury', delta: total },
     ],
     rationale: 'Owner-requested sweep: return all agent funds to the treasury.',
