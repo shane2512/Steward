@@ -23,3 +23,25 @@ Put these in `.env.local`:
 MOCK_VAULT_ADDRESS=0x3741f0da6dFFfFD8Be2353e326a49E41a3396485
 MOCK_PRICE_FEED_ADDRESS=0xea0183F799ffCfE2f5bFd831EBfdc9f064fddf69
 ```
+
+## DEMO-only token pair (Phase 6, deployed 2026-09-21)
+
+Circle's testnet USDC comes from a CDP faucet that is rate-limited per project — not enough for an
+unattended loop run or a rehearsed demo. DEMO.md anticipates this ("200,000 via MockUSDC if faucet
+limits are too small — then USDC_ADDRESS points to MockUSDC; banner says DEMO DATA").
+
+| Name | Address | Verified how | Source |
+|---|---|---|---|
+| **MockUSDC** (6 dec, owner-mintable) | `0x1ba0af42256425d1F9Eb03aA804048593E23926a` | deployed 2026-09-21, tx `0x7ac19b140293bd94dd84ae415dd26ff87ae82ee60e1349c1e1661f1740b9ffef`; on-chain: `decimals()` == 6, `symbol()` == mUSDC, `owner()` == demo admin | `contracts/src/MockUSDC.sol`, `scripts/live/deploy-demo-token.ts` |
+| **MockVault over MockUSDC** | `0xc1eb5AF474e99Dd78e8137bd9164A522C60A7Be1` | deployed 2026-09-21, tx `0x8af4efc5d245d8f071a06b614f7181f32de8fa24fbfde1fef9b0998d14766023`; on-chain: `asset()` == MockUSDC, `owner()` == demo admin, `decimals()` == 6 | same |
+
+Both deployed via CREATE2 with salt `0x…02` (the real-USDC pair above uses `0x…01`), so the two sets
+coexist and redeploying is a no-op. **Use these only with `DEMO_MODE=true` on chain 84532**, where
+I11 fences the demo overrides and the UI must show the DEMO DATA banner:
+
+```
+USDC_ADDRESS=0x1ba0af42256425d1F9Eb03aA804048593E23926a
+MOCK_VAULT_ADDRESS=0xc1eb5AF474e99Dd78e8137bd9164A522C60A7Be1
+```
+
+Mint more at any time: `STEWARD_LIVE=1 npx tsx scripts/live/deploy-demo-token.ts <to> <wholeTokens>`.
