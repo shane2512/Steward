@@ -27,3 +27,6 @@ coverage/
 # stray tool-output redirects
 *.gate.out
 .gate.out
+
+# third-party reference art (never commit)
+docs/design/Photos/
