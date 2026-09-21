@@ -28,6 +28,7 @@ export const zSimulatedApproval = z.object({
   spender: zAddress,
   amount: zAmount,
 });
+export type SimulatedApproval = z.infer<typeof zSimulatedApproval>;
 
 export const zEvaluationInput = z.object({
   policy: zPolicy,
