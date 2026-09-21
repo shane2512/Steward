@@ -1,1 +1,235 @@
 @import 'tailwindcss';
+
+/* ===========================================================================
+   Steward design tokens — see docs/DESIGN.md
+   Palette values are indirected through --st-* so that a `data-theme`
+   attribute on <html> OR on any wrapper element swaps the whole theme, while
+   `prefers-color-scheme` remains the default.
+   =========================================================================== */
+
+:root {
+  --st-ground: #f2f4f7;
+  --st-surface: #ffffff;
+  --st-ink: #0f141b;
+  --st-muted: #5a6472;
+  --st-line: #dde2ea;
+  --st-line-strong: #77818f;
+  --st-seal: #2a46a6;
+  --st-ok: #14713f;
+  --st-warn: #8a5300;
+  --st-stop: #b3261e;
+  /* text that sits on a filled seal / stop control */
+  --st-on-accent: #ffffff;
+  --st-shadow-e1: 0 1px 2px rgb(15 20 27 / 0.06);
+  --st-shadow-e2: 0 16px 40px -12px rgb(15 20 27 / 0.22);
+  color-scheme: light;
+}
+
+/* dark values, applied by preference unless an explicit light theme is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --st-ground: #070a0f;
+    --st-surface: #131923;
+    --st-ink: #e7edf6;
+    --st-muted: #98a3b4;
+    --st-line: #232b38;
+    --st-line-strong: #586679;
+    --st-seal: #8fa8f5;
+    --st-ok: #4ed18c;
+    --st-warn: #e3b15a;
+    --st-stop: #ff8a80;
+    --st-on-accent: #070a0f;
+    --st-shadow-e1: 0 0 0 0 transparent;
+    --st-shadow-e2: 0 16px 40px -12px rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+/* explicit override, on <html> or on any subtree (the preview uses a wrapper) */
+[data-theme='dark'] {
+  --st-ground: #070a0f;
+  --st-surface: #131923;
+  --st-ink: #e7edf6;
+  --st-muted: #98a3b4;
+  --st-line: #232b38;
+  --st-line-strong: #586679;
+  --st-seal: #8fa8f5;
+  --st-ok: #4ed18c;
+  --st-warn: #e3b15a;
+  --st-stop: #ff8a80;
+  --st-on-accent: #070a0f;
+  --st-shadow-e1: 0 0 0 0 transparent;
+  --st-shadow-e2: 0 16px 40px -12px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --st-ground: #f2f4f7;
+  --st-surface: #ffffff;
+  --st-ink: #0f141b;
+  --st-muted: #5a6472;
+  --st-line: #dde2ea;
+  --st-line-strong: #77818f;
+  --st-seal: #2a46a6;
+  --st-ok: #14713f;
+  --st-warn: #8a5300;
+  --st-stop: #b3261e;
+  --st-on-accent: #ffffff;
+  --st-shadow-e1: 0 1px 2px rgb(15 20 27 / 0.06);
+  --st-shadow-e2: 0 16px 40px -12px rgb(15 20 27 / 0.22);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-ground: var(--st-ground);
+  --color-surface: var(--st-surface);
+  --color-ink: var(--st-ink);
+  --color-muted: var(--st-muted);
+  --color-line: var(--st-line);
+  --color-line-strong: var(--st-line-strong);
+  --color-seal: var(--st-seal);
+  --color-ok: var(--st-ok);
+  --color-warn: var(--st-warn);
+  --color-stop: var(--st-stop);
+  --color-on-accent: var(--st-on-accent);
+
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* type scale (docs/DESIGN.md §3) */
+  --text-label: 0.78125rem; /* 12.5px */
+  --text-label--line-height: 1.4;
+  --text-mono: 0.8125rem; /* 13px */
+  --text-mono--line-height: 1.6;
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.5;
+  --text-body: 1rem;
+  --text-body--line-height: 1.55;
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.35;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.3;
+  --text-h1: 1.75rem;
+  --text-h1--line-height: 1.15;
+  --text-balance: 2.5rem;
+  --text-balance--line-height: 1;
+  --text-balance-lg: 3rem;
+  --text-balance-lg--line-height: 1;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --shadow-e1: var(--st-shadow-e1);
+  --shadow-e2: var(--st-shadow-e2);
+
+  --ease-enter: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@layer base {
+  body {
+    background-color: var(--st-ground);
+    color: var(--st-ink);
+  }
+
+  /* §10 — focus is never removed */
+  :focus-visible {
+    outline: 2px solid var(--st-seal);
+    outline-offset: 2px;
+  }
+
+  /* §3 — one money rule */
+  .tabular {
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+}
+
+@layer components {
+  /* §6 — glass is solid by default, opts in, then opts back out */
+  .glass {
+    background-color: var(--st-surface);
+  }
+
+  @supports (backdrop-filter: blur(1px)) {
+    .glass {
+      background-color: color-mix(in srgb, var(--st-surface) 72%, transparent);
+      backdrop-filter: blur(20px) saturate(160%);
+    }
+    .glass-sheet {
+      background-color: color-mix(in srgb, var(--st-surface) 76%, transparent);
+      backdrop-filter: blur(28px) saturate(160%);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+    .glass,
+    .glass-sheet {
+      background-color: var(--st-surface);
+      backdrop-filter: none;
+    }
+    .seal-wash {
+      background-image: none;
+    }
+  }
+
+  /* the one coloured wash in the product: behind the balance card only */
+  .seal-wash {
+    background-image: radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--st-seal) 20%, transparent) 0%,
+      transparent 70%
+    );
+  }
+
+  /* the limit line — the one device (docs/DESIGN.md §1) */
+  .meter-track {
+    position: relative;
+    height: 8px;
+    border-radius: 999px;
+    background-color: var(--st-line);
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+  /* the wall at the edge of what Steward may touch; never clipped by the track */
+  .limit-line {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 2px;
+    border-radius: 1px;
+    background-color: var(--st-ink);
+    transform: translateX(-1px);
+  }
+}
+
+/* §5 — the single ambient motion, and only while the agent is running */
+@keyframes st-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.breathe {
+  animation: st-breathe 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .breathe {
+    animation: none;
+    opacity: 1;
+  }
+}
