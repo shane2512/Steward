@@ -232,7 +232,7 @@
   }
 }
 .breathe {
-  animation: st-breathe 2.4s ease-in-out infinite;
+  animation: st-breathe 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

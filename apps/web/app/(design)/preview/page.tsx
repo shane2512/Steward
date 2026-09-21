@@ -143,8 +143,9 @@ function StatusPill({ state }: { state: keyof typeof PILLS }) {
 }
 
 /**
- * Verdict marks are drawn, not typed: ✓ / ⚠ / ✕ render as colour emoji on some
- * platforms, which is the wrong register for a policy verdict.
+ * Verdict marks are drawn, not typed: the check, warning-triangle and cross
+ * characters render as colour emoji on some platforms, which is the wrong
+ * register for a policy verdict, and their metrics differ per font.
  */
 function Glyph({ kind }: { kind: keyof typeof VERDICTS }) {
   const d = {

@@ -3,7 +3,7 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 6 complete (Opus)**, awaiting human "continue"; Phase 5 complete 2026-09-21
+Phase: **Phase 6 complete (Opus)**; Phase 7 design pass done (Opus), awaiting human "continue" for the Phase 7 build
 Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8)
 Last updated: 2026-09-21
 
@@ -1061,6 +1061,80 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | V-09 | NOT CONFIRMED -> fallback | PromptGuard / Shadow Agents / decision trails appear in OpenServ marketing/console (https://console.openserv.ai/, https://docs.openserv.ai/what-is-serv) but no API parameter or response field is documented in the chat-completions reference. Fallback: own screen + verifier (already designed); Phase 4.11 skipped | 2026-09-20 |
 | V-12 | VERIFIED | https://www.openserv.ai/hackathon : AgentKit track; hackathon Sep 14-28 2026; submissions close **Sep 28 00:00 UTC**; submission = public X post tagging @openservai (name, concept, images, GitHub/demo links) + submission form; project must be new, functional, demonstrable; judged on creativity, user-readiness, revenue potential; human must enable data collection at console.openserv.ai/settings/organization (prompts shared with OpenServ -> keep secrets/PII out, NFR-5). No explicit OpenServ agent registration requirement found | 2026-09-20 |
 
+## Phase 7 - design pass (Opus, done 2026-09-21, before the build)
+
+A design-only pass. No product screens, no backend or security code touched, no dependency added.
+
+- [x] Read `UX_FLOWS.md` (S1-S11), `PRD.md`, `SECURITY.md` 4-5, the Phase 6 API contracts and RR-14.
+- [x] Browsed the references live and sampled them with computed styles rather than by eye:
+      **Solflare** (the brief's inspiration), **Coinbase Wallet** and **Rainbow** for contrast.
+      Findings in `docs/design/refs/REFERENCE.md`. No third-party imagery is committed
+      (`docs/design/refs/.gitignore`) - we studied the visual language, we do not redistribute assets.
+- [x] `docs/DESIGN.md` - principles, palette (light + dark with computed WCAG ratios), type scale,
+      space/radius/elevation, the **glass policy** with fallbacks, motion policy, component
+      inventory, ASCII wireframes for S1-S11 at 390px and desktop, and the accessibility floor.
+- [x] Tokens implemented in `apps/web/app/globals.css` (Tailwind v4 `@theme inline` over `--st-*`
+      indirection, so `prefers-color-scheme` **and** `data-theme` both work), fonts via `next/font`.
+- [x] `apps/web/app/(design)/preview/page.tsx` - a static, mock-data-only reference page at
+      `/preview` (`?theme=dark` for dark). It imports nothing from wallet/policy/reasoning.
+- [x] `scripts/design-shots.mjs` captures `docs/design/shots/{mobile,desktop}-{light,dark}.png`.
+- [x] Gates: `pnpm lint`, `pnpm typecheck`, `pnpm check:arch` all green; no test touched.
+
+### Design direction, in short
+
+Inherited from the wallet grammar all three references share: balance-first hierarchy, a giant
+figure with dimmed minor units, an equal-weight action row under it, and row lists with
+right-aligned tabular amounts. Original to Steward: the **limit line** (a wall on a capsule track
+with recessed ground beyond it - the one ornament, and it carries the product's core fact), the
+verdict-led decision row, the literal signing-message block, the palette and the typography.
+Explicitly not taken: Solflare's yellow, FK Grotesk, its mark, illustrations or layouts.
+
+Palette: `ground #F2F4F7` / `surface #FFFFFF` / `ink #0F141B` / `muted #5A6472` / `line #DDE2EA` /
+`seal #2A46A6` (+ dark twins), with `ok`/`warn`/`stop` reserved for verdicts - which is why the
+brand accent may not be green, amber or red. Type: **Public Sans** (OFL, drawn for plain-language
+government services) for everything a human wrote, **IBM Plex Mono** (OFL) for machine data only.
+
+Glass is used in exactly four places (sticky header, sheets/modals, the balance card, toasts and
+the DEMO banner) and is forbidden on all dense data. Alpha never drops below 0.72 and nothing but
+flat tokens may sit behind it, which is what makes the contrast figures true rather than hopeful.
+
+### Self-review (tastemaker), before -> after
+
+Rated against the brief, not against a generic rubric. The "before" column is the first build; the
+"after" column is what is committed.
+
+| Dimension | Before | After | What changed |
+|---|---|---|---|
+| Minimal wallet feel | 8 | 8.5 | - (this was right from the plan) |
+| Solflare-inspired but original | 8 | 8.5 | wordmark rule moved under "war", stopping short of the d |
+| Glass only where justified | 8 | 9 | scrim became a measurable `.scrim` token |
+| Contrast & accessibility | 6 | 9 | every glass pair re-measured on **computed composites**, not the doc's arithmetic |
+| Typography & money rendering | 7 | 8.5 | minor units 0.62em -> 0.72em; real apostrophes |
+| Copy voice | 6 | 9 | "Acme" placeholder replaced with honest sample copy |
+| Trust legibility | **5** | 9 | the limit line was invisible; Freeze appeared twice |
+| Restraint / anti-slop | 7 | 9 | drawn SVG verdict marks, `min-h-dvh`, both scanners clean |
+
+The one that mattered: **the limit line, the design's single device, was invisible.** It was drawn
+at 100% of its own track, where a wall is indistinguishable from the track's end. The allowance
+meter is now drawn at cap x 1.15 so the wall stands at ~86% with recessed ground after it, and the
+caption reads "Steward stops at the line". The rule is now written into `DESIGN.md` 1: a limit
+line only earns its place when the limit sits *inside* the range.
+
+Verified, not eyeballed: glass text contrast computed from the live composited backgrounds -
+light `.glass` >= 5.84:1 on `rgb(251,252,253)`, `.glass-sheet` >= 5.86:1; dark `.glass` >= 7.19:1 on
+`rgb(16,21,29)`, `.glass-sheet` >= 7.15:1. `anti_slop_scan.py` and `audit_motion.py` both pass.
+
+Screenshots: `docs/design/shots/` (390px and 1280px, light and dark).
+
+### For the human to decide
+
+1. **Desktop keeps the phone column** (440px centred everywhere, a 1040px two-column variant only
+   on `/app/activity` and `/app/policy`). This is a deliberate bet that "it is your wallet" beats
+   "it is an admin console". Say so if you want a wider dashboard instead.
+2. **Light is the default theme** and the one the demo should run in; dark follows the OS.
+3. **Public Sans** is a reasoned pick, not a reflex one, but it is competent rather than
+   characterful at balance size. A display-only second face was considered and cut.
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
@@ -1126,6 +1200,11 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | D-57 | 2026-09-21 | **New dependencies:** `pg-boss` + `pg` added to `apps/web` (the queue insert) and to the repo root devDependencies (the live runner); `@types/pg` + the existing workspace packages added to `apps/worker`. No new third-party runtime dependency was introduced — all of these were already in the lockfile for other workspaces | justification required by CLAUDE.md §7 | none |
 | D-58 | 2026-09-21 | **`scripts/live/loop-e2e.ts` derives the owner key from `SESSION_SECRET` instead of generating a random one per run.** Still in memory only: never written to disk, never printed, never sent anywhere; the script refuses anything but chain 84532 with DEMO_MODE on | A fresh random key per run strands that run's testnet USDC at an address whose key is gone the moment the run crashes — which happened twice, and the CDP faucet is rate-limited per project. Deriving it makes the treasury stable on this machine and nowhere else | keep it random and re-faucet each time (rejected: the faucet is the bottleneck) |
 | D-59 | 2026-09-21 | **A loop tick with nothing to do writes ONE `NOOP` audit row and NO `agent_decisions` row**, and the DEMO half-step is one-shot (`half: true` in the payload) rather than re-queued by its own handler | DATA_MODEL already says `agent_decisions` is "one per loop iteration that reached reasoning or a deterministic proposal"; the old behaviour wrote 100 decision rows in a 10-minute live run and would have made the Phase 7 timeline useless. `singletonKey` is not a uniqueness constraint on a standard-policy pg-boss queue, so the payload flag is what makes the cadence exactly 2/min | keep the rows and paginate them away in the UI (rejected: unbounded growth in an append-only log) |
+| D-60 | 2026-09-21 | **Design tokens are Tailwind v4 `@theme inline` over `--st-*` custom properties.** The indirection is what lets `prefers-color-scheme` and a `data-theme` attribute (on `<html>` *or* any wrapper) both drive the same tokens | The preview renders both themes on one page without client JS, and Phase 7 gets a theme toggle for free | a `dark:` variant class strategy (rejected: needs JS on `<html>` and doubles every colour utility) |
+| D-61 | 2026-09-21 | **Fonts are Public Sans + IBM Plex Mono, both OFL, via `next/font/google`.** Mono is reserved for machine data (addresses, hashes, rule codes, the literal signing message) and forbidden for prose labels | Public Sans was drawn for plain-language, accessibility-audited government services, which is this product's exact register, and it is neither the reflex family nor Solflare's FK Grotesk | Inter/Geist (rejected: reflex defaults) |
+| D-62 | 2026-09-21 | **No new dependency for the design pass.** Screenshots come from `scripts/design-shots.mjs`, which drives the Chrome already installed on the machine over the DevTools protocol using Node 22's built-in `WebSocket`. `eslint.config.js` gained Node globals for `**/*.mjs` | Playwright/Puppeteer is a browser download for four PNGs. Chrome's `--window-size` will not go below ~500px on Windows, so the 390px shots need `Emulation.setDeviceMetricsOverride` regardless | `playwright` (rejected), `--screenshot` alone (rejected: cannot reach 390px) |
+| D-63 | 2026-09-21 | **Scrims and other translucent surfaces use explicit `color-mix(in srgb, ...)` tokens, never Tailwind's `/60` opacity modifier.** | The opacity modifier resolves in **oklab**, and its computed value cannot be composited and contrast-checked in sRGB - which is how the sheet's real contrast went unverified in the first pass | `bg-ground/60` (rejected once it proved unmeasurable) |
+| D-64 | 2026-09-21 | **Third-party reference imagery is studied, not committed.** `docs/design/refs/` holds sampled tokens and measurements in `REFERENCE.md`; `*.png|jpg|jpeg|webp` there is git-ignored | Committing Solflare's marketing art to a repo that may go public is redistribution; the measurements are what the design pass actually needs | committing the screenshots (rejected: safer option per CLAUDE.md 2) |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks
@@ -1282,9 +1361,13 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 6 is complete; waiting for the human to say "continue". Phase 7 (web app UX) requires
-  Sonnet (`/model sonnet`), with Opus sub-tasks 7.6 and 7.8.**
-- Do not start Phase 7 before that.
+- **Phase 6 is complete and the Phase 7 *design pass* is done** (`docs/DESIGN.md`, tokens, and the
+  static `/preview` page). Waiting for the human to say "continue" before any screen is built.
+- **Phase 7 build: Sonnet for 7.1-7.5, 7.7, 7.9, 7.10 using `docs/DESIGN.md`; Opus for 7.6 and 7.8.**
+  Run `/model sonnet` for the Sonnet tasks. Every screen follows `docs/DESIGN.md` 11's handover
+  rules - tokens only, `<Money />` only, the approval message verbatim, and glass only where 6
+  allows it.
+- Do not start the Phase 7 build before the human says so.
 - `.env.local` now carries everything the worker and the live runner need (verified by
   `pnpm live:env`, which prints variable NAMES only). `USDC_ADDRESS` and
   `SPEND_PERMISSION_MANAGER_ADDRESS` are absent and fall back to the verified defaults in
