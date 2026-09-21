@@ -3,8 +3,8 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 3 complete (Opus)**, awaiting human "continue"; Phase 2 complete 2026-09-21
-Required model: Phase 4 = Opus
+Phase: **Phase 4 complete (Opus)**, awaiting human "continue"; Phase 3 complete 2026-09-21
+Required model: Phase 5 = Opus
 Last updated: 2026-09-21
 
 ## Phase status
