@@ -3,8 +3,6 @@
 // done by our own code afterwards — the model never produces a Proposal directly.
 import { z } from 'zod';
 
-/** Whole-USDC decimal string, e.g. "10000.00". Never a JS number (I12). */
-const decimal = z.string().regex(/^\d+(\.\d{1,6})?$/);
 const signedDecimal = z.string().regex(/^-?\d+(\.\d{1,6})?$/);
 /** "" means "not applicable to this kind" — strict json_schema has no optional properties. */
 const optionalDecimal = z.string().regex(/^(\d+(\.\d{1,6})?)?$/);
@@ -66,10 +64,12 @@ export type ServScreen = z.infer<typeof zServScreen>;
 
 export const zServMandate = z
   .object({
-    runwayBufferUsdc: decimal,
-    perTxUsdc: decimal,
-    dailyUsdc: decimal,
-    approvalThresholdUsdc: decimal,
+    // Empty string = "the mandate does not say": `compileMandate` turns that into an issue and a
+    // question for the owner rather than letting the model invent a limit.
+    runwayBufferUsdc: optionalDecimal,
+    perTxUsdc: optionalDecimal,
+    dailyUsdc: optionalDecimal,
+    approvalThresholdUsdc: optionalDecimal,
     approvalThresholdVaultDepositUsdc: optionalDecimal,
     maxActionsPerHour: z.number().int().min(1).max(100),
     depegThresholdBps: z.number().int().min(0).max(10_000),
@@ -87,7 +87,7 @@ export const zServMandate = z
         z
           .object({
             id: z.string().max(64),
-            maxPerTxUsdc: decimal,
+            maxPerTxUsdc: optionalDecimal,
             /** 0 = no schedule. */
             scheduleDayOfMonth: z.number().int().min(0).max(28),
             scheduleAmountUsdc: optionalDecimal,

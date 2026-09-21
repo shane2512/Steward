@@ -46,6 +46,14 @@ export const ceilingsForPrompt = (): Record<string, string | number> => ({
   minRiskThresholdBps: SYSTEM_CEILINGS.MIN_RISK_THRESHOLD_BPS,
 });
 
+/** The limits the owner must end up with a number for. */
+const MANDATE_NUMBERS = [
+  'runwayBufferUsdc',
+  'perTxUsdc',
+  'dailyUsdc',
+  'approvalThresholdUsdc',
+] as const satisfies readonly (keyof ServMandate)[];
+
 const KINDS: readonly ProposalKind[] = [
   'pull_allowance',
   'vault_deposit',
@@ -95,9 +103,27 @@ export async function compileMandate(input: CompileInput): Promise<CompileOutcom
   }
 
   const out = res.value.value;
+  const extraQuestions = unknownIds(out, input.binding);
+
+  // A limit the mandate never stated is a question for the owner, never a number we invent.
+  const missing = MANDATE_NUMBERS.filter((f) => out[f] === '');
+  if (missing.length > 0) {
+    return {
+      sentences: [],
+      assumptions: out.assumptions,
+      questions: [...out.questions, ...extraQuestions],
+      issues: missing.map((path) => ({
+        path,
+        code: 'MISSING' as const,
+        message: 'The mandate does not say what this limit should be.',
+        suggestion: 'Answer the question below, or start from a template and edit it.',
+      })),
+      meta: res.value.meta,
+    };
+  }
+
   const draftInput = toDraft(out, input.binding);
   const validated = validatePolicyDraft(draftInput);
-  const extraQuestions = unknownIds(out, input.binding);
 
   if (!validated.ok) {
     return {

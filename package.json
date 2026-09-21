@@ -30,6 +30,8 @@
   "devDependencies": {
     "@coinbase/cdp-sdk": "^1.56.0",
     "@eslint/js": "^10.0.1",
+    "@steward/context": "workspace:*",
+    "@steward/reasoning": "workspace:*",
     "@steward/shared": "workspace:*",
     "@steward/wallet": "workspace:*",
     "@types/node": "^26.6.2",

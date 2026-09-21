@@ -345,3 +345,24 @@ describe('compileMandate', () => {
     expect(r.issues[0]?.code).toBe('MISSING');
   });
 });
+
+describe('compileMandate — unknown numbers', () => {
+  it('asks the owner instead of inventing a limit the mandate never gave', async () => {
+    const r = await compileMandate({
+      client: client({
+        compile: mandate({
+          runwayBufferUsdc: '',
+          questions: ['What does one month of runway cost?'],
+        }),
+      }),
+      model: MODEL,
+      mandateText: 'Keep four months of runway liquid.',
+      binding,
+    });
+    expect(r.draft).toBeUndefined();
+    expect(r.issues).toEqual([
+      expect.objectContaining({ path: 'runwayBufferUsdc', code: 'MISSING' }),
+    ]);
+    expect(r.questions[0]).toContain('month of runway');
+  });
+});

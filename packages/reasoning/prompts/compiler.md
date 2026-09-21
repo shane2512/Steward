@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: compile
 ---
 
@@ -22,6 +22,10 @@ Rules:
   possible.
 - Anything genuinely ambiguous or missing goes in `questions`, phrased as a short question the owner
   can answer in one line.
+- If the mandate does not give you a number you need (for example "four months of runway" without
+  saying what a month costs), return an EMPTY STRING for that amount and ask for it in `questions`.
+  Never guess a limit, and never write a word like "unknown" or "redacted" where a number belongs —
+  an empty string is the honest answer and the owner will be asked for it.
 - Be conservative: when a reading is ambiguous, choose the one that moves less money, keeps more
   liquid, and asks the owner more often.
 
