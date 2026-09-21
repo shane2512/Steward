@@ -1,11 +1,9 @@
 'use client';
 // The modal FRAME for S9 (DESIGN §5, §9): scrim, glass sheet, focus trap, Escape to close, focus
 // restored to the opener. What happens inside it is `FreezeFlow` (task 7.8).
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { useFocusTrap } from '@/lib/useFocusTrap';
 import { FreezeFlow, type FreezeFlowProps } from './FreezeFlow';
-
-const FOCUSABLE =
-  'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 export function FreezeModal({
   open,
@@ -14,41 +12,7 @@ export function FreezeModal({
   onDone,
 }: { open: boolean } & FreezeFlowProps) {
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const opener = document.activeElement as HTMLElement | null;
-    const root = ref.current;
-    const first = root?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? root)?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab' || !root) return;
-      const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      const a = items[0];
-      const z = items[items.length - 1];
-      if (!a || !z) {
-        e.preventDefault();
-        return;
-      }
-      if (e.shiftKey && document.activeElement === a) {
-        e.preventDefault();
-        z.focus();
-      } else if (!e.shiftKey && document.activeElement === z) {
-        e.preventDefault();
-        a.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      opener?.focus?.();
-    };
-  }, [open, onClose]);
+  useFocusTrap(ref, open, onClose);
 
   if (!open) return null;
   return (
