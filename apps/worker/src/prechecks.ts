@@ -17,6 +17,7 @@
 // A deterministic proposal is NOT a bypass: it goes through `buildCalls`, the risk gate, the real
 // `evaluate()`, a signed AllowReceipt and the executor exactly like a SERV one. It skips only the
 // LLM proposer and (via R15's `source` exemption) the shadow verifier.
+import { hashProposal } from '@steward/policy';
 import type { Address, Policy, Proposal, ProposalKind, RiskTrigger } from '@steward/shared';
 
 /** Below this, an action is not worth a transaction. 0.1 USDC at 6 decimals. */
@@ -68,6 +69,16 @@ export type PreCheckInput = {
   degraded: boolean;
   /** Dust floor for an action, in base units. Defaults to `MIN_ACTION_BASE_UNITS`. */
   minActionBaseUnits?: bigint;
+  /**
+   * Proposal hashes already decided in the rolling 24 h window (R17's input).
+   *
+   * Building one of these again is pointless: R17 denies a repeat, so the loop would re-ask the
+   * same refused question on every tick and write a decision row each time. A live run produced 21
+   * identical `pay_recipient` DENYs this way, all correctly refused by R07's daily cap, none of
+   * which needed asking twice. This does not weaken anything — the engine still decides, and an
+   * action it would have permitted has a hash that is NOT in this set.
+   */
+  recentProposalHashes?: readonly string[];
 };
 
 export type PreCheck =
@@ -109,6 +120,18 @@ function proposal(
  * what makes `replay()` (NFR-4) meaningful for the deterministic path too.
  */
 export function preChecks(input: PreCheckInput): PreCheck {
+  const decided = decide(input);
+  if (decided.kind !== 'deterministic') return decided;
+  // Already asked and answered inside R17's window: stay quiet rather than re-proposing it.
+  const seen = input.recentProposalHashes ?? [];
+  if (!seen.includes(hashProposal(decided.proposal))) return decided;
+  return {
+    kind: 'noop',
+    reason: `the only available action (${decided.proposal.kind}: ${decided.reason}) was already decided in the last 24h; R17 would refuse a repeat`,
+  };
+}
+
+function decide(input: PreCheckInput): PreCheck {
   if (input.frozen) return { kind: 'skip', reason: 'wallet is frozen' };
   if (input.breakerOpen) return { kind: 'skip', reason: 'circuit breaker is open' };
 

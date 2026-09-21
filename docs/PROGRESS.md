@@ -88,15 +88,16 @@ Last updated: 2026-09-21
 | `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
 | `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
 | `pnpm check:arch` | ✅ 0 violations (**193 modules, 526 dependencies**), **no rule changes**; all four fixtures fire (`policy-only-shared`, `reasoning-no-wallet-db`, `owner-path-no-reasoning`, `cdp-only-in-wallet-bootstrap`); purity lint fixture 10 problems |
-| `pnpm test` | ✅ **37 files / 729 tests passed**, 3 files / 25 skipped (the three opt-in fork suites); `packages/policy` still **100% branches (411/411)**, 8 files / 344 tests |
+| `pnpm test` | ✅ **37 files / 731 tests passed**, 3 files / 26 skipped (the three opt-in fork suites); `packages/policy` still **100% branches (411/411)**, 8 files / 344 tests |
 | `pnpm test:adversarial` | ✅ unchanged — 60 cases, guarantee **48/48 (100%)**, benign FP **0/12**, screen recall 35/40 |
-| Phase 6 fork suite (opt-in) | ✅ `STEWARD_FORK=1 npx vitest run apps/worker/test/fork` — **16/16 passed** |
-| Phase 5 fork suite (opt-in) | ✅ still 2 files / 9 tests |
+| Phase 6 fork suite (opt-in) | ✅ `STEWARD_FORK=1 npx vitest run apps/worker/test/fork` — **17/17 passed** |
+| Phase 5 fork suite (opt-in) | ✅ still 2 files / 9 tests — all three fork files together: **3 files / 26 tests** |
+| `pnpm contracts:test` | ✅ **21/21** (16 carried + 5 for the new MockUSDC) |
 | live unattended run | ✅ see "Live unattended run" below |
 
 New Phase 6 test files: `apps/worker/test/prechecks.test.ts` (**26**, pure — no network, no db),
-`apps/worker/test/loop.test.ts` (**30**, real Postgres), `apps/worker/test/fork/loop.fork.test.ts`
-(**16**, opt-in fork + real Postgres).
+`apps/worker/test/loop.test.ts` (**32**, real Postgres), `apps/worker/test/fork/loop.fork.test.ts`
+(**17**, opt-in fork + real Postgres).
 
 Required cases from PHASES 6 "Tests", and where each lives:
 
@@ -123,6 +124,33 @@ Two real bugs were found by these suites and fixed, both worth naming:
    boot, so `boss.send('exec.confirm')` threw `Queue exec.confirm does not exist` and killed the
    worker at startup — found by the first live run, fixed with an idempotent `createQueue`, and
    covered by an assertion in the fork crash-window test.
+
+A further **three** defects were found by the live runs themselves, and none of the suites would
+have caught them, which is the argument for the live gate existing at all:
+
+3. **Every executed decision was recorded as `status: 'noop'`**, because the post-pipeline write
+   that stores the 6.9 timings passed `status` and overwrote what `runPipeline` had just set. A
+   deterministic NOOP was also mislabelled `proposal_source: 'serv'` when no model had been called.
+   Reporting bugs, not control bugs — nothing moved that should not have — but the Phase 7 timeline
+   would have lied about what the agent did. The fork suite now asserts the decision row's status,
+   source and timings for both an ALLOW and a DENY.
+4. **The loop never went quiescent: 100 decision rows in 10 minutes.** A tick with nothing to do was
+   creating an `agent_decisions` row plus `CONTEXT` and `PROPOSAL` audit rows. DATA_MODEL is
+   explicit that the table holds "one per loop iteration **that reached reasoning or a deterministic
+   proposal**" — a quiet tick reached neither. It now writes exactly **one** audit row (`NOOP`,
+   carrying the context hash that proves what the agent was looking at) and no decision row.
+   `runIteration`'s noop outcome carries `decisionId: null`.
+5. **The DEMO half-step self-perpetuated.** The half-step handler queued another half-step, so every
+   cron tick started a self-perpetuating chain and the chains accumulated one per minute — roughly
+   100 iterations in 10 minutes instead of 20. The tick payload now carries `half: true` and only a
+   cron tick spawns one. (`singletonKey` did not save us: on a standard-policy pg-boss queue it is
+   not a uniqueness constraint — D-59.)
+
+Neither (4) nor (5) touched the policy path: every quiet tick still ran the full gather and
+pre-check, and no proposal ever skipped the engine. The cost was bounded growth of rows that said
+nothing happened. Covered now by the fork test "goes QUIESCENT once the work is done" (drive the
+demo to completion, tick 8 more times, assert zero new executions, zero new decision rows, exactly
+8 `NOOP` audit rows and an intact chain) and two unit tests pinning the one-shot tick payload.
 
 ### Live unattended run on Base Sepolia (2026-09-21) — `STEWARD_LIVE=1 pnpm live:loop 10`
 
@@ -1048,6 +1076,8 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | D-56 | 2026-09-21 | **`packages/wallet/src/demoOracle.ts` takes a structural `CdpDemoAdmin` port instead of importing `@coinbase/cdp-sdk`.** The DEMO-only `price.refresh` job therefore needed **no** change to `cdp-only-in-wallet-bootstrap` | The rule stays exactly as Phase 5 left it. The module is still fenced at construction (DEMO_MODE + chain 84532), encodes only `setPrice(uint256)` from a 1-entry ABI, targets only the configured feed, and moves no tokens | adding demoOracle.ts to the allowlist (rejected: weakening a rule we were told never to weaken) |
 | D-57 | 2026-09-21 | **New dependencies:** `pg-boss` + `pg` added to `apps/web` (the queue insert) and to the repo root devDependencies (the live runner); `@types/pg` + the existing workspace packages added to `apps/worker`. No new third-party runtime dependency was introduced — all of these were already in the lockfile for other workspaces | justification required by CLAUDE.md §7 | none |
 | D-58 | 2026-09-21 | **`scripts/live/loop-e2e.ts` derives the owner key from `SESSION_SECRET` instead of generating a random one per run.** Still in memory only: never written to disk, never printed, never sent anywhere; the script refuses anything but chain 84532 with DEMO_MODE on | A fresh random key per run strands that run's testnet USDC at an address whose key is gone the moment the run crashes — which happened twice, and the CDP faucet is rate-limited per project. Deriving it makes the treasury stable on this machine and nowhere else | keep it random and re-faucet each time (rejected: the faucet is the bottleneck) |
+| D-59 | 2026-09-21 | **A loop tick with nothing to do writes ONE `NOOP` audit row and NO `agent_decisions` row**, and the DEMO half-step is one-shot (`half: true` in the payload) rather than re-queued by its own handler | DATA_MODEL already says `agent_decisions` is "one per loop iteration that reached reasoning or a deterministic proposal"; the old behaviour wrote 100 decision rows in a 10-minute live run and would have made the Phase 7 timeline useless. `singletonKey` is not a uniqueness constraint on a standard-policy pg-boss queue, so the payload flag is what makes the cadence exactly 2/min | keep the rows and paginate them away in the UI (rejected: unbounded growth in an append-only log) |
+| D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks
 ### Phase 6
@@ -1056,6 +1086,11 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
   and with $1.00 otherwise. That only decides *how big a proposal to write down*; the Policy Engine
   redoes the conversion properly and R08/R06/R10/R12 deny or escalate if the sizing was wrong. It is
   a heuristic that can produce a proposal the engine then refuses — never one it wrongly permits.
+- **RR-17 — quiescence is now a property the tests pin, not an emergent one.** A tick with nothing
+  to do writes one `NOOP` audit row and no decision row (D-59). That is the right record, but it
+  means the timeline shows *actions*, not *attention*: "the agent looked and did nothing" is only in
+  the audit chain, not in `agent_decisions`. Phase 7's UI should read the `NOOP` audit events if it
+  wants to show liveness.
 - **RR-14 — R17 and the deterministic path interact.** Because deterministic proposals are a pure
   function of balances, two ticks with unchanged balances produce the *same* proposal hash, which
   R17 denies for 24 h. In practice a successful action changes the balances, so the next hash
@@ -1078,9 +1113,9 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
   than a matching `expireInSeconds` would be.
 - **The retry backoff still sleeps in-process** (Phase 5 note, unchanged): up to 15 minutes inside
   one `execute()` call. It should become a pg-boss retry so a restart does not lose the schedule.
-- **`loop.tick`'s DEMO half-step is best-effort.** It is queued by the handler with
-  `singletonKey: 'demo-half-step'`, so at most one is pending; if the worker restarts between the
-  cron tick and the half-step, that 30-second slot is simply skipped.
+- **`loop.tick`'s DEMO half-step is best-effort.** One cron tick queues exactly one half-step at
+  +30 s (`half: true`, so it cannot spawn another — D-59). If the worker restarts between the cron
+  tick and the half-step, that 30-second slot is simply skipped.
 - **`risk.scan` writes a vault snapshot every minute per wallet** with no retention. Fine at
   hackathon volume, unbounded growth in principle.
 - **The SERV breaker is per-process.** A second worker instance would keep its own counter. The
@@ -1088,7 +1123,15 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
   safe; the breaker would need to move into the database first.
 - **Two runs of the live script were lost to testnet funding, not to code.** The CDP faucet is
   rate-limited per project, and the first two runs each stranded their USDC at an ephemeral
-  treasury. Fixed by D-58; recorded because the Phase 9 demo will hit the same faucet limit.
+  treasury. Fixed by D-58 and then by the DEMO MockUSDC pair (D-60); recorded because the Phase 9
+  demo will hit the same faucet limit.
+- **The live runner's `boss.stop({ graceful: true })` takes ~1 minute to drain** the cron workers
+  after the watch window closes, so a `pnpm live:loop 10` process lives about 11 minutes. Cosmetic,
+  but `apps/worker/src/index.ts`'s SIGTERM handler uses a bare `boss.stop()` and should get the
+  same treatment plus a timeout before Phase 9 deploys it.
+- **`MockUSDC` is mintable by the demo admin without limit.** That is the point, and it is fenced to
+  DEMO_MODE on chain 84532 where the UI must show the DEMO DATA banner — but it means a demo
+  treasury balance proves nothing about real funds, and Phase 9's copy must not imply otherwise.
 
 ### Phase 5
 - **`.env.local` is missing `RECEIPT_HMAC_SECRET`, `DATABASE_URL` and `SESSION_SECRET`** (it carries

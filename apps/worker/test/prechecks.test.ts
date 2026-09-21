@@ -1,6 +1,7 @@
 // 6.2 — PreChecks are pure, so they are tested pure: no database, no RPC, no network, no clock.
 // Every case here is a shape the live loop will actually hit.
 import { describe, expect, it } from 'vitest';
+import { hashProposal } from '@steward/policy';
 import type { Policy, Proposal } from '@steward/shared';
 import {
   MIN_ACTION_BASE_UNITS,
@@ -470,6 +471,48 @@ describe('preChecks — when SERV is asked, and when it is not (SERV §7)', () =
       }),
     );
     expect(deterministic(result).kind).toBe('risk_exit');
+  });
+});
+
+describe('preChecks — never re-asks a question the engine already refused (RR-14)', () => {
+  const idle = () => input({ treasuryUsdc: 200_000n * ONE, allowanceRemaining: 50_000n * ONE });
+
+  it('stays quiet when the only available action is already inside the R17 window', () => {
+    const first = preChecks(idle());
+    const proposal = deterministic(first);
+    const hash = hashProposal(proposal);
+
+    const again = preChecks({ ...idle(), recentProposalHashes: [hash] });
+    expect(again.kind).toBe('noop');
+    expect(again.kind === 'noop' && again.reason).toContain('already decided in the last 24h');
+  });
+
+  it('an UNRELATED hash in the window changes nothing', () => {
+    const again = preChecks({ ...idle(), recentProposalHashes: [`0x${'ab'.repeat(32)}`] });
+    expect(deterministic(again).kind).toBe('pull_allowance');
+  });
+
+  it('an empty window changes nothing', () => {
+    expect(deterministic(preChecks({ ...idle(), recentProposalHashes: [] })).kind).toBe(
+      'pull_allowance',
+    );
+  });
+
+  it('a repeatedly-refused payroll parks the wallet instead of looping', () => {
+    // The live case: R07's daily cap refuses the payment, so the same proposal would be rebuilt on
+    // every tick. Parking is also the RIGHT answer — if payroll cannot be met, idle cash should not
+    // be locked into a vault either.
+    const due = input({
+      agentUsdc: 6_000n * ONE,
+      treasuryUsdc: 200_000n * ONE,
+      allowanceRemaining: 50_000n * ONE,
+      obligations: [{ id: 'o1', policyRecipientId: 'alex', amount: 3_000n * ONE, dueDate: NOW }],
+    });
+    const payment = deterministic(preChecks(due));
+    expect(payment.kind).toBe('pay_recipient');
+
+    const parked = preChecks({ ...due, recentProposalHashes: [hashProposal(payment)] });
+    expect(parked.kind).toBe('noop');
   });
 });
 

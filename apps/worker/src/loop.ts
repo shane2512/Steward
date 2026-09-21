@@ -182,6 +182,7 @@ export async function runIteration(
     riskTriggers: g.riskTriggers,
     runwayBufferBaseUnits: microUsdToBase(g.policy.runwayBufferMicroUsd, g),
     perTxBaseUnits: microUsdToBase(g.policy.limits.perTxMicroUsd, g),
+    recentProposalHashes: g.ledger.recentProposalHashes,
     degraded,
   });
 
