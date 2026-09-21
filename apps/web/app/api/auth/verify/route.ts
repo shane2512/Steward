@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { upsertUserByAddress } from '@steward/db';
+import { ensureWalletForUser, upsertUserByAddress } from '@steward/db';
 import { getEnv, zHex } from '@steward/shared';
 import { verifySiwe } from '@/lib/siwe';
 import { getSession } from '@/lib/session';
@@ -26,6 +26,8 @@ export async function POST(req: Request) {
   });
   if (!r.ok) return apiError(401, 'unauthorized', r.error);
   const user = await upsertUserByAddress(getDb(), r.value, new Date());
+  // First sign-in creates the wallet row (treasury = the owner's own smart wallet). Idempotent.
+  await ensureWalletForUser(getDb(), user.id, getEnv().CHAIN_ID, user.ownerAddress);
   session.nonce = undefined; // single use
   session.nonceIssuedAt = undefined;
   session.userId = user.id;

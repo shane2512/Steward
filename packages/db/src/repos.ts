@@ -18,6 +18,29 @@ export async function upsertUserByAddress(db: Db, ownerAddress: string, now: Dat
   return row;
 }
 
+/**
+ * The owner's wallet row, created on first sign-in. `treasuryAddress` is the owner's own smart wallet
+ * (the account that grants the spend permission and receives every sweep home); the agent wallet is
+ * provisioned separately. Idempotent: an existing row is returned untouched.
+ */
+export async function ensureWalletForUser(
+  db: Db,
+  userId: string,
+  chainId: number,
+  treasuryAddress: string,
+): Promise<Wallet> {
+  const existing = await getWalletByUserId(db, userId);
+  if (existing) return existing;
+  const [row] = await db
+    .insert(wallets)
+    .values({ userId, chainId, treasuryAddress })
+    .onConflictDoNothing()
+    .returning();
+  const wallet = row ?? (await getWalletByUserId(db, userId));
+  if (!wallet) throw new Error('ensureWalletForUser: no row');
+  return wallet;
+}
+
 export async function getUserById(db: Db, id: string): Promise<User | undefined> {
   return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
 }

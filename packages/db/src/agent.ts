@@ -6,6 +6,8 @@ import type { Db } from './client';
 import {
   agentDecisions,
   approvals,
+  auditLog,
+  mandates,
   notifications,
   obligations,
   policies,
@@ -401,4 +403,83 @@ export async function setWalletFrozen(
           },
     )
     .where(eq(wallets.id, walletId));
+}
+
+// ---- Phase 7 read models (web UI). Read-only except `insertMandate`, which stores the owner's own
+// mandate text and its compiled DRAFT (a draft grants nothing until the owner signs it: Phase 7.6).
+
+export type MandateRow = typeof mandates.$inferSelect;
+
+export async function insertMandate(
+  db: Db,
+  row: {
+    walletId: string;
+    text: string;
+    template: MandateRow['template'];
+    compiledDraft: unknown;
+    assumptions: unknown;
+    questions: unknown;
+  },
+): Promise<MandateRow> {
+  const [r] = await db.insert(mandates).values(row).returning();
+  if (!r) throw new Error('insertMandate: no row returned');
+  return r;
+}
+
+export async function getLatestMandate(db: Db, walletId: string): Promise<MandateRow | undefined> {
+  return (
+    await db
+      .select()
+      .from(mandates)
+      .where(eq(mandates.walletId, walletId))
+      .orderBy(desc(mandates.createdAt))
+      .limit(1)
+  )[0];
+}
+
+/** Newest audit row written by the agent loop for this wallet: the "is the worker alive" signal. */
+export async function latestAgentAudit(
+  db: Db,
+  walletId: string,
+): Promise<{ event: string; payload: unknown; createdAt: Date } | undefined> {
+  return (
+    await db
+      .select({
+        event: auditLog.event,
+        payload: auditLog.payload,
+        createdAt: auditLog.createdAt,
+      })
+      .from(auditLog)
+      .where(and(eq(auditLog.walletId, walletId), eq(auditLog.actor, 'agent')))
+      .orderBy(desc(auditLog.id))
+      .limit(1)
+  )[0];
+}
+
+/** How many decisions the Policy Engine has DENIED for this wallet (the "attacks blocked" widget). */
+export async function countDeniedVerdicts(
+  db: Db,
+  walletId: string,
+): Promise<{ count: number; lastAt: Date | null }> {
+  const rows = await db
+    .select({ at: verdicts.evaluatedAt })
+    .from(verdicts)
+    .innerJoin(agentDecisions, eq(agentDecisions.id, verdicts.decisionId))
+    .where(and(eq(agentDecisions.walletId, walletId), eq(verdicts.decision, 'DENY')))
+    .orderBy(desc(verdicts.evaluatedAt));
+  return { count: rows.length, lastAt: rows[0]?.at ?? null };
+}
+
+export async function getActivePolicyBody(
+  db: Db,
+  walletId: string,
+): Promise<{ version: number; body: unknown } | undefined> {
+  const row = (
+    await db
+      .select({ version: policies.version, body: policies.body })
+      .from(policies)
+      .where(and(eq(policies.walletId, walletId), eq(policies.status, 'active')))
+      .limit(1)
+  )[0];
+  return row;
 }

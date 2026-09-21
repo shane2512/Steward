@@ -1,10 +1,16 @@
 import { getUserById, getWalletByUserId } from '@steward/db';
+import { fixtureFor } from '@/lib/fixture';
+import { fixtureMe } from '@/lib/fixtures';
 import { getSession } from '@/lib/session';
 import { apiError, getDb } from '@/lib/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Dev-only fixture switch (lib/fixtureGate.ts): canned payload, no session, no real data.
+  const fx = fixtureFor(req);
+  if (fx) return Response.json(fixtureMe(fx));
+
   const { userId } = await getSession();
   if (!userId) return apiError(401, 'unauthorized', 'sign in required');
   const db = getDb();
