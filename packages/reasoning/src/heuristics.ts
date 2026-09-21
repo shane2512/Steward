@@ -35,8 +35,9 @@ const NEW_DESTINATION =
 const BASE64 = /\b[A-Za-z0-9+/]{40,}={0,2}\b/;
 const LONG_HEX = /\b(0x)?[0-9a-fA-F]{60,}\b/;
 const MORSE = /(?:[.\-/]{2,}\s+){4,}/;
-const LEET =
-  /\b[a-z]*[0134577@$][a-z]*[0134577@$][a-z]*\b.*\b(1gn0r3|s3nd|tr4nsf3r|4ll|w4llet|p4y|funds?)\b/i;
+/** Two or more digit/symbol substitutions inside one word AND a leet-spelled money/command word. */
+const LEET_WORD = /[a-z0134@$]*[0134@$][a-z0134@$]*[0134@$][a-z0134@$]*/i;
+const LEET_TERM = /(1gn0r3|d1sr3g4rd|s3nd|tr4nsf3r|w1thdr4w|4ll|w4ll3t|p4y|fund5|m0n3y|urg3nt)/i;
 const CYRILLIC_OR_GREEK = /[Ѐ-ӿͰ-Ͽ]/;
 const LATIN = /[A-Za-z]/;
 const MARKDOWN_IMG = /!\[[^\]]*\]\([^)]*\)|<img\b|<script\b|<iframe\b|<!--/i;
@@ -48,7 +49,8 @@ const MULTILINGUAL =
 type Rule = { signal: string; test: (t: string) => boolean };
 
 const RULES: readonly Rule[] = [
-  { signal: 'address_like', test: (t) => ADDRESS.test(t) },
+  // The sanitizer may already have replaced the address with its placeholder; both are the signal.
+  { signal: 'address_like', test: (t) => ADDRESS.test(t) || t.includes('[redacted-address]') },
   { signal: 'ens_or_domain_name', test: (t) => ENS.test(t) },
   { signal: 'url', test: (t) => URL.test(t) },
   { signal: 'instruction_override', test: (t) => OVERRIDE.test(t) },
@@ -66,7 +68,7 @@ const RULES: readonly Rule[] = [
   { signal: 'base64_blob', test: (t) => BASE64.test(t) },
   { signal: 'long_hex_blob', test: (t) => LONG_HEX.test(t) },
   { signal: 'morse_code', test: (t) => MORSE.test(t) },
-  { signal: 'leetspeak', test: (t) => LEET.test(t) },
+  { signal: 'leetspeak', test: (t) => LEET_WORD.test(t) && LEET_TERM.test(t) },
   { signal: 'mixed_script_homoglyph', test: (t) => CYRILLIC_OR_GREEK.test(t) && LATIN.test(t) },
   { signal: 'markup_injection', test: (t) => MARKDOWN_IMG.test(t) },
   { signal: 'multilingual_override', test: (t) => MULTILINGUAL.test(t) },
@@ -105,9 +107,13 @@ function decodings(text: string): { how: string; text: string }[] {
 export function screenText(text: string, extraSignals: readonly string[] = []): HeuristicResult {
   const signals = new Set<string>();
   for (const s of extraSignals) {
+    if (s === 'address_redacted') signals.add('address_like');
+    if (s === 'opaque_token_redacted') signals.add('base64_blob');
     if (s === 'invisible_chars_removed') signals.add('zero_width_chars');
     if (s === 'markup_escaped') signals.add('markup_injection');
-    if (s === 'normalized') signals.add('unicode_normalized');
+    // `normalized` is deliberately NOT a signal: NFKC also rewrites innocent things (a non-breaking
+    // space, an "fi" ligature) and flagging those would cost benign memos for no security gain.
+    // Homoglyph attacks survive NFKC as mixed scripts and are caught by their own rule.
   }
   for (const r of RULES) if (r.test(text)) signals.add(r.signal);
   for (const d of decodings(text)) {

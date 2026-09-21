@@ -184,8 +184,9 @@ export function buildCompilerPrompt(input: CompilerInput): BuiltPrompt {
     user: [
       'AVAILABLE IDS (the only ones that exist):',
       json({
-        vaults: input.vaults.map((v) => pick(v, VAULT_FIELDS)),
-        recipients: input.recipients.map((r) => pick(r, RECIPIENT_FIELDS)),
+        // Unlike a Context, this input has not been through the context sanitizer yet.
+        vaults: input.vaults.map((v) => ({ id: v.id, name: sanitizeLabel(v.name) })),
+        recipients: input.recipients.map((r) => ({ id: r.id, label: sanitizeLabel(r.label) })),
         kinds: input.allowedKinds,
       }),
       '',
