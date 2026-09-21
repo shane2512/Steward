@@ -27,9 +27,9 @@ const outDir = resolve('docs/design/shots');
 mkdirSync(outDir, { recursive: true });
 
 const shots = [
-  { name: 'mobile-light', path: '/preview', width: 390, mobile: true },
+  { name: 'mobile-light', path: '/preview?theme=light', width: 390, mobile: true },
   { name: 'mobile-dark', path: '/preview?theme=dark', width: 390, mobile: true },
-  { name: 'desktop-light', path: '/preview', width: 1280, mobile: false },
+  { name: 'desktop-light', path: '/preview?theme=light', width: 1280, mobile: false },
   { name: 'desktop-dark', path: '/preview?theme=dark', width: 1280, mobile: false },
 ];
 

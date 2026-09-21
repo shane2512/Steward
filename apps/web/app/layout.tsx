@@ -1,20 +1,20 @@
 import type { ReactNode } from 'react';
-import { IBM_Plex_Mono, Public_Sans } from 'next/font/google';
+import { Figtree, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-// docs/DESIGN.md §3 — Public Sans (OFL) for everything a human wrote,
-// IBM Plex Mono (OFL) for machine data only.
-const publicSans = Public_Sans({
+// docs/DESIGN.md §3 — Figtree (OFL, variable) for everything a human wrote:
+// single-storey g, tall x-height, geometric-humanist grotesk. Geist Mono (OFL)
+// for machine data only (addresses, hashes, tx ids, eyebrow micro-labels).
+const figtree = Figtree({
   subsets: ['latin'],
   display: 'swap',
-  variable: '--font-public-sans',
+  variable: '--font-figtree',
 });
 
-const plexMono = IBM_Plex_Mono({
+const geistMono = Geist_Mono({
   subsets: ['latin'],
-  weight: ['400', '500'],
   display: 'swap',
-  variable: '--font-plex-mono',
+  variable: '--font-geist-mono',
 });
 
 export const metadata = {
@@ -24,7 +24,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${publicSans.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`${figtree.variable} ${geistMono.variable}`}>
       <body className="min-h-dvh bg-ground font-sans text-body text-ink antialiased">
         {children}
       </body>

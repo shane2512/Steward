@@ -1,450 +1,904 @@
 /**
- * Static design preview — docs/DESIGN.md made visible.
+ * Static design preview — docs/DESIGN.md v2 made visible.
  *
  * Mock data only. No API calls, no auth, no wallet/policy/reasoning imports.
  * This page is the living reference for Phase 7; it is not a product screen.
  *
- * `/preview` renders light, `/preview?theme=dark` renders dark.
+ * `/preview` renders dark (the default theme). `/preview?theme=light` renders light.
  */
 import type { ReactNode } from 'react';
 
 export const metadata = { title: 'Steward — design preview' };
 
-/* ---------------------------------------------------------------- primitives */
+/* ------------------------------------------------------------------- icons
+ * Flat geometric glyphs, 1.75px stroke or solid fill, drawn inline rather than
+ * pulling a new dependency in for a design-only page. One family, one weight.
+ */
+type IconProps = { className?: string };
+const S = (d: string) =>
+  function Icon({ className }: IconProps) {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.75}
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+        className={className}
+        aria-hidden="true"
+      >
+        <path d={d} />
+      </svg>
+    );
+  };
+
+const IconApprovals = S('M12 3v11M12 18v2M4 21h16');
+const IconRecipients = S(
+  'M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+);
+const IconActivity = S('M3 12h4l3-7 4 14 3-7h4');
+const IconAdd = S('M12 5v14M5 12h14');
+const IconChevron = S('M9 5l7 7-7 7');
+const IconBack = S('M15 5l-7 7 7 7');
+const IconSearch = S('M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-4-4');
+const IconExternal = S('M14 4h6v6M20 4l-9 9M18 14v6H4V6h6');
+const IconVault = S('M4 5h16v14H4zM12 9v6M9 12h6');
+const IconWallet = S('M3 7h15a3 3 0 0 1 3 3v7H3zM3 7V5h13M17 13h1');
+const IconHome = S('M4 10l8-6 8 6v10H4z');
+const IconSettings = S('M4 7h16M4 12h16M4 17h16');
+const IconDoc = S('M6 3h8l4 4v14H6zM14 3v4h4');
+const IconShield = S('M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z');
+const IconBell = S('M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3zM10 20h4');
+const IconRevoke = S('M5 5l14 14M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z');
+const IconLock = S('M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3');
+
+function VerdictGlyph({ tone, className }: { tone: Verdict; className?: string }) {
+  // Three non-colour channels: filled disc, outlined ring, filled disc with a slash.
+  if (tone === 'escalate') {
+    return (
+      <svg viewBox="0 0 16 16" className={className} aria-hidden="true">
+        <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden="true">
+      <circle cx="8" cy="8" r="7" fill="currentColor" />
+      {tone === 'allow' ? (
+        <path d="M4.6 8.2l2.3 2.3 4.5-4.7" fill="none" stroke="var(--st-ground)" strokeWidth="2" />
+      ) : (
+        <path d="M4.6 4.6l6.8 6.8" fill="none" stroke="var(--st-ground)" strokeWidth="2" />
+      )}
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------- primitives */
 
 function Money({
   amount,
   minor,
   token = 'USDC',
   usd,
-  size = 'body',
 }: {
   amount: string;
-  minor: string;
+  minor?: string;
   token?: string;
   usd?: string;
-  size?: 'body' | 'balance';
 }) {
-  const big = size === 'balance';
   return (
     <span className="tabular">
-      <span className={big ? 'text-balance font-bold tracking-[-0.02em] sm:text-balance-lg' : ''}>
-        {amount}
-      </span>
-      <span className={big ? 'text-[0.72em] font-bold text-muted' : 'text-muted'}>{minor}</span>
-      <span className={big ? 'ml-2 text-small text-muted' : ' text-muted'}> {token}</span>
-      {usd ? <span className="block text-small text-muted">({usd})</span> : null}
+      {amount}
+      {minor ? <span className="text-line">{minor}</span> : null}
+      {token ? ` ${token}` : null}
+      {usd ? <span className="text-muted"> ({usd})</span> : null}
     </span>
   );
 }
 
-function Card({
-  children,
-  tone = 'plain',
-}: {
-  children: ReactNode;
-  tone?: 'plain' | 'warn' | 'stop';
-}) {
-  const border = tone === 'warn' ? 'border-warn' : tone === 'stop' ? 'border-stop' : 'border-line';
-  return <div className={`rounded-lg border ${border} bg-surface p-5 shadow-e1`}>{children}</div>;
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p className="px-4 pt-6 pb-2 font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+      {children}
+    </p>
+  );
 }
 
-function H({ children }: { children: ReactNode }) {
-  return <h2 className="mb-3 text-h2 font-semibold tracking-[-0.01em]">{children}</h2>;
+type Verdict = 'allow' | 'escalate' | 'deny';
+const VERDICT: Record<Verdict, { text: string; word: string }> = {
+  allow: { text: 'text-allow', word: 'Allowed' },
+  escalate: { text: 'text-escalate', word: 'Needs you' },
+  deny: { text: 'text-deny', word: 'Denied' },
+};
+
+function VerdictBadge({ tone, label }: { tone: Verdict; label?: string }) {
+  const v = VERDICT[tone];
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${v.text}`}>
+      <VerdictGlyph tone={tone} className="size-3.5 shrink-0" />
+      <span className="text-small font-medium">{label ?? v.word}</span>
+    </span>
+  );
 }
 
-function Label({ children }: { children: ReactNode }) {
-  return <span className="text-label font-medium text-muted">{children}</span>;
+function Chip({ tone = 'neutral', children }: { tone?: 'neutral' | 'warn'; children: ReactNode }) {
+  const cls = tone === 'warn' ? 'bg-escalate/15 text-escalate' : 'bg-surface-2 text-muted';
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 font-mono text-label tracking-[0.08em] uppercase ${cls}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 function Button({
+  variant = 'primary',
   children,
-  variant = 'outline',
+  disabled,
 }: {
+  variant?: 'primary' | 'ghost' | 'danger';
   children: ReactNode;
-  variant?: 'primary' | 'outline' | 'danger' | 'danger-outline';
+  disabled?: boolean;
 }) {
   const base =
-    'inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-4 text-small font-medium transition-colors duration-[120ms] sm:px-5';
-  const styles = {
-    primary: 'bg-seal text-on-accent',
-    outline: 'border border-line-strong bg-transparent text-ink',
-    danger: 'bg-stop text-on-accent',
-    'danger-outline': 'border border-stop bg-transparent text-stop',
-  } as const;
+    'inline-flex h-14 w-full items-center justify-center rounded-full px-6 text-h3 font-bold transition-transform duration-150 ease-[var(--ease-enter)] active:scale-[0.97]';
+  const tone = disabled
+    ? 'bg-surface-2 text-muted'
+    : {
+        primary: 'bg-accent text-on-accent hover:bg-accent-press',
+        ghost: 'border border-line-strong text-ink hover:bg-surface-2',
+        danger: 'bg-deny-fill text-on-deny-fill',
+      }[variant];
   return (
-    <button type="button" className={`${base} ${styles[variant]}`}>
+    <button type="button" disabled={disabled} className={`${base} ${tone}`}>
       {children}
     </button>
   );
 }
 
-/* --------------------------------------------------------------- components */
-
-/**
- * The limit line (docs/DESIGN.md §1). `limitPct` is where the wall stands; with
- * `beyond`, the track continues past it as ground Steward may never reach — which
- * is what makes the line legible instead of an invisible tick at the track's end.
- */
-function Meter({
-  pct,
-  limitPct = 100,
-  beyond = false,
+function Row({
+  icon: Icon,
+  title,
+  sub,
+  right,
+  pressed,
   tone,
-  caption,
-  valueText,
 }: {
-  pct: number;
-  limitPct?: number;
-  beyond?: boolean;
-  tone: 'seal' | 'warn' | 'stop' | 'ok';
-  caption: string;
-  valueText: string;
+  icon?: (p: IconProps) => ReactNode;
+  title: ReactNode;
+  sub?: ReactNode;
+  right?: ReactNode;
+  pressed?: boolean;
+  tone?: 'deny';
 }) {
-  const fill = { seal: 'bg-seal', warn: 'bg-warn', stop: 'bg-stop', ok: 'bg-ok' }[tone];
+  return (
+    <div className={`flex min-h-[52px] items-center gap-3 px-4 py-3 ${pressed ? 'row-press' : ''}`}>
+      {Icon ? (
+        <span className={`shrink-0 ${tone === 'deny' ? 'text-deny' : 'text-ink'}`}>
+          <Icon className="size-6" />
+        </span>
+      ) : null}
+      <span className="min-w-0 flex-1">
+        <span
+          className={`block text-h3 font-semibold ${tone === 'deny' ? 'text-deny' : 'text-ink'}`}
+        >
+          {title}
+        </span>
+        {sub ? <span className="block text-small text-muted">{sub}</span> : null}
+      </span>
+      {right ? <span className="shrink-0 text-right text-small">{right}</span> : null}
+    </div>
+  );
+}
+
+function AllowanceMeter({
+  usedPct,
+  capPct = 100,
+  tone = 'accent',
+  caption,
+}: {
+  usedPct: number;
+  capPct?: number;
+  tone?: 'accent' | 'escalate' | 'deny';
+  caption: string;
+}) {
+  const fill = { accent: 'bg-accent', escalate: 'bg-escalate', deny: 'bg-deny' }[tone];
   return (
     <div>
-      <div
-        className="meter-track"
-        role="meter"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuetext={valueText}
-      >
-        <div className={`meter-fill ${fill}`} style={{ width: `${pct}%` }} />
-        {beyond ? (
-          <span className="meter-beyond" style={{ left: `${limitPct}%` }} aria-hidden />
-        ) : null}
-        <span className="limit-line" style={{ left: `${limitPct}%` }} aria-hidden />
+      <div className="meter-track">
+        <div className="meter-beyond" style={{ width: `${100 - capPct}%` }} />
+        <div className={`meter-fill ${fill}`} style={{ width: `${usedPct}%` }} />
+        <div className="limit-line" style={{ left: `${capPct}%` }} />
       </div>
-      <p className="mt-2 text-small text-muted">{caption}</p>
+      <p className="pt-2 font-mono text-label tracking-[0.06em] text-faint uppercase">{caption}</p>
     </div>
   );
 }
 
-const PILLS = {
-  running: { dot: 'bg-ok breathe', text: 'text-ink', label: 'Running' },
-  idle: { dot: 'bg-muted', text: 'text-muted', label: 'Idle' },
-  degraded: { dot: 'bg-warn', text: 'text-warn', label: 'Safe mode' },
-  parked: { dot: 'bg-warn', text: 'text-warn', label: 'Holding still' },
-  frozen: { dot: 'bg-stop', text: 'text-stop', label: 'Frozen' },
-  breaker: { dot: 'bg-stop', text: 'text-stop', label: 'Breaker tripped' },
-} as const;
-
-function StatusPill({ state }: { state: keyof typeof PILLS }) {
-  const p = PILLS[state];
+function StatusPill({ state }: { state: 'running' | 'idle' | 'degraded' | 'frozen' }) {
+  const map = {
+    running: { dot: 'bg-allow breathe', label: 'Running' },
+    idle: { dot: 'bg-muted', label: 'Idle' },
+    degraded: { dot: 'bg-escalate', label: 'Degraded' },
+    frozen: { dot: 'bg-deny', label: 'Frozen' },
+  }[state];
   return (
-    <span className="inline-flex min-h-8 items-center gap-2 rounded-full border border-line px-3 text-small">
-      <span className={`size-2 rounded-full ${p.dot}`} aria-hidden />
-      <span className={p.text}>{p.label}</span>
+    <span className="inline-flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5">
+      <span className={`size-2 rounded-full ${map.dot}`} />
+      <span className="text-small font-medium text-ink">{map.label}</span>
     </span>
   );
 }
 
-/**
- * Verdict marks are drawn, not typed: the check, warning-triangle and cross
- * characters render as colour emoji on some platforms, which is the wrong
- * register for a policy verdict, and their metrics differ per font.
- */
-function Glyph({ kind }: { kind: keyof typeof VERDICTS }) {
-  const d = {
-    allow: 'M3 8.5 6.5 12 13 4',
-    escalate: 'M8 2.5 14.5 13.5h-13L8 2.5ZM8 6.5v3.2M8 11.6v.1',
-    deny: 'M4 4l8 8M12 4l-8 8',
-    noop: 'M8 8h.01',
-  }[kind];
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" aria-hidden focusable="false">
-      <path
-        d={d}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={kind === 'noop' ? 3 : 1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+function FreezeButton({ frozen }: { frozen?: boolean }) {
+  return frozen ? (
+    <span className="inline-flex h-9 items-center rounded-full bg-deny-fill px-4 text-small font-bold text-on-deny-fill">
+      Frozen
+    </span>
+  ) : (
+    <span className="inline-flex h-9 items-center rounded-full border border-deny/40 px-4 text-small font-bold text-deny">
+      Freeze
+    </span>
   );
 }
 
-const VERDICTS = {
-  allow: { color: 'text-ok', edge: '' },
-  escalate: { color: 'text-warn', edge: '' },
-  deny: { color: 'text-stop', edge: 'border-l-2 border-stop pl-3 -ml-[2px]' },
-  noop: { color: 'text-muted', edge: '' },
-} as const;
-
-function DecisionRow({
-  verdict,
-  title,
-  time,
-  amount,
-  note,
-}: {
-  verdict: keyof typeof VERDICTS;
-  title: string;
-  time: string;
-  amount?: string;
-  note?: string;
-}) {
-  const v = VERDICTS[verdict];
+function Wordmark() {
   return (
-    <div className={`flex min-h-14 gap-3 border-b border-line py-3 last:border-b-0 ${v.edge}`}>
-      <span className={`flex w-5 shrink-0 justify-center pt-0.5 ${v.color}`}>
-        <Glyph kind={verdict} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-h3 font-medium">
-          <span className="sr-only">{verdict === 'deny' ? 'Blocked. ' : ''}</span>
-          {title}
-        </p>
-        <p className="text-small text-muted">{time}</p>
-        {note ? <p className="mt-1 text-small text-stop">{note}</p> : null}
+    <span className="relative inline-block text-h3 font-bold tracking-[-0.02em] text-ink">
+      Steward
+      <span className="wordmark-rule" />
+    </span>
+  );
+}
+
+/* ----------------------------------------------------------------- shells */
+
+function Phone({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="w-[390px] shrink-0">
+      <h2 className="pb-2 font-mono text-label tracking-[0.12em] text-faint uppercase">{label}</h2>
+      <div className="overflow-hidden rounded-lg border border-line bg-ground">{children}</div>
+    </section>
+  );
+}
+
+function Header({ frozen }: { frozen?: boolean }) {
+  return (
+    <header className="glass sticky top-0 z-10 flex h-14 items-center justify-between px-4">
+      <Wordmark />
+      <StatusPill state={frozen ? 'frozen' : 'running'} />
+      <FreezeButton frozen={frozen} />
+    </header>
+  );
+}
+
+function TabBar({ active = 'Home' }: { active?: string }) {
+  const items: Array<[string, (p: IconProps) => ReactNode]> = [
+    ['Home', IconHome],
+    ['Activity', IconActivity],
+    ['Approve', IconApprovals],
+    ['People', IconRecipients],
+    ['Settings', IconSettings],
+  ];
+  return (
+    <nav className="flex bg-surface pt-0 pb-3">
+      {items.map(([name, Icon]) => {
+        const on = name === active;
+        return (
+          <span key={name} className="relative flex flex-1 flex-col items-center gap-1 pt-3">
+            {on ? <span className="absolute top-0 h-[3px] w-10 rounded-full bg-accent" /> : null}
+            <Icon className={`size-6 ${on ? 'text-ink' : 'text-muted'}`} />
+            <span className={`text-label ${on ? 'font-semibold text-ink' : 'text-muted'}`}>
+              {name}
+            </span>
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Sheet({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="relative bg-ground pt-16">
+      <div className="scrim absolute inset-0" />
+      <div className="glass-sheet relative rounded-t-xl px-4 pt-3 pb-5">
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-faint" />
+        <h3 className="pb-4 text-h2 font-bold text-ink">{title}</h3>
+        {children}
       </div>
-      {amount ? <span className="tabular shrink-0 text-h3 font-medium">{amount}</span> : null}
     </div>
-  );
-}
-
-function RuleChip({
-  code,
-  text,
-  state,
-}: {
-  code: string;
-  text: string;
-  state: keyof typeof VERDICTS;
-}) {
-  const v = VERDICTS[state];
-  return (
-    <span className="inline-flex items-center gap-2 rounded-sm border border-line-strong px-2 py-1 text-small">
-      <span className={v.color}>
-        <Glyph kind={state} />
-      </span>
-      <span className="font-mono text-mono">{code}</span>
-      <span className="text-muted">{text}</span>
-    </span>
   );
 }
 
 /* ------------------------------------------------------------------ screens */
 
-function DemoBanner() {
+function Dashboard() {
   return (
-    <div className="glass rounded-md border border-warn px-4 py-3 text-small text-ink">
-      Demo data — prices and rates are simulated on Base Sepolia.
-    </div>
-  );
-}
-
-function AppHeader() {
-  return (
-    <header className="glass flex min-h-14 items-center justify-between rounded-md border border-line px-4">
-      <span className="text-h3 font-semibold tracking-[-0.02em]">
-        Ste<span className="border-b-2 border-seal pb-px">war</span>d
-      </span>
-      <div aria-live="polite">
-        <StatusPill state="running" />
+    <>
+      <Header />
+      <div className="flex items-center gap-2 bg-escalate/15 px-4 py-2">
+        <span className="font-mono text-label font-semibold tracking-[0.12em] text-escalate uppercase">
+          Demo data
+        </span>
+        <span className="text-small text-escalate">
+          Prices and rates are mocked on Base Sepolia.
+        </span>
       </div>
-      <Button variant="danger-outline">Freeze</Button>
-    </header>
-  );
-}
 
-function BalanceCard() {
-  return (
-    <div className="seal-wash rounded-lg">
-      <div className="glass rounded-lg border border-line p-5 shadow-e1">
-        <p className="text-center">
-          <Label>Treasury</Label>
-        </p>
-        <p className="mt-2 text-center">
-          <Money amount="124,000" minor=".00" usd="$124,000.00" size="balance" />
-        </p>
-
-        <div className="mt-6">
-          <Meter
-            pct={50}
-            limitPct={86}
-            beyond
-            tone="seal"
-            valueText="5,800 USDC of a 10,000 USDC daily limit used; 4,200 USDC remains"
-            caption="5,800 of today’s 10,000 USDC limit used. Steward stops at the line."
-          />
+      <div className="px-4 pt-4">
+        <div className="glass rounded-lg p-5">
+          <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+            Treasury
+          </p>
+          <p className="pt-2 text-balance font-bold tracking-[-0.02em] text-ink tabular">
+            $12,480<span className="text-line">.00</span>
+          </p>
+          <p className="pt-1.5 text-small text-muted">
+            <span className="text-allow tabular">+$38.20</span> today · 4.12% APY
+          </p>
+          <div className="pt-5">
+            <AllowanceMeter usedPct={24} capPct={78} caption="2,400 USDC of 10,000 used today" />
+          </div>
         </div>
+      </div>
 
-        <p className="mt-4 text-center">
-          <span className="tabular inline-flex min-h-8 items-center gap-2 rounded-full border border-line-strong px-3 text-small">
-            Maximum at risk 12,400 USDC
-            <svg viewBox="0 0 16 16" className="size-4 text-seal" aria-hidden focusable="false">
-              <circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
-              <path
-                d="M8 7.2v4M8 4.6v.1"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
+      <div className="grid grid-cols-4 gap-2 px-4 pt-5">
+        {(
+          [
+            ['Approvals', IconApprovals, '2'],
+            ['Recipients', IconRecipients, null],
+            ['Activity', IconActivity, null],
+            ['Add funds', IconAdd, null],
+          ] as Array<[string, (p: IconProps) => ReactNode, string | null]>
+        ).map(([name, Icon, badge]) => (
+          <span key={name} className="flex flex-col items-center gap-2">
+            <span className="relative flex size-[52px] items-center justify-center rounded-full bg-surface-3">
+              <Icon className="size-6 text-ink" />
+              {badge ? (
+                <span className="absolute -top-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-accent text-label font-bold text-on-accent">
+                  {badge}
+                </span>
+              ) : null}
+            </span>
+            <span className="text-small font-semibold text-ink">{name}</span>
           </span>
-        </p>
+        ))}
+      </div>
 
-        {/* Freeze lives in the header and only there — one name, one place. */}
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <Button>Add funds</Button>
-          <Button>Activity</Button>
-          <Button>Recipients</Button>
+      <Eyebrow>Positions</Eyebrow>
+      <Row
+        icon={IconVault}
+        title="Aave USDC"
+        sub="4.12% APY"
+        right={<Money amount="8,100" usd="$8,100" />}
+      />
+      <Row
+        icon={IconWallet}
+        title="Idle in treasury"
+        sub="not earning"
+        right={<Money amount="4,380" usd="$4,380" />}
+      />
+
+      <Eyebrow>Recent</Eyebrow>
+      <Row
+        icon={IconActivity}
+        title="Paid Mara Okonjo"
+        sub={<VerdictBadge tone="allow" />}
+        right={
+          <>
+            <Money amount="1,200" />
+            <span className="block font-mono text-label text-faint">2h ago</span>
+          </>
+        }
+      />
+      <Row
+        icon={IconVault}
+        title="Deposit to Aave"
+        sub={<VerdictBadge tone="allow" />}
+        right={
+          <>
+            <Money amount="3,000" />
+            <span className="block font-mono text-label text-faint">6h ago</span>
+          </>
+        }
+      />
+      <Row
+        icon={IconActivity}
+        title="Pay 0x7ac1...4d90"
+        sub={<VerdictBadge tone="deny" />}
+        right={
+          <>
+            <span className="text-muted">blocked</span>
+            <span className="block font-mono text-label text-faint">9h ago · R-04</span>
+          </>
+        }
+      />
+      <div className="px-4 pt-2 pb-6 text-right">
+        <span className="text-small font-semibold text-accent-ink">View all activity</span>
+      </div>
+
+      <TabBar active="Home" />
+    </>
+  );
+}
+
+function Timeline() {
+  return (
+    <>
+      <header className="glass sticky top-0 z-10 flex h-14 items-center gap-3 px-4">
+        <IconBack className="size-6 text-ink" />
+        <span className="flex-1 text-h3 font-semibold text-ink">Activity</span>
+        <FreezeButton />
+      </header>
+
+      <div className="px-4 pt-4">
+        <div className="flex rounded-full bg-surface-2 p-1">
+          {['All', 'Allowed', 'Needs you', 'Denied'].map((t, i) => (
+            <span
+              key={t}
+              className={`flex-1 rounded-full py-2 text-center text-small ${
+                i === 0 ? 'bg-surface-3 font-semibold text-ink' : 'text-muted'
+              }`}
+            >
+              {t}
+            </span>
+          ))}
         </div>
       </div>
-    </div>
+
+      <div className="pt-2">
+        <Row
+          icon={IconActivity}
+          title="Paid Mara Okonjo"
+          sub={<VerdictBadge tone="allow" />}
+          right={
+            <>
+              <Money amount="1,200" />
+              <span className="block font-mono text-label text-faint">14:22</span>
+            </>
+          }
+        />
+
+        <div className="px-4">
+          <div className="row-press px-0">
+            <Row
+              icon={IconVault}
+              title="Deposit to Aave"
+              sub={<VerdictBadge tone="allow" />}
+              right={
+                <>
+                  <Money amount="3,000" />
+                  <span className="block font-mono text-label text-faint">09:04</span>
+                </>
+              }
+            />
+            <div className="mx-3 mb-3 rounded-md bg-surface-2 p-4">
+              <p className="text-small text-ink">
+                Steward proposed moving <Money amount="3,000" usd="$3,000" /> into Aave USDC.
+              </p>
+              <ul className="space-y-2 pt-4">
+                {(
+                  [
+                    ['allow', 'R-01', 'Daily cap', '2,400 of 10,000'],
+                    ['allow', 'R-03', 'Allowlist', 'exact match'],
+                    ['allow', 'R-07', 'Depeg guard', 'USDC at 1.0000'],
+                    ['allow', 'SIM', 'Simulation', 'no revert'],
+                  ] as Array<[Verdict, string, string, string]>
+                ).map(([tone, id, name, detail]) => (
+                  <li key={id} className="flex items-center gap-2 text-small">
+                    <VerdictGlyph
+                      tone={tone}
+                      className={`size-3.5 shrink-0 ${VERDICT[tone].text}`}
+                    />
+                    <span className="font-mono text-mono text-faint">{id}</span>
+                    <span className="flex-1 text-ink">{name}</span>
+                    <span className="text-muted tabular">{detail}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="flex items-center gap-2 pt-4 font-mono text-mono text-accent-ink">
+                tx 0x9f3c 44ae 7b12 a21b
+                <IconExternal className="size-4" />
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Row
+          icon={IconActivity}
+          title="Pay 0x7ac1...4d90"
+          sub={<VerdictBadge tone="deny" />}
+          right={
+            <>
+              <span className="text-muted">blocked</span>
+              <span className="block font-mono text-label text-faint">08:51</span>
+            </>
+          }
+        />
+        <div className="h-6" />
+      </div>
+    </>
   );
 }
-
-function ParkedNotice() {
-  return (
-    <Card tone="warn">
-      <p className="text-h3 font-medium text-warn">Steward is holding still</p>
-      <p className="mt-2 text-small">
-        It can’t pay Northbeam Studio (8,000 USDC) inside today’s limit, and it won’t deploy idle
-        cash while a payment is due. Nothing is wrong with your funds.
-      </p>
-      <p className="mt-3">
-        <a className="text-small font-medium text-seal underline underline-offset-4" href="#s5">
-          See why
-        </a>
-      </p>
-    </Card>
-  );
-}
-
-const SIGNING_MESSAGE = `Steward approval
-Wallet: 7f3c9d21-88ab-4c41-9e5f-1a2b3c4d5e6f
-Proposal: 0x9a41c8b2e7d4f6019b3c5a8e2d7f4109c6b3e8a5d2f7019c4b6e3a8d5f201c7b
-Policy: v3
-Expires: 2026-09-21T18:12:00.000Z`;
 
 function ApprovalSheet() {
   return (
-    <div className="scrim rounded-xl p-3">
-      <div className="glass-sheet rounded-xl border border-line-strong p-5 shadow-e2">
-        <h3 className="text-h1 font-bold tracking-[-0.015em]">Pay Northbeam Studio</h3>
-        <p className="mt-1">
-          <Money amount="8,000" minor=".00" usd="$8,000.00" />
-        </p>
-
-        <div className="mt-6">
-          <H>You’ll see these changes</H>
-          <div className="rounded-md border border-line bg-surface">
-            <div className="flex justify-between border-b border-line px-4 py-3 text-small">
-              <span>Agent wallet</span>
-              <span className="tabular text-stop">−8,000.00 USDC</span>
-            </div>
-            <div className="flex justify-between px-4 py-3 text-small">
-              <span>Northbeam Studio</span>
-              <span className="tabular text-ok">+8,000.00 USDC</span>
-            </div>
-          </div>
+    <Sheet title="Approve this payment">
+      <dl className="space-y-3 text-small">
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">To</dt>
+          <dd className="text-right text-ink">
+            Devon Achebe
+            <span className="block font-mono text-mono text-muted">0x4b2e 88c1 90fa 9f10</span>
+          </dd>
         </div>
-
-        <div className="mt-6">
-          <H>Why Steward proposed this</H>
-          <p className="max-w-[68ch] text-body">
-            The 1 October invoice is due and sits above the amount Steward can pay on its own.
-          </p>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Amount</dt>
+          <dd className="text-ink">
+            <Money amount="4,000" usd="$4,000" />
+          </dd>
         </div>
+      </dl>
 
-        <div className="mt-6">
-          <H>Rules that triggered</H>
-          <div className="flex flex-wrap gap-2">
-            <RuleChip code="R10" text="Above the autonomous limit" state="escalate" />
-            <RuleChip code="R03" text="Recipient is on your list" state="allow" />
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <H>What you will sign</H>
-          {/* SECURITY §5 — verbatim from the API, never rebuilt. */}
-          <pre className="overflow-x-auto rounded-md border border-line bg-surface p-4 font-mono text-mono whitespace-pre-wrap break-all">
-            {SIGNING_MESSAGE}
-          </pre>
-          <p className="mt-2 text-small text-muted">
-            This is exactly what your wallet will show you.
-          </p>
-        </div>
-
-        <p className="mt-4 text-small text-muted">Expires in 5h 12m</p>
-        <div className="mt-4 flex gap-3">
-          <Button variant="primary">Approve</Button>
-          <Button>Reject</Button>
-        </div>
+      <div className="pt-5">
+        <AllowanceMeter
+          usedPct={64}
+          capPct={78}
+          tone="escalate"
+          caption="Would use 6,400 of 10,000 today"
+        />
       </div>
-    </div>
+
+      <p className="pt-5 pb-2 font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+        You will sign
+      </p>
+      <pre className="overflow-x-auto rounded-md bg-surface-2 p-4 font-mono text-mono text-ink">
+        {`Steward: approve payment
+4000 USDC to
+0x4b2e88c190fa...9f10
+nonce 84 · expires 15m`}
+      </pre>
+
+      <ul className="space-y-2 pt-5">
+        <li className="flex items-center gap-2 text-small">
+          <VerdictGlyph tone="escalate" className="size-3.5 shrink-0 text-escalate" />
+          <span className="font-mono text-mono text-faint">R-02</span>
+          <span className="flex-1 text-ink">Over the 2,500 single-payment cap</span>
+        </li>
+        <li className="flex items-center gap-2 text-small">
+          <VerdictGlyph tone="allow" className="size-3.5 shrink-0 text-allow" />
+          <span className="font-mono text-mono text-faint">R-03</span>
+          <span className="flex-1 text-ink">Recipient is allowlisted</span>
+        </li>
+      </ul>
+
+      <div className="space-y-2 pt-6">
+        <Button>Approve</Button>
+        <Button variant="ghost">Reject</Button>
+      </div>
+    </Sheet>
   );
 }
 
 function FreezeModal() {
-  const steps = [
-    { n: 1, title: 'Freeze now', body: 'Stops every action immediately.', cta: 'danger' as const },
-    {
-      n: 2,
-      title: 'Revoke spending permission',
-      body: 'Removes Steward’s on-chain allowance.',
-      cta: 'outline' as const,
-    },
-    {
-      n: 3,
-      title: 'Bring funds home',
-      body: 'Sends everything back to your treasury.',
-      cta: 'outline' as const,
-    },
-  ];
   return (
-    <div className="scrim rounded-xl p-3">
-      <div className="glass-sheet rounded-xl border border-line-strong p-5 shadow-e2">
-        <h3 className="text-h1 font-bold tracking-[-0.015em]">Stop Steward</h3>
-        <p className="mt-2 max-w-[68ch] text-body text-muted">
-          Freezing stops every action immediately. Your funds stay where they are, and you can undo
-          this in Settings.
+    <div className="relative bg-ground px-4 py-16">
+      <div className="scrim absolute inset-0" />
+      <div className="glass-sheet relative rounded-lg p-5">
+        <h3 className="text-h2 font-bold text-ink">Freeze Steward</h3>
+        <p className="max-w-[46ch] pt-3 text-small text-muted">
+          Steward stops proposing and stops executing, right now. Your spend permission is revoked
+          on-chain. Nothing in the treasury moves until you unfreeze.
         </p>
-        <ol className="mt-5">
-          {steps.map((s) => (
-            <li key={s.n} className="border-b border-line py-4 last:border-b-0">
-              <div className="flex gap-3">
-                <span className="tabular w-5 shrink-0 text-muted">{s.n}</span>
-                <div className="flex-1">
-                  <p className="text-h3 font-medium">{s.title}</p>
-                  <p className="text-small text-muted">{s.body}</p>
-                  <div className="mt-3">
-                    <Button variant={s.cta === 'danger' ? 'danger' : 'outline'}>
-                      {s.n === 1 ? 'Freeze now' : s.n === 2 ? 'Revoke' : 'Sweep'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <div className="mt-4 flex items-center gap-4 text-small">
-          <span className="inline-flex items-center gap-2 text-ok">
-            <Glyph kind="allow" /> Frozen at 14:02
-          </span>
-          <span className="inline-flex items-center gap-2 text-stop">
-            <Glyph kind="deny" /> Revoke failed. Nothing moved.
-          </span>
+        <div className="space-y-2 pt-6">
+          <Button variant="danger">Freeze now</Button>
+          <Button variant="ghost">Cancel</Button>
         </div>
       </div>
     </div>
+  );
+}
+
+function AddRecipientSheet() {
+  return (
+    <Sheet title="Add recipient">
+      <label className="block pb-4">
+        <span className="block pb-2 text-small font-medium text-ink">Label</span>
+        <span className="flex h-12 items-center rounded-md border border-line px-4 text-ink">
+          Mara Okonjo
+        </span>
+      </label>
+      <label className="block">
+        <span className="block pb-2 text-small font-medium text-ink">Address</span>
+        <span className="flex h-12 items-center rounded-md border-2 border-accent-ink px-4 font-mono text-mono text-ink">
+          0x1d4f 2a99 60b7 c802
+        </span>
+      </label>
+      <p className="flex gap-2 pt-3 text-small text-escalate">
+        <VerdictGlyph tone="escalate" className="mt-1 size-3.5 shrink-0" />
+        <span>Steward matches this address exactly. No ENS, no lookalikes. Check it.</span>
+      </p>
+      <div className="pt-6">
+        <Button>Add recipient</Button>
+      </div>
+    </Sheet>
+  );
+}
+
+function OnboardingStep() {
+  return (
+    <>
+      <div className="flex gap-1 px-4 pt-3">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span
+            key={i}
+            className={`h-[3px] flex-1 rounded-full ${i <= 1 ? 'bg-ink' : 'bg-surface-3'}`}
+          />
+        ))}
+      </div>
+      <header className="flex h-14 items-center gap-3 px-4">
+        <IconBack className="size-6 text-ink" />
+        <span className="flex-1" />
+        <span className="font-mono text-mono text-faint">Step 2 of 5</span>
+      </header>
+
+      <div className="px-4 pt-2">
+        <h3 className="text-h1 font-bold tracking-[-0.015em] text-ink">
+          What should Steward do with idle USDC?
+        </h3>
+        <div className="mt-5 rounded-md bg-surface-2 p-4 font-mono text-mono leading-relaxed text-ink">
+          Keep 20,000 USDC liquid. Put the rest in Aave. Pay the contractors every Friday.
+        </div>
+        <p className="max-w-[46ch] pt-3 text-small text-muted">
+          Plain English. Steward compiles it into a policy you approve next.
+        </p>
+      </div>
+
+      <div className="px-4 pt-8 pb-6">
+        <Button>Continue</Button>
+      </div>
+    </>
+  );
+}
+
+function Settings() {
+  return (
+    <>
+      <header className="flex h-14 items-center justify-center px-4">
+        <span className="text-h3 font-semibold text-ink">Settings</span>
+      </header>
+      <Row
+        icon={IconDoc}
+        title="Mandate"
+        sub="Edit what Steward may do"
+        right={<IconChevron className="size-5 text-muted" />}
+      />
+      <Row
+        icon={IconShield}
+        title="Spend permission"
+        sub="10,000 USDC per day"
+        right={<IconChevron className="size-5 text-muted" />}
+      />
+      <Row
+        icon={IconRecipients}
+        title="Recipients"
+        sub="4 allowlisted addresses"
+        right={<IconChevron className="size-5 text-muted" />}
+        pressed
+      />
+      <Row
+        icon={IconBell}
+        title="Notifications"
+        sub="Tell me when Steward needs me"
+        right={<IconChevron className="size-5 text-muted" />}
+      />
+      <Row
+        icon={IconDoc}
+        title="Export audit log"
+        sub="Download every decision as JSON"
+        right={<IconChevron className="size-5 text-muted" />}
+      />
+      <Row
+        icon={IconLock}
+        title="Verify audit chain"
+        sub="Check the log has not been edited"
+        right={<IconChevron className="size-5 text-muted" />}
+      />
+      <Row
+        icon={IconSettings}
+        title="Network"
+        sub="Steward only runs on testnet"
+        right={<Chip>Base Sepolia</Chip>}
+      />
+      <Row
+        icon={IconRevoke}
+        title="Revoke permission"
+        sub="Steward can no longer spend"
+        right={<IconChevron className="size-5 text-deny" />}
+        tone="deny"
+      />
+      <Row
+        icon={IconRevoke}
+        title="Close account"
+        sub="Freeze, revoke, sweep home, export"
+        right={<IconChevron className="size-5 text-deny" />}
+        tone="deny"
+      />
+      <p className="px-4 py-6 text-center text-small text-faint">Steward runs on Base Sepolia.</p>
+      <TabBar active="Settings" />
+    </>
+  );
+}
+
+function StatesColumn() {
+  return (
+    <>
+      {/* loading */}
+      <div className="loadbar h-[3px] overflow-hidden bg-transparent">
+        <span className="block h-full w-1/4 rounded-full bg-accent" />
+      </div>
+      <Eyebrow>Loading</Eyebrow>
+      <div className="space-y-3 px-4 pb-4">
+        <div className="skeleton h-[132px] w-full rounded-lg" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="skeleton size-10 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <div className="skeleton h-3.5 w-2/3" />
+              <div className="skeleton h-3 w-1/3" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* empty */}
+      <Eyebrow>Empty</Eyebrow>
+      <div className="px-8 py-6 text-center">
+        <svg viewBox="0 0 64 64" className="mx-auto size-16" aria-hidden="true">
+          <path d="M8 20h34l10 10v26H8z" fill="var(--st-surface-3)" />
+          <path d="M42 20v10h10" fill="var(--st-surface-2)" />
+          <path d="M18 40h20M18 48h12" stroke="var(--st-accent)" strokeWidth="3" />
+        </svg>
+        <h3 className="pt-4 text-h2 font-bold text-ink">Nothing needs you</h3>
+        <p className="mx-auto max-w-[46ch] pt-2 text-small text-muted">
+          Steward is inside every limit you set. It will ask before it is not.
+        </p>
+      </div>
+
+      {/* error */}
+      <Eyebrow>Error</Eyebrow>
+      <div className="mx-4 rounded-md bg-surface-2 p-4">
+        <p className="flex items-center gap-2 text-h3 font-semibold text-deny">
+          <VerdictGlyph tone="deny" className="size-4" />
+          Vault unreachable
+        </p>
+        <p className="max-w-[46ch] pt-2 text-small text-muted">
+          Steward could not reach Aave. It retried twice and stopped. Nothing moved.
+        </p>
+        <div className="pt-4">
+          <span className="inline-flex h-11 items-center rounded-full border border-line-strong px-5 text-small font-bold text-ink">
+            Retry
+          </span>
+        </div>
+      </div>
+
+      {/* stale + degraded + frozen */}
+      <Eyebrow>Stale, degraded, frozen</Eyebrow>
+      <div className="space-y-3 px-4 pb-6">
+        <p className="text-small text-muted">
+          <Money amount="12,480" minor=".00" token="" usd="$12,480" />{' '}
+          <span className="font-mono text-label text-faint">as of 14:02</span>
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <StatusPill state="running" />
+          <StatusPill state="idle" />
+          <StatusPill state="degraded" />
+          <StatusPill state="frozen" />
+        </div>
+        <p className="rounded-md bg-surface-2 p-3 text-small text-escalate">
+          SERV is unreachable. Steward is not proposing. Freeze still works.
+        </p>
+        <div className="flex items-center justify-between rounded-md bg-surface-2 p-3">
+          <span className="text-small text-ink">Aave position could not be exited</span>
+          <Chip tone="warn">Parked</Chip>
+        </div>
+        <div className="space-y-2 pt-2">
+          <Button disabled>Approve (frozen)</Button>
+          <AllowanceMeter usedPct={78} capPct={78} tone="deny" caption="Daily cap reached" />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Recipients() {
+  return (
+    <>
+      <header className="flex h-14 items-center gap-3 px-4">
+        <IconBack className="size-6 text-ink" />
+        <span className="flex-1 text-h3 font-semibold text-ink">Recipients</span>
+        <IconAdd className="size-6 text-ink" />
+      </header>
+      <div className="px-4">
+        <span className="flex h-12 items-center gap-3 rounded-md border border-line px-4 text-muted">
+          <IconSearch className="size-5" />
+          Search
+        </span>
+      </div>
+      <Eyebrow>Allowlist</Eyebrow>
+      {(
+        [
+          ['MO', 'Mara Okonjo', '0x1d4f 2a99 60b7 c802', '1,200', 'paid Fri'],
+          ['DA', 'Devon Achebe', '0x4b2e 88c1 90fa 9f10', '4,000', 'pending'],
+          ['TB', 'Tomas Berg', '0x88a0 4c1e 2d55 6b31', '900', 'paid Fri'],
+        ] as Array<[string, string, string, string, string]>
+      ).map(([init, name, addr, amt, when]) => (
+        <div key={addr} className="flex min-h-[52px] items-center gap-3 px-4 py-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-3 text-small font-bold text-ink">
+            {init}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-h3 font-semibold text-ink">{name}</span>
+            <span className="block truncate font-mono text-mono text-muted">{addr}</span>
+          </span>
+          <span className="shrink-0 text-right text-small">
+            <Money amount={amt} token="" />
+            <span className="block font-mono text-label text-faint">{when}</span>
+          </span>
+        </div>
+      ))}
+      <div className="h-6" />
+    </>
   );
 }
 
 /* -------------------------------------------------------------------- page */
 
-function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+function Board() {
   return (
-    <section id={id} className="scroll-mt-4">
-      <p className="mb-3 border-b border-line pb-2 text-label font-medium text-muted">{title}</p>
-      <div className="space-y-4">{children}</div>
-    </section>
+    <div className="mx-auto max-w-[1400px] px-4 py-8">
+      <header className="pb-8">
+        <Wordmark />
+        <h1 className="pt-3 text-h1 font-bold tracking-[-0.015em] text-ink">Design preview</h1>
+        <p className="max-w-[65ch] pt-2 text-small text-muted">
+          Every component in docs/DESIGN.md §9, rendered with mock data. No API, no auth, no wallet
+          imports. If a product screen disagrees with this page, this page is right.
+        </p>
+      </header>
+
+      <div className="flex flex-wrap gap-8">
+        <Phone label="S4 Dashboard">
+          <Dashboard />
+        </Phone>
+        <Phone label="S5 Timeline, one row expanded">
+          <Timeline />
+        </Phone>
+        <Phone label="S6 Approval sheet">
+          <ApprovalSheet />
+        </Phone>
+        <Phone label="S9 Freeze modal">
+          <FreezeModal />
+        </Phone>
+        <Phone label="S8 Recipients">
+          <Recipients />
+        </Phone>
+        <Phone label="S8 Add recipient sheet">
+          <AddRecipientSheet />
+        </Phone>
+        <Phone label="S3 Onboarding, step 2">
+          <OnboardingStep />
+        </Phone>
+        <Phone label="S10 Settings">
+          <Settings />
+        </Phone>
+        <Phone label="Global states">
+          <StatesColumn />
+        </Phone>
+      </div>
+    </div>
   );
 }
 
@@ -454,214 +908,10 @@ export default async function PreviewPage({
   searchParams: Promise<{ theme?: string }>;
 }) {
   const { theme } = await searchParams;
-  const dark = theme === 'dark';
-
+  const mode = theme === 'light' ? 'light' : 'dark';
   return (
-    <div data-theme={dark ? 'dark' : 'light'} className="min-h-dvh bg-ground text-ink">
-      <main className="mx-auto w-[min(100%-2rem,440px)] space-y-10 py-8">
-        <header>
-          <h1 className="text-h1 font-bold tracking-[-0.015em]">
-            Ste<span className="border-b-2 border-seal pb-px">war</span>d design preview
-          </h1>
-          <p className="mt-2 max-w-[68ch] text-body text-muted">
-            Static reference for docs/DESIGN.md. Mock data. {dark ? 'Dark' : 'Light'} theme —{' '}
-            <a
-              className="font-medium text-seal underline underline-offset-4"
-              href={dark ? '/preview' : '/preview?theme=dark'}
-            >
-              switch to {dark ? 'light' : 'dark'}
-            </a>
-            .
-          </p>
-        </header>
-
-        <Section id="s1" title="S1 Landing">
-          <h2 className="text-h1 font-bold tracking-[-0.015em]">
-            The self-driving treasury that can’t run off with the money.
-          </h2>
-          <p className="max-w-[68ch] text-body text-muted">
-            Steward keeps your idle USDC working, pays your team on schedule, and cannot exceed the
-            limit you signed.
-          </p>
-          <Button variant="primary">Connect wallet</Button>
-          <BalanceCard />
-          <div className="border-t border-line">
-            <div className="flex justify-between border-b border-line py-3 text-body">
-              <span>Earns on idle cash</span>
-            </div>
-            <div className="flex justify-between border-b border-line py-3 text-body">
-              <span>Pays your team on time</span>
-            </div>
-            <div className="flex justify-between py-3 text-body">
-              <span>Attacks blocked</span>
-              <span className="tabular font-medium">1,204</span>
-            </div>
-          </div>
-        </Section>
-
-        <Section id="s2" title="S2 Connect">
-          <h2 className="text-h1 font-bold tracking-[-0.015em]">Connect your wallet</h2>
-          <p className="max-w-[68ch] text-body text-muted">
-            Steward never sees a seed phrase and never holds your funds.
-          </p>
-          <Card>
-            <div className="flex min-h-14 items-center justify-between">
-              <div>
-                <p className="text-h3 font-medium">Coinbase Smart Wallet</p>
-                <p className="text-small text-muted">Passkey — no extension</p>
-              </div>
-              <svg viewBox="0 0 16 16" className="size-4 text-muted" aria-hidden focusable="false">
-                <path
-                  d="m6 3 5 5-5 5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-          </Card>
-          <Card tone="stop">
-            <p className="text-h3 font-medium text-stop">Signature declined</p>
-            <p className="mt-1 text-small">You declined the signature. Nothing was sent.</p>
-            <div className="mt-3">
-              <Button>Try again</Button>
-            </div>
-          </Card>
-        </Section>
-
-        <Section id="s4" title="S4 Dashboard">
-          <AppHeader />
-          <DemoBanner />
-          <BalanceCard />
-          <ParkedNotice />
-
-          <div className="flex flex-wrap gap-2">
-            <StatusPill state="running" />
-            <StatusPill state="idle" />
-            <StatusPill state="degraded" />
-            <StatusPill state="frozen" />
-            <StatusPill state="breaker" />
-          </div>
-
-          <div>
-            <H>Working in vaults</H>
-            <Card>
-              <div className="flex justify-between">
-                <div>
-                  <p className="text-h3 font-medium">Aave USDC</p>
-                  <p className="text-small text-muted">4.8% APY</p>
-                </div>
-                <div className="text-right">
-                  <span className="tabular text-h3 font-medium">44,000.00</span>
-                  <p className="text-small text-warn">Updated 6 min ago</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          <div>
-            <H>Liquid runway</H>
-            <Meter
-              pct={74}
-              limitPct={60}
-              tone="ok"
-              valueText="7.4 months of runway against a 6 month buffer"
-              caption="7.4 months liquid · buffer 6.0 months"
-            />
-          </div>
-
-          <div>
-            <H>Next up</H>
-            <Card>
-              <div className="flex justify-between border-b border-line pb-3 text-body">
-                <span>Northbeam Studio</span>
-                <span className="tabular">
-                  <span className="mr-4 text-muted">1 Oct</span>8,000.00
-                </span>
-              </div>
-              <div className="flex justify-between pt-3 text-body">
-                <span>Payroll</span>
-                <span className="tabular">
-                  <span className="mr-4 text-muted">5 Oct</span>22,400.00
-                </span>
-              </div>
-            </Card>
-          </div>
-        </Section>
-
-        <Section id="s5" title="S5 Timeline">
-          <Card>
-            <DecisionRow
-              verdict="allow"
-              title="Deposited 44,000 USDC into Aave"
-              time="12:04 · 8 minutes ago"
-              amount="44,000.00"
-            />
-            <DecisionRow
-              verdict="escalate"
-              title="Waiting for you: pay Northbeam Studio"
-              time="11:59 · 13 minutes ago"
-              amount="8,000.00"
-            />
-            <DecisionRow
-              verdict="deny"
-              title="Blocked a payment to an address not on your list"
-              time="11:47 · 25 minutes ago"
-              amount="50,000.00"
-              note="Why was this blocked?"
-            />
-          </Card>
-          <div className="flex flex-wrap gap-2">
-            <RuleChip code="R00" text="Kind is allowed" state="allow" />
-            <RuleChip code="R03" text="Recipient is on your list" state="allow" />
-            <RuleChip code="R07" text="Over today's limit" state="deny" />
-          </div>
-        </Section>
-
-        <Section id="s6" title="S6 Approval sheet (glass)">
-          <ApprovalSheet />
-        </Section>
-
-        <Section id="s9" title="S9 Freeze (glass)">
-          <FreezeModal />
-        </Section>
-
-        <Section id="states" title="Empty, error and loading">
-          <Card>
-            <p className="text-h2 font-semibold">No activity yet</p>
-            <p className="mt-2 max-w-[68ch] text-body text-muted">
-              Steward checks your treasury every five minutes and will explain anything it does
-              here.
-            </p>
-            <div className="mt-4">
-              <Button variant="primary">Run a check now</Button>
-            </div>
-          </Card>
-
-          <Card tone="stop">
-            <p className="text-h3 font-medium text-stop">The deposit did not go through</p>
-            <p className="mt-2 max-w-[68ch] text-small">
-              The vault rejected the transaction. No money moved and your allowance was not used.
-              Steward will try again on the next check.
-            </p>
-            <div className="mt-4">
-              <Button>View the decision</Button>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="h-3 w-24 rounded-full bg-line" />
-            <div className="mt-3 h-10 w-52 rounded-md bg-line" />
-            <div className="mt-4 h-2 w-full rounded-full bg-line" />
-            <div className="mt-6 space-y-3">
-              <div className="h-4 w-full rounded-sm bg-line" />
-              <div className="h-4 w-3/4 rounded-sm bg-line" />
-            </div>
-          </Card>
-        </Section>
-      </main>
-    </div>
+    <main data-theme={mode} className="min-h-dvh bg-ground">
+      <Board />
+    </main>
   );
 }

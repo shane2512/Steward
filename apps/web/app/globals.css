@@ -1,125 +1,196 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Steward design tokens — see docs/DESIGN.md
-   Palette values are indirected through --st-* so that a `data-theme`
+   Steward design tokens v2 — see docs/DESIGN.md
+   Dark is the default (the reference frames are dark-first). Light is the
+   alternate. Values are indirected through --st-* so that a `data-theme`
    attribute on <html> OR on any wrapper element swaps the whole theme, while
    `prefers-color-scheme` remains the default.
+
+   The accent is ONE light green, used in exactly the eight roles listed in
+   DESIGN.md §2. It is never a status. Verdict colours live on a different hue
+   family (§4) and always ship with a glyph and a word.
    =========================================================================== */
 
+/* --- dark, the default ---------------------------------------------------- */
 :root {
-  --st-ground: #f2f4f7;
-  --st-surface: #ffffff;
-  --st-ink: #0f141b;
-  --st-muted: #5a6472;
-  --st-line: #dde2ea;
-  --st-line-strong: #77818f;
-  --st-seal: #2a46a6;
-  --st-ok: #14713f;
-  --st-warn: #8a5300;
-  --st-stop: #b3261e;
-  /* text that sits on a filled seal / stop control */
-  --st-on-accent: #ffffff;
-  --st-shadow-e1: 0 1px 2px rgb(15 20 27 / 0.06);
-  --st-shadow-e2: 0 16px 40px -12px rgb(15 20 27 / 0.22);
-  color-scheme: light;
-}
+  --st-ground: #090c11;
+  --st-surface: #111419;
+  --st-surface-2: #1b1e23;
+  --st-surface-3: #24272f;
+  --st-line: #2a2d31;
+  --st-line-strong: #5a616b;
+  --st-ink: #ffffff;
+  --st-muted: #b3b6be;
+  --st-faint: #7e838d;
 
-/* dark values, applied by preference unless an explicit light theme is set */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --st-ground: #070a0f;
-    --st-surface: #131923;
-    --st-ink: #e7edf6;
-    --st-muted: #98a3b4;
-    --st-line: #232b38;
-    --st-line-strong: #586679;
-    --st-seal: #8fa8f5;
-    --st-ok: #4ed18c;
-    --st-warn: #e3b15a;
-    --st-stop: #ff8a80;
-    --st-on-accent: #070a0f;
-    --st-shadow-e1: 0 0 0 0 transparent;
-    --st-shadow-e2: 0 16px 40px -12px rgb(0 0 0 / 0.6);
-    color-scheme: dark;
-  }
-}
+  --st-accent: #aef07a;
+  --st-accent-press: #98de5f;
+  --st-on-accent: #0b120b;
+  /* accent-coloured TEXT. In dark the accent itself is legible (14.5:1);
+     in light it is not, so this token diverges. Components use it for text
+     and --st-accent for fills, always. */
+  --st-accent-ink: #aef07a;
 
-/* explicit override, on <html> or on any subtree (the preview uses a wrapper) */
-[data-theme='dark'] {
-  --st-ground: #070a0f;
-  --st-surface: #131923;
-  --st-ink: #e7edf6;
-  --st-muted: #98a3b4;
-  --st-line: #232b38;
-  --st-line-strong: #586679;
-  --st-seal: #8fa8f5;
-  --st-ok: #4ed18c;
-  --st-warn: #e3b15a;
-  --st-stop: #ff8a80;
-  --st-on-accent: #070a0f;
+  --st-allow: #2fd9a6;
+  --st-escalate: #ffb020;
+  --st-deny: #ff6a5e;
+  --st-deny-fill: #d92d1e;
+  --st-on-deny-fill: #ffffff;
+  --st-info: #7c8cff;
+
   --st-shadow-e1: 0 0 0 0 transparent;
-  --st-shadow-e2: 0 16px 40px -12px rgb(0 0 0 / 0.6);
+  --st-shadow-e2: 0 -24px 48px -12px rgb(0 0 0 / 0.55);
+  --st-glass-mix: 72%;
+  --st-glass-edge: rgb(255 255 255 / 0.06);
   color-scheme: dark;
 }
 
+/* --- light, the alternate ------------------------------------------------- */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --st-ground: #f4f6fa;
+    --st-surface: #ffffff;
+    --st-surface-2: #eef1f6;
+    --st-surface-3: #e4e8ef;
+    --st-line: #d6dbe4;
+    --st-line-strong: #5a6270;
+    --st-ink: #0b0f16;
+    --st-muted: #525a68;
+    --st-faint: #6e7684;
+
+    --st-accent: #aef07a;
+    --st-accent-press: #98de5f;
+    --st-on-accent: #0b120b;
+    --st-accent-ink: #3f6b1a;
+
+    --st-allow: #067a59;
+    --st-escalate: #8a5300;
+    --st-deny: #c42a1b;
+    --st-deny-fill: #c42a1b;
+    --st-on-deny-fill: #ffffff;
+    --st-info: #3b45c9;
+
+    --st-shadow-e1: 0 1px 2px rgb(11 15 22 / 0.06);
+    --st-shadow-e2: 0 -24px 48px -12px rgb(11 15 22 / 0.18);
+    --st-glass-mix: 76%;
+    --st-glass-edge: rgb(255 255 255 / 0.7);
+    color-scheme: light;
+  }
+}
+
+/* explicit override, on <html> or on any subtree (the preview uses wrappers) */
 [data-theme='light'] {
-  --st-ground: #f2f4f7;
+  --st-ground: #f4f6fa;
   --st-surface: #ffffff;
-  --st-ink: #0f141b;
-  --st-muted: #5a6472;
-  --st-line: #dde2ea;
-  --st-line-strong: #77818f;
-  --st-seal: #2a46a6;
-  --st-ok: #14713f;
-  --st-warn: #8a5300;
-  --st-stop: #b3261e;
-  --st-on-accent: #ffffff;
-  --st-shadow-e1: 0 1px 2px rgb(15 20 27 / 0.06);
-  --st-shadow-e2: 0 16px 40px -12px rgb(15 20 27 / 0.22);
+  --st-surface-2: #eef1f6;
+  --st-surface-3: #e4e8ef;
+  --st-line: #d6dbe4;
+  --st-line-strong: #5a6270;
+  --st-ink: #0b0f16;
+  --st-muted: #525a68;
+  --st-faint: #6e7684;
+
+  --st-accent: #aef07a;
+  --st-accent-press: #98de5f;
+  --st-on-accent: #0b120b;
+  --st-accent-ink: #3f6b1a;
+
+  --st-allow: #067a59;
+  --st-escalate: #8a5300;
+  --st-deny: #c42a1b;
+  --st-deny-fill: #c42a1b;
+  --st-on-deny-fill: #ffffff;
+  --st-info: #3b45c9;
+
+  --st-shadow-e1: 0 1px 2px rgb(11 15 22 / 0.06);
+  --st-shadow-e2: 0 -24px 48px -12px rgb(11 15 22 / 0.18);
+  --st-glass-mix: 76%;
+  --st-glass-edge: rgb(255 255 255 / 0.7);
   color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --st-ground: #090c11;
+  --st-surface: #111419;
+  --st-surface-2: #1b1e23;
+  --st-surface-3: #24272f;
+  --st-line: #2a2d31;
+  --st-line-strong: #5a616b;
+  --st-ink: #ffffff;
+  --st-muted: #b3b6be;
+  --st-faint: #7e838d;
+
+  --st-accent: #aef07a;
+  --st-accent-press: #98de5f;
+  --st-on-accent: #0b120b;
+  --st-accent-ink: #aef07a;
+
+  --st-allow: #2fd9a6;
+  --st-escalate: #ffb020;
+  --st-deny: #ff6a5e;
+  --st-deny-fill: #d92d1e;
+  --st-on-deny-fill: #ffffff;
+  --st-info: #7c8cff;
+
+  --st-shadow-e1: 0 0 0 0 transparent;
+  --st-shadow-e2: 0 -24px 48px -12px rgb(0 0 0 / 0.55);
+  --st-glass-mix: 72%;
+  --st-glass-edge: rgb(255 255 255 / 0.06);
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-ground: var(--st-ground);
   --color-surface: var(--st-surface);
-  --color-ink: var(--st-ink);
-  --color-muted: var(--st-muted);
+  --color-surface-2: var(--st-surface-2);
+  --color-surface-3: var(--st-surface-3);
   --color-line: var(--st-line);
   --color-line-strong: var(--st-line-strong);
-  --color-seal: var(--st-seal);
-  --color-ok: var(--st-ok);
-  --color-warn: var(--st-warn);
-  --color-stop: var(--st-stop);
+  --color-ink: var(--st-ink);
+  --color-muted: var(--st-muted);
+  --color-faint: var(--st-faint);
+
+  --color-accent: var(--st-accent);
+  --color-accent-press: var(--st-accent-press);
+  --color-accent-ink: var(--st-accent-ink);
   --color-on-accent: var(--st-on-accent);
 
-  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --color-allow: var(--st-allow);
+  --color-escalate: var(--st-escalate);
+  --color-deny: var(--st-deny);
+  --color-deny-fill: var(--st-deny-fill);
+  --color-on-deny-fill: var(--st-on-deny-fill);
+  --color-info: var(--st-info);
+
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* type scale (docs/DESIGN.md §3) */
-  --text-label: 0.78125rem; /* 12.5px */
+  --text-label: 0.6875rem; /* 11px */
   --text-label--line-height: 1.4;
   --text-mono: 0.8125rem; /* 13px */
   --text-mono--line-height: 1.6;
-  --text-small: 0.875rem;
+  --text-small: 0.9375rem; /* 15px */
   --text-small--line-height: 1.5;
   --text-body: 1rem;
   --text-body--line-height: 1.55;
-  --text-h3: 1.0625rem;
+  --text-h3: 1.0625rem; /* 17px */
   --text-h3--line-height: 1.35;
-  --text-h2: 1.25rem;
+  --text-h2: 1.25rem; /* 20px */
   --text-h2--line-height: 1.3;
-  --text-h1: 1.75rem;
+  --text-h1: 1.75rem; /* 28px */
   --text-h1--line-height: 1.15;
-  --text-balance: 2.5rem;
+  --text-balance: 2.75rem; /* 44px */
   --text-balance--line-height: 1;
-  --text-balance-lg: 3rem;
+  --text-balance-lg: 3.25rem; /* 52px */
   --text-balance-lg--line-height: 1;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  /* radii (docs/DESIGN.md §6) — pill-first */
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 24px;
+  --radius-xl: 28px;
 
   --shadow-e1: var(--st-shadow-e1);
   --shadow-e2: var(--st-shadow-e2);
@@ -134,9 +205,9 @@
     color: var(--st-ink);
   }
 
-  /* §10 — focus is never removed */
+  /* §12 — focus is never removed */
   :focus-visible {
-    outline: 2px solid var(--st-seal);
+    outline: 2px solid var(--st-accent-ink);
     outline-offset: 2px;
   }
 
@@ -144,22 +215,36 @@
   .tabular {
     font-variant-numeric: tabular-nums slashed-zero;
   }
+
+  /* §3 — no orphans in display type */
+  h1,
+  h2 {
+    text-wrap: balance;
+  }
 }
 
 @layer components {
-  /* §6 — glass is solid by default, opts in, then opts back out */
+  /* §8 — glass is solid by default, opts in, then opts back out */
   .glass {
     background-color: var(--st-surface);
   }
 
   @supports (backdrop-filter: blur(1px)) {
     .glass {
-      background-color: color-mix(in srgb, var(--st-surface) 72%, transparent);
+      background-color: color-mix(in srgb, var(--st-surface) var(--st-glass-mix), transparent);
       backdrop-filter: blur(20px) saturate(160%);
+      box-shadow: inset 0 1px 0 var(--st-glass-edge);
     }
     .glass-sheet {
-      background-color: color-mix(in srgb, var(--st-surface) 76%, transparent);
+      background-color: color-mix(
+        in srgb,
+        var(--st-surface) calc(var(--st-glass-mix) + 4%),
+        transparent
+      );
       backdrop-filter: blur(28px) saturate(160%);
+      box-shadow:
+        inset 0 1px 0 var(--st-glass-edge),
+        var(--st-shadow-e2);
     }
   }
 
@@ -169,36 +254,32 @@
       background-color: var(--st-surface);
       backdrop-filter: none;
     }
-    .seal-wash {
-      background-image: none;
-    }
   }
 
   /* the scrim behind a sheet or modal — an explicit token, not an opacity
-     modifier, so its composite stays measurable in sRGB (docs/DESIGN.md §6) */
+     modifier, so its composite stays measurable in sRGB (docs/DESIGN.md §8) */
   .scrim {
-    background-color: color-mix(in srgb, var(--st-ground) 60%, transparent);
+    background-color: color-mix(in srgb, var(--st-ground) 72%, transparent);
   }
 
-  /* the one coloured wash in the product: behind the balance card only */
-  .seal-wash {
-    background-image: radial-gradient(
-      120% 80% at 50% 0%,
-      color-mix(in srgb, var(--st-seal) 20%, transparent) 0%,
-      transparent 70%
-    );
+  /* §9 — the pressed state of a full-bleed list row */
+  .row-press {
+    border-radius: var(--radius-md);
+    background-color: var(--st-surface-3);
   }
 
-  /* the limit line — the one device (docs/DESIGN.md §1) */
+  /* §1 — the limit line, the one device */
   .meter-track {
     position: relative;
     height: 8px;
     border-radius: 999px;
-    background-color: var(--st-line);
+    background-color: var(--st-surface-3);
+    overflow: visible;
   }
   .meter-fill {
     height: 100%;
     border-radius: 999px;
+    background-color: var(--st-accent);
   }
   /* the ground Steward may never reach: recessed, past the limit line */
   .meter-beyond {
@@ -219,9 +300,20 @@
     background-color: var(--st-ink);
     transform: translateX(-1px);
   }
+
+  /* §10 — the wordmark's rule: the fence that stops short of the end */
+  .wordmark-rule {
+    position: absolute;
+    left: 0;
+    bottom: -3px;
+    width: 62%;
+    height: 2px;
+    border-radius: 1px;
+    background-color: var(--st-accent);
+  }
 }
 
-/* §5 — the single ambient motion, and only while the agent is running */
+/* §7 — the single ambient motion, and only while the agent is running */
 @keyframes st-breathe {
   0%,
   100% {
@@ -235,6 +327,35 @@
   animation: st-breathe 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* §9 — the top-of-page loading bar */
+@keyframes st-loadbar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.loadbar > span {
+  animation: st-loadbar 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* §9 — skeletons shaped like the row they replace */
+@keyframes st-shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.skeleton {
+  background-color: var(--st-surface-3);
+  border-radius: var(--radius-sm);
+  animation: st-shimmer 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -243,7 +364,9 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .breathe {
+  .breathe,
+  .skeleton,
+  .loadbar > span {
     animation: none;
     opacity: 1;
   }
