@@ -247,6 +247,17 @@ the same refused question every 30 seconds.
 | audit rows per quiet tick | 2 (`CONTEXT` + `PROPOSAL`) | **1** (`NOOP`) — 21 of them |
 | executions | 6 | 0 — correctly: the daily cap was already exhausted |
 
+Its closing verification (`ran for 601s`):
+
+| | |
+|---|---|
+| audit chain | **OK — 365 rows**, head `0x61e3cdc5e1d5efd9a7f84854f2990cb9b13c86283a71c88646223b8268624d88` |
+| NFR-4 replay | **29/29 decisions replayed identically** — every decision this wallet has ever taken that reached a verdict, ALLOWs and DENYs alike, re-evaluated from the append-only chain |
+| end state | agent 2,250 · vault shares 44,500,000,000 · treasury 147,750 mUSDC |
+
+(The single non-confirmed execution is Phase 5's `sweep_home`, reconciled to `timeout` on the first
+boot and correctly never resent.)
+
 The `NOOP` rows say exactly why the agent is parked, which is the part that matters:
 
 ```
