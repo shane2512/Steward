@@ -1091,12 +1091,16 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
   means the timeline shows *actions*, not *attention*: "the agent looked and did nothing" is only in
   the audit chain, not in `agent_decisions`. Phase 7's UI should read the `NOOP` audit events if it
   wants to show liveness.
-- **RR-14 — R17 and the deterministic path interact.** Because deterministic proposals are a pure
-  function of balances, two ticks with unchanged balances produce the *same* proposal hash, which
-  R17 denies for 24 h. In practice a successful action changes the balances, so the next hash
-  differs; but an action that is denied for another reason will keep producing the same hash and
-  will be denied by R17 from the second tick onwards, with the original reason no longer visible in
-  the verdict's top line. The audit row still carries every rule result.
+- **RR-14 — R17 and the deterministic path interact. FIXED, with a consequence worth knowing.**
+  Deterministic proposals are a pure function of balances, so an action the engine refuses is
+  rebuilt identically on the next tick. A live run produced 21 identical `pay_recipient` DENYs, all
+  correctly refused by R07's rolling daily cap. PreChecks now take R17's `recentProposalHashes` and
+  go quiet when the only available action is already inside that window. Nothing is weakened — R17
+  denies a repeat anyway, so an action the engine *would* permit has a hash that is not in the set.
+  **The consequence:** because obligations outrank yield (priority b before c), a stuck obligation
+  parks the whole wallet until the window rolls or the policy changes. That is the right answer on
+  its own terms — if payroll cannot be met, idle cash should not be locked into a vault — but it is
+  a behaviour Phase 7 must surface, not hide: the `NOOP` audit row carries the reason.
 - **RR-15 — the payroll-before-yield ordering differs from DEMO.md's narration.** PreChecks pay an
   obligation that is due *before* deploying idle cash (6.2 priority b before c), so a live run emits
   pull → pay → pull → deposit rather than DEMO.md's "pull 50k → deposit 44k → pay". The safer order

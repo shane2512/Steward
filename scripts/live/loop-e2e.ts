@@ -78,8 +78,15 @@ process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', St
 
 const MINUTES = Number(process.argv[2] ?? '10');
 const ONE = 1_000_000n;
-/** A fixed uuid so re-runs reuse the same CDP accounts (D-3) and the same agent wallet. */
-const USER_ID = '55555555-6666-4777-8888-999999999999';
+/**
+ * A fixed uuid so re-runs reuse the same CDP accounts (D-3) and the same agent wallet.
+ *
+ * Override it to get a FRESH agent wallet, and therefore a fresh `wallets` row with its own ledger
+ * — which is what you want when a previous run's outflows are still inside R07's rolling 24-hour
+ * window and would legitimately refuse everything. The treasury is unaffected: its address comes
+ * from the derived owner key, so the demo tokens stay where they are.
+ */
+const USER_ID = process.env['STEWARD_LIVE_USER_ID'] ?? '55555555-6666-4777-8888-999999999999';
 
 const env = getEnv();
 const cdp = cdpClient();
