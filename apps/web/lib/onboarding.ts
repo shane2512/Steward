@@ -33,3 +33,18 @@ export const STEP_TITLES = [
 export function reachableSteps(furthest: OnboardingStep): number {
   return furthest === 'done' ? 5 : furthest;
 }
+
+export type WizardStep = 1 | 2 | 3 | 4 | 5;
+
+/** Where the wizard opens: a brand-new owner sees "Meet Steward" first, a returning one resumes. */
+export function initialView(furthest: OnboardingStep, hasAgentWallet: boolean): WizardStep {
+  if (furthest === 'done') return 5;
+  if (!hasAgentWallet && furthest === 2) return 1;
+  return furthest;
+}
+
+/** The owner may go back freely, but never past what the server state allows. */
+export function clampView(view: number, furthest: OnboardingStep): WizardStep {
+  const max = reachableSteps(furthest);
+  return Math.min(Math.max(Math.trunc(view), 1), max) as WizardStep;
+}
