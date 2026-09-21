@@ -242,10 +242,10 @@ the same refused question every 30 seconds.
 
 | | run 1 (before the fixes) | run 2 (after) |
 |---|---|---|
-| iterations | ~100 in 10 min | **2 per minute**, exactly the DEMO cadence |
+| iterations | ~100 in 10 min | **13 in 10 min** — the cron + half-step cadence, nothing more |
 | `agent_decisions` rows written | **100** | **1** (the one `pay_recipient` that R07 refused) |
 | audit rows per quiet tick | 2 (`CONTEXT` + `PROPOSAL`) | **1** (`NOOP`) |
-| executions | 6 | 0 — correctly, the daily cap was exhausted |
+| executions | 6 | 0 — correctly: the daily cap was already exhausted |
 
 The `NOOP` rows say exactly why the agent is parked, which is the part that matters:
 
@@ -261,6 +261,15 @@ Three separate causes of churn, all fixed at the root and all covered by tests:
 
 None of them touched the policy path. Every tick still ran the full gather and pre-check, and no
 proposal ever reached the executor without a verdict and a receipt.
+
+**Coverage, stated honestly.** Run 1 proved the six-action sequence end to end on Base Sepolia but
+predates the churn fixes; run 2 proves quiescence on the fixed code but had no headroom left to act.
+What covers *both* on the fixed code is the fork test `goes QUIESCENT once the work is done`, which
+drives the demo to completion against forked Base Sepolia state — real MockVault, real USDC, real
+`eth_simulateV1`, real receipts, real executor — and then ticks eight more times asserting zero new
+executions, zero new decision rows and exactly eight `NOOP` audit rows. A third live run on a fresh
+wallet (`STEWARD_LIVE_USER_ID=<uuid> pnpm live:loop`) would close the last gap and is the first
+thing to do when the 24-hour outflow window rolls.
 
 ## Phase 6 — Opus review gate
 
