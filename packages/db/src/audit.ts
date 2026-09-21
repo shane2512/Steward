@@ -5,7 +5,7 @@
 // row_hash = sha256(canonicalJson({walletId, actor, event, entityType, entityId, payload, createdAt, prevHash})).
 // created_at is generated in app code and stored verbatim, so the hashed value always matches the stored one.
 // The chain is serialized per chain key with pg_advisory_xact_lock, so concurrent appends cannot fork it.
-import { asc, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { canonicalJson, err, hashCanonical, ok, type Result } from '@steward/shared';
 import type { Db } from './client';
 import { auditLog } from './schema';
@@ -139,6 +139,23 @@ export async function appendAudit(
   } catch (e) {
     return err({ code: 'WRITE_FAILED', message: String(e) });
   }
+}
+
+/**
+ * Audit rows for one entity, oldest first. Read-only; used by `/api/decisions/:id` and by the
+ * NFR-4 replay, which reconstructs a decision from the immutable chain rather than from the
+ * mutable tables.
+ */
+export async function listAuditForEntity(
+  db: Db,
+  entityType: string,
+  entityId: string,
+): Promise<AuditRow[]> {
+  return db
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, entityType), eq(auditLog.entityId, entityId)))
+    .orderBy(asc(auditLog.id));
 }
 
 export interface ChainBreak {

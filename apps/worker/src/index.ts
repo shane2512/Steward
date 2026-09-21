@@ -1,13 +1,22 @@
-// Worker skeleton (Phase 1): boots pg-boss and runs a recurring `health` job. Later phases add the decision loop.
+// The worker process: pg-boss, the scheduled jobs, and the crash-window recovery that must run
+// BEFORE the first tick (6.6 — `runIteration` refuses to propose for a wallet with an unresolved
+// execution, but boot is where those get resolved in the first place).
 import { PgBoss } from 'pg-boss';
 import { createLogger, getEnv } from '@steward/shared';
 import { createDb } from '@steward/db';
 import { installUnhandledRejectionLogger } from '@steward/wallet';
-import { registerConfirmJob } from './jobs/confirm';
+import { registerJobs, resumeCrashWindow } from './jobs';
+import {
+  demoPriceRefresherFor,
+  priceAdapterFor,
+  publicClientFor,
+  receiptKeyFor,
+  senderFactory,
+  servClientFor,
+} from './runtime';
 
 const log = createLogger('worker');
 // D-1: AgentKit's un-awaited telemetry POST can reject and crash Node 22; log instead of dying.
-// Every process that can boot AgentKit installs it — the wallet package owns the canonical version.
 installUnhandledRejectionLogger();
 
 try {
@@ -27,11 +36,30 @@ await boss.work('health', async (jobs) => {
 await boss.send('health'); // one immediately, then every minute (cron minimum granularity)
 await boss.schedule('health', '* * * * *');
 
-// 5.5 — the confirmer. Registered here; Phase 6.5/6.6 owns enqueueing and the boot-time resume of
-// unresolved executions (`listCrashWindow` + `reconcileExecution`).
 const { db, pool } = createDb(env.DATABASE_URL);
-await registerConfirmJob({ boss, db, env });
-log.info({ chainId: env.CHAIN_ID }, 'worker started');
+const publicClient = publicClientFor(env);
+
+// 6.6 — close the crash window first. An execution that reached the chain goes back to the
+// confirmer; one that never did is marked failed; an ambiguous one becomes UNCERTAIN and is NEVER
+// resent (PHASES "Do not").
+const recovered = await resumeCrashWindow({ boss, db, publicClient });
+if (recovered.resumed + recovered.uncertain + recovered.neverSent > 0)
+  log.warn(recovered, 'crash window closed');
+
+await registerJobs({
+  boss,
+  db,
+  pool,
+  env,
+  publicClient,
+  senderFor: senderFactory(env),
+  receiptKey: receiptKeyFor(env),
+  serv: servClientFor(env),
+  priceAdapter: priceAdapterFor(env, publicClient),
+  demoPrice: demoPriceRefresherFor(env),
+});
+
+log.info({ chainId: env.CHAIN_ID, demoMode: env.DEMO_MODE }, 'worker started');
 
 const stop = async () => {
   await boss.stop();

@@ -153,7 +153,7 @@ export async function runPipeline(
   }
 
   // ── the Policy Engine — the only gate ─────────────────────────────────────────────────────────
-  const verdict = evaluate({
+  const evaluationInput = {
     policy: g.policy,
     proposal,
     now,
@@ -168,7 +168,8 @@ export async function runPipeline(
     screen: input.screen,
     contextFactIds: input.contextFactIds,
     ownerApproval: input.ownerApproval,
-  });
+  };
+  const verdict = evaluate(evaluationInput);
 
   await insertVerdict(db, {
     decisionId: input.decisionId,
@@ -182,6 +183,12 @@ export async function runPipeline(
     policyVersion: verdict.policyVersion,
     results: verdict.results,
     ownerApproval: input.ownerApproval === null ? null : { signer: input.ownerApproval.signer },
+    // NFR-4: the COMPLETE input the verdict is a function of, minus the policy body (referenced by
+    // `policyVersion`, which is itself immutable once activated). `replay(decisionId)` re-runs the
+    // real `evaluate()` on exactly this and must get an identical verdict. Storing it in the
+    // append-only, hash-chained audit log — rather than in a mutable table — is what makes the
+    // reproducibility claim worth anything.
+    evaluationInput: serializeEvaluationInput(evaluationInput),
   });
   if (!verdictAudited) return { status: 'failed', verdict, code: 'AUDIT_FAILED', message: 'VERDICT' };
 
@@ -297,6 +304,76 @@ export async function runPipeline(
 
   return { status: 'executed', verdict, execution: executed.value };
 }
+
+/**
+ * The replayable half of an `EvaluationInput`, as canonical JSON.
+ *
+ * The policy body is left out on purpose: it is already immutable (`policies(wallet_id, version)`
+ * with exactly one active row) and including it would put an owner signature into the audit payload,
+ * which `appendAudit` refuses on principle (SECURITY §6). Dates become ISO strings, bigints decimal
+ * strings — `zEvaluationInput` reads both back.
+ */
+export function serializeEvaluationInput(i: EvaluationInputLike): Record<string, unknown> {
+  return {
+    proposal: JSON.parse(JSON.stringify(i.proposal, bigint)) as unknown,
+    now: i.now.toISOString(),
+    chainId: i.chainId,
+    allowMainnet: i.allowMainnet,
+    demoStableParity: i.demoStableParity,
+    state: {
+      ...i.state,
+      agentUsdc: i.state.agentUsdc.toString(),
+      treasuryUsdc: i.state.treasuryUsdc.toString(),
+      allowanceRemaining: i.state.allowanceRemaining.toString(),
+      vaultPositions: Object.fromEntries(
+        Object.entries(i.state.vaultPositions).map(([k, v]) => [k, v.toString()]),
+      ),
+      prices: Object.fromEntries(
+        Object.entries(i.state.prices).map(([k, v]) => [
+          k,
+          { microUsd: v.microUsd.toString(), publishedAt: v.publishedAt.toISOString() },
+        ]),
+      ),
+    },
+    ledger: {
+      outflowsLast24hMicroUsd: i.ledger.outflowsLast24hMicroUsd.toString(),
+      actionsLastHour: i.ledger.actionsLastHour,
+      recentProposalHashes: i.ledger.recentProposalHashes,
+    },
+    simulation:
+      i.simulation === null
+        ? null
+        : {
+            ok: i.simulation.ok,
+            deltas: i.simulation.deltas.map((d) => ({ ...d, delta: d.delta.toString() })),
+            approvals: i.simulation.approvals.map((a) => ({ ...a, amount: a.amount.toString() })),
+            ...(i.simulation.error === undefined ? {} : { error: i.simulation.error }),
+          },
+    verifier: i.verifier,
+    screen: i.screen,
+    contextFactIds: i.contextFactIds,
+    ownerApproval:
+      i.ownerApproval === null
+        ? null
+        : {
+            signer: i.ownerApproval.signer,
+            proposalHash: i.ownerApproval.proposalHash,
+            expiresAt: i.ownerApproval.expiresAt.toISOString(),
+          },
+  };
+}
+
+type EvaluationInputLike = Omit<PipelineInput, 'g' | 'decisionId'> & {
+  now: Date;
+  chainId: number;
+  allowMainnet: boolean;
+  demoStableParity: boolean;
+  state: ReturnType<typeof evaluationStateOf>;
+  ledger: Gathered['ledger'];
+  simulation: { ok: boolean; deltas: Delta[]; approvals: SimulatedApproval[]; error?: string } | null;
+};
+
+const bigint = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v);
 
 /** `EvaluationInput.state` — kept next to the pipeline so the approval path builds the same shape. */
 export function evaluationStateOf(g: Gathered) {
