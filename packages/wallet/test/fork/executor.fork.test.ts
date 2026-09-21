@@ -257,10 +257,7 @@ describe.skipIf(!FORK)('fork: the full Phase 5 chain against Base Sepolia state'
     const fresh = await freshTestDb();
     db = fresh.db;
     pool = fresh.pool;
-    const [user] = await db
-      .insert(schema.users)
-      .values({ ownerAddress: TREASURY })
-      .returning();
+    const [user] = await db.insert(schema.users).values({ ownerAddress: TREASURY }).returning();
     const [wallet] = await db
       .insert(schema.wallets)
       .values({

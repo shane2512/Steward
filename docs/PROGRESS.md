@@ -3,8 +3,8 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 4 complete (Opus)**, awaiting human "continue"; Phase 3 complete 2026-09-21
-Required model: Phase 5 = Opus
+Phase: **Phase 5 complete (Opus)**, awaiting human "continue"; Phase 4 complete 2026-09-21
+Required model: Phase 6 = Opus
 Last updated: 2026-09-21
 
 ## Phase status
@@ -15,11 +15,269 @@ Last updated: 2026-09-21
 | 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 86 modules/152 deps 0 violations, test 16 files/164 tests, contracts:test 16/16. Mocks live on 84532; live spend + revoke done through product code |
 | 3 | Policy Engine & mandate validator | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 129 modules/278 deps 0 violations + both violation fixtures fire, test 24 files/508 tests, `packages/policy` **100% branches (411/411)** enforced in its own vitest config |
 | 4 | SERV reasoning & injection defenses | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 153 modules/371 deps 0 violations + all three violation fixtures fire, test 32 files/621 tests (policy still 100% branches), `pnpm test:adversarial` **60 cases, guarantee 48/48 (100%), benign FP 0/12 (0%)**, live SERV smoke recorded (request ids below). 4.11 skipped (V-09 not confirmed) |
-| 5 | Risk gate, executor, confirmer | Opus | ☐ | | |
+| 5 | Risk gate, executor, confirmer | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch 170 modules/430 deps 0 violations + all **four** violation fixtures fire, test 35 files/673 tests (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, fork suite **2 files / 9 tests** (opt-in), and a LIVE Base Sepolia run: pull → deposit → payment → sweep, all through `executor.ts` (tx hashes below) |
 | 6 | Decision loop, scheduler, obligations, risk exits | Opus | ☐ | | |
 | 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
+
+## Phase 5 — tasks (all done 2026-09-21)
+- [x] 5.1 `packages/risk/src/simulate.ts` — `simulateProposalCalls` via **`eth_simulateV1`** (viem
+  `simulateCalls`), the only option that carries state across the calls of one action (`approve` then
+  `deposit`). Deltas are **measured**, not inferred: the same simulated block runs `balanceOf` for
+  agent/treasury/recipient before and after the real calls. `extractApprovals` decodes every ERC-20
+  approval from the calldata so R18 has something to see (Phase 3 flagged this as a Phase 5
+  obligation). No weaker fallback: an RPC without `eth_simulateV1` is an `Err` (D-40).
+- [x] 5.2 `packages/risk/src/oracle.ts` — `PriceAdapter` + `mockPriceFeedAdapter`, refused at
+  construction time unless `DEMO_MODE` **and** chainId 84532 (I11). Every quote carries `demo: true`
+  so the UI can show the DEMO DATA banner. No real-feed adapter is shipped (V-13: Pyth needs a keyed
+  endpoint); the interface is the seam for mainnet.
+- [x] 5.3 `packages/risk/src/triggers.ts` — `detectRiskTriggers`, pure, bigint, multiplication-only
+  bps maths (`drop * 10_000 >= bps * previous`, no division, no rounding window). Drawdown vs the
+  previous `vault_snapshots` row; depeg in either direction flags every vault holding the asset.
+- [x] 5.4 `packages/wallet/src/executor.ts` — AGENTKIT §4 exactly: build → verify receipt (MAC,
+  injected clock, policyVersion, walletId, proposalHash, **callsHash of the freshly built bytes**) →
+  simulation-parity check → atomic nonce burn + execution claim → **fresh** frozen/breaker re-read →
+  parity + `assertAllowedTargets` again → send → store userOp hash *and* tx hash. The send capability
+  is the `TxSender` port declared inside the module (D-42), so "only the executor sends" holds for
+  the CDP smart account, the fork's local account and any future signer.
+- [x] 5.4 (arch) `.dependency-cruiser.cjs` gained **`cdp-only-in-wallet-bootstrap`** (only
+  `packages/wallet/src/agentkit.ts`, `apps/web/lib/wallet.ts` and `scripts/live/` may import
+  `@coinbase/cdp-sdk` / `@coinbase/agentkit`) and **`owner-path-no-reasoning`**. Both have
+  deliberate-violation fixtures that `pnpm check:arch` now **requires** to fire (4 of them).
+- [x] 5.5 `packages/wallet/src/confirmer.ts` + the `exec.confirm` pg-boss handler in `apps/worker`
+  (registration only; scheduling is Phase 6.5/6.6). 3-minute poll, status transitions, effect
+  verification, `ledger_entries`, breaker counter, obligation status, an audit row per transition.
+  A timeout marks the execution `timeout` (= UNCERTAIN / needs-reconcile), alerts, and **never**
+  resends.
+- [x] 5.5 (crash window) `packages/wallet/src/reconcile.ts` — `listCrashWindow` +
+  `reconcileExecution`: the lookup that decides whether a hash-less `pending` row ever reached the
+  chain. Never sends.
+- [x] 5.6 `packages/wallet/src/errors.ts` — `Retryable` (network, sponsorship) with backoff
+  1/2/4/8 min, max 4 attempts, **same execution row**; `Fatal` (revert, parity mismatch, bad receipt,
+  frozen) ⇒ FAILED, no retry. Nothing is caught and ignored anywhere in the phase.
+- [x] 5.7 Circuit breaker — 3 consecutive FAILED ⇒ `breaker_open = true`, `frozen = true`,
+  notification row, audit `BREAKER_OPEN`. `tripBreaker()` is exported for Phase 6's R14 breach.
+- [x] 5.8 `sweepHome(walletId)` — plain async function, owner path: reads balances and positions,
+  builds the `source: 'owner'` proposal in code, simulates it, runs the **real `evaluate()`**, signs a
+  receipt and goes through the executor. Works while frozen (R01 exception + the executor's own
+  owner-sweep exception) and imports no reasoning (rule + fixture).
+
+## Phase 5 Exit Gate result (2026-09-21)
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
+| `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
+| `pnpm check:arch` | ✅ 0 violations (**170 modules, 430 dependencies**); all **four** fixtures fire: `policy-only-shared`, `reasoning-no-wallet-db`, **`owner-path-no-reasoning`**, **`cdp-only-in-wallet-bootstrap`**; purity lint fixture 10 problems |
+| `pnpm test` | ✅ **35 files / 673 tests passed**, 2 files / 9 skipped (the two opt-in fork suites); `packages/policy` still **100% branches (411/411)** |
+| `pnpm test:adversarial` | ✅ unchanged — 60 cases, guarantee **48/48 (100%)**, benign FP **0/12** |
+| fork integration suite (opt-in) | ✅ `STEWARD_FORK=1 npx vitest run packages/wallet/test/fork` — **2 files / 9 tests passed**: the Phase 2 calldata suite (4) plus the new Phase 5 chain (5): deposit, withdraw, payment, a revert caught by the simulation, and `sweepHome` while frozen |
+| live on Base Sepolia | ✅ `STEWARD_LIVE=1 pnpm live:executor` — 4 actions through the executor (below) |
+
+New Phase 5 test files: `packages/risk/test/risk.test.ts` (13), `packages/wallet/test/executor.test.ts`
+(26, real Postgres), `packages/wallet/test/confirmer.test.ts` (13, real Postgres),
+`packages/wallet/test/fork/executor.fork.test.ts` (5, opt-in).
+
+Required cases from PHASES 5 "Tests", and where each lives:
+
+| Required case | Test |
+|---|---|
+| deposit / withdraw / pay / sweep happy paths on a fork | `fork/executor.fork.test.ts` ×4 (+ the live run) |
+| duplicate execute returns the SAME execution, no resend | `executor` › "a duplicate call with the SAME receipt…", "a FRESH receipt for the same proposal hash…" |
+| expired receipt rejected | `executor` › "refuses an expired receipt" (+ "issued in the future") |
+| tampered receipt, each field | `executor` › 8-case `it.each` (proposalHash, policyVersion, walletId, nonce, issuedAt, expiresAt, callsHash, mac) + "signed with a different key" |
+| replayed receipt nonce rejected | `executor` › "a replayed nonce on a DIFFERENT proposal is refused outright" |
+| frozen between verdict and send ⇒ CANCELLED, nothing sent | `executor` › "cancels when the wallet was frozen between verdict and send" (+ breaker variant) |
+| callsHash mismatch (simulation vs execute) ⇒ refused | `executor` › "refuses when the simulated calls hash differs", "refuses when the policy changed the recipient address after the receipt was signed" |
+| timeout does not resend | `confirmer` › "marks the execution as needing reconciliation and leaves it alone" |
+| retryable error retries on the same row, with the backoff schedule | `executor` › "retries a retryable failure on the SAME row with the 1/2/4 minute backoff" (asserts `[60_000, 120_000]`), "gives up after 4 attempts" (asserts `[60_000, 120_000, 240_000]`) |
+| fatal error, no retry | `executor` › "never retries a fatal failure" |
+| breaker trips after 3 consecutive failures | `confirmer` › "opens and freezes after 3 consecutive failures" |
+| concurrent execute of the same proposal_hash ⇒ exactly one send | `executor` › "concurrent executes of the same proposal hash produce exactly one send and one row" (5 parallel calls, 5 distinct receipts) |
+| sweepHome works while frozen and never reads reasoning | `fork` › "sweepHome: owner path works WHILE FROZEN"; `check:arch` rule `owner-path-no-reasoning` + fixture |
+
+### Live run on Base Sepolia (2026-09-21) — `STEWARD_LIVE=1 pnpm live:executor`
+Agent wallet (CDP smart account) `0x75cDd4056a7f7479bBaAB2376a93d3aBe2Bb7dCa`; owner treasury
+(Coinbase Smart Wallet, ephemeral in-memory owner key as in Phase 2)
+`0x5A800164dAe7CdCa05E021c47cC38AB424eA334C`; wallet id `cd30b339-64bd-4b09-bfde-33b809ac7aa4`;
+spend permission hash `0x1d7cc6ebaa7c08b9ce7d9bb2d5142b8037d79bab634f0fc24da7dc83f8634e8f`
+(allowance 2 USDC / day).
+
+Every one of these was **simulated with `eth_simulateV1`, judged by the real `evaluate()` (all rules
+PASS), issued a real `AllowReceipt` bound to the calls hash, executed by `executor.ts` and confirmed
+by the confirmer** (receipt success *and* the measured Transfer deltas matching the proposal):
+
+| Step | Execution id | Tx |
+|---|---|---|
+| `pull_allowance` 1 USDC | `4d369f4e-9b65-479a-8ab8-31f97bfdf108` | `0x445b89f579dd853562ebdce857e894af48921bd87975a28575ad954b5d737828` |
+| `vault_deposit` 0.6 USDC → MockVault | `15295d07-9095-4085-9f40-bad4d3666ca2` | `0x1b16c417406f88fea4e9659a393e100861bb672430daef5ce61ac868a419f67a` |
+| `pay_recipient` 0.2 USDC → allowlisted `0x1111…1111` | `cfc4bc50-9bcc-41d8-b482-baca9440829a` | `0x043fab45d06049e5ad8bc82b73843279949a0c13cbec52f48f0a3382d65691ba` |
+| `sweepHome` **while frozen** | `c668c65d-55e9-4795-9f44-377b7b473a70` | `0xf2babe038282eab47610fb26d1e5a63c08db34791702ef31811bee14310ebb48` |
+
+Supporting transactions: owner smart-wallet deploy
+`0xacf38e598272b9c77d8748eac901ad55dbad2228daf05177c6b05c88a11a721c`, `addOwnerAddress(manager)`
+`0xc42dad51f2b3fd40d5223dc4ab990c7211c04582ee00ddb65a7d4aaaa522a2c6`.
+End state: agent 0.2 → **0 USDC**, 600000 shares → **0**, treasury 0 → **0.8 USDC**. Gas was fully
+sponsored (the agent holds no ETH, V-04).
+
+## Phase 5 — Opus review gate
+
+**Q1 — Enumerate EVERY path that calls an AgentKit / walletProvider / CDP send.**
+
+```
+$ grep -rnE "sendTransaction|sendUserOperation|useSpendPermission|requestFaucet|signTransaction|signTypedData|writeContract|\.send\(" \
+    --include=*.ts packages/*/src apps/web/app apps/web/lib apps/worker/src scripts/live
+packages/wallet/src/executor.ts:57: * (`sendUserOperation` + `waitForUserOperation`) in production, a local viem account in the fork
+packages/wallet/src/executor.ts:243:      outcome = await sender.send(calls);
+packages/wallet/src/spendPermission.ts:421:  sendTransaction(tx: { to: Address; data: Hex; value: bigint }): Promise<Hex>;
+packages/wallet/src/spendPermission.ts:457:    const userOpHash = await sender.sendTransaction({
+apps/web/app/api/spend-permission/prepare/route.ts:64:    // `message` is serialized with decimal strings so the client can hand it to eth_signTypedData_v4
+apps/worker/src/index.ts:27:await boss.send('health'); // one immediately, then every minute (cron minimum granularity)
+scripts/live/deploy-contracts.ts:47:  const f = await cdp.evm.requestFaucet({ address: owner, network: NETWORK, token: 'eth' });
+scripts/live/deploy-contracts.ts:78:  const { transactionHash } = await cdp.evm.sendTransaction({
+scripts/live/executor-e2e.ts:150:  const f = await cdp.evm.requestFaucet({ address: treasury, network: NETWORK, token: 'usdc' });
+scripts/live/executor-e2e.ts:155:  const f = await cdp.evm.requestFaucet({
+scripts/live/executor-e2e.ts:171:  const h = await wc.sendTransaction({ to: factory.factory!, data: factory.factoryData! });
+scripts/live/executor-e2e.ts:188:  const h = await wc.sendTransaction({
+scripts/live/executor-e2e.ts:216:const signature = (await ownerWallet.signTypedData(typedData)) as Hex;
+scripts/live/executor-e2e.ts:228:  sendTransaction: async ({ to, data, value }) => {
+scripts/live/executor-e2e.ts:229:    const op = await cdp.evm.sendUserOperation({
+scripts/live/executor-e2e.ts:243:    const op = await cdp.evm.sendUserOperation({
+scripts/live/spend-permission-e2e.ts:110,115: requestFaucet (usdc, eth)
+scripts/live/spend-permission-e2e.ts:134,155,314: wc.sendTransaction (owner EOA: deploy, addOwnerAddress, revoke)
+scripts/live/spend-permission-e2e.ts:192: ownerWallet.signTypedData
+scripts/live/spend-permission-e2e.ts:203,204,287,336: the ApprovalSender adapter + spend + post-revoke probe
+```
+
+Classified — in **product code** there are exactly **two** lines that can broadcast:
+
+| # | Site | Guard |
+|---|---|---|
+| 1 | `packages/wallet/src/executor.ts:243` — `sender.send(calls)` | The whole of `execute()`: a verified `AllowReceipt` bound to `proposalHash` + `policyVersion` + `walletId` + **the hash of these exact bytes**, simulation parity, a burned single-use nonce, a fresh frozen/breaker read, and `assertAllowedTargets`. This is the only path a proposal's calls can ever take. |
+| 2 | `packages/wallet/src/spendPermission.ts:457` — `ensureApprovedOnchain` | The Phase 2 exception, explicitly named in the task. It can emit exactly one `approveWithSignature(permission, ownerSignature)` to the SpendPermissionManager, value 0, moves **no funds**, is idempotent, refuses a revoked permission, and refuses when the sender is not the permission's spender. |
+
+Everything else on that list is **not** a send: `apps/web/.../prepare/route.ts:64` is a comment about
+typed-data serialization (the route returns an unsigned payload), and `apps/worker/src/index.ts:27` is
+`boss.send('health')` — a pg-boss queue message, not a transaction.
+
+The remaining sites are all under `scripts/live/`, which is **not product code**: it is imported by
+nothing (`grep -rn "scripts/live" packages apps` → nothing), excluded from vitest's `include`, and
+every script starts with `requireLive(...)`, which exits unless `STEWARD_LIVE=1`:
+
+```
+$ grep -rn "requireLive(" scripts/live/*.ts
+scripts/live/deploy-contracts.ts:33:requireLive('deploy-contracts');
+scripts/live/executor-e2e.ts:69:requireLive('executor-e2e');
+scripts/live/lib.ts:20:export function requireLive(name: string): void {
+scripts/live/spend-permission-e2e.ts:67:requireLive('spend-permission-e2e');
+```
+
+`requestFaucet` is listed as asked: it appears three times (deploy-contracts, and the two live e2e
+scripts) and only ever **receives** testnet funds. It cannot move owner money.
+
+This is now enforced, not just observed: `check:arch` rule `cdp-only-in-wallet-bootstrap` fails the
+gate if any module outside `packages/wallet/src/agentkit.ts`, `apps/web/lib/wallet.ts` or
+`scripts/live/` imports `@coinbase/cdp-sdk` or `@coinbase/agentkit`, and the fixture
+`scripts/fixtures/arch/packages/risk/src/violation.ts` proves the rule fires:
+
+```
+error cdp-only-in-wallet-bootstrap: packages/risk/src/violation.ts → …/@coinbase/cdp-sdk/_esm/index.js
+error owner-path-no-reasoning: packages/wallet/src/sweepHome.ts → packages/reasoning/src/index.ts
+error reasoning-no-wallet-db: packages/reasoning/src/violation.ts → packages/wallet/src/index.ts
+error policy-only-shared: packages/policy/src/violation.ts → packages/db/src/index.ts
+x 5 dependency violations (5 errors, 0 warnings). 8 modules, 4 dependencies cruised.
+OK: violations detected (policy-only-shared, reasoning-no-wallet-db, owner-path-no-reasoning, cdp-only-in-wallet-bootstrap; depcruise exit 5)
+```
+
+**Q2 — Prove no code path can send without a prior policy ALLOW.**
+
+```
+$ grep -rn "signReceipt\|verifyReceipt" --include=*.ts packages/*/src apps/web/app apps/web/lib apps/worker/src scripts/live
+packages/policy/src/receipt.ts:79:export function signReceipt(        # the only issuer
+packages/policy/src/receipt.ts:130:export function verifyReceipt(
+packages/wallet/src/executor.ts:122:  const verified = verifyReceipt(   # the only gate
+packages/wallet/src/sweepHome.ts:237:  const receipt = signReceipt(verdict, …)
+scripts/live/executor-e2e.ts:487:  const receipt = signReceipt(verdict, …)
+```
+
+The chain of reasoning:
+1. `sender.send` is reached only after `verifyReceipt` returns `ok` (there is no other `send` call in
+   the file, and no early path around it — the function returns `Err` on every refusal).
+2. `signReceipt` refuses any verdict whose `decision !== 'ALLOW'` (`NOT_ALLOW`), refuses a key
+   shorter than 32 bytes, and refuses a TTL above the system ceiling. It is the **only** issuer, and
+   both of its callers pass the output of a real `evaluate()` — `sweepHome.ts:237` and the live
+   script both stop on anything but ALLOW.
+3. The receipt is bound to `callsHash`, so an ALLOW for one action cannot authorise another
+   (D-27 — this is what stops one `sweep_home` receipt authorising a later, larger sweep).
+4. A forged receipt needs the HMAC key; a replayed one is stopped by the unique nonce insert; a
+   stale one by the 120 s TTL against the injected clock; one for an older policy by
+   `policyVersion`. All eight fields are covered by the tamper table above.
+5. `packages/reasoning` and `packages/context` cannot even import `packages/wallet`
+   (`reasoning-no-wallet-db`, `context-no-wallet-db`), so no LLM-facing module can reach the
+   executor at all.
+
+**Q3 — Prove idempotency under concurrency.**
+
+The proof is a database one, not a code one. `claimExecutionSlot` runs in a single transaction that
+(a) inserts the receipt nonce (`receipt_nonces.nonce` PRIMARY KEY) with `ON CONFLICT DO NOTHING` and
+(b) inserts the execution row (`executions(wallet_id, proposal_hash)` UNIQUE) with
+`ON CONFLICT DO NOTHING`, then re-reads the winner. Three outcomes, all safe:
+
+- fresh nonce + no execution ⇒ a new `pending` row, `created: true` — the only path that sends;
+- burned nonce **and** an execution for the same proposal hash ⇒ that row, `created: false` — the
+  legitimate duplicate call, nothing is sent;
+- burned nonce and **no** matching execution ⇒ `NONCE_REPLAYED` — refused.
+
+Evidence: `executor.test.ts` › "concurrent executes of the same proposal hash produce exactly one
+send and one row" fires five `execute()` calls in parallel, each with its own valid receipt and its
+own nonce, against a real Postgres: exactly one returns `submitted`, the sender records exactly one
+attempt, and `executions` holds one row. Retries never re-enter the claim — the retry loop sits
+*after* it, so all four attempts reuse the same row and the same idempotency key.
+
+**Q4 — What happens when things are down.**
+
+| Failure | Behaviour |
+|---|---|
+| **DB down** | Abort **before** any send. `claimExecutionSlot` returns `WRITE_FAILED` ⇒ `DB_UNAVAILABLE` and the function returns before the send block; the wallet re-read failing likewise. And because the pre-send `EXECUTION_PENDING` audit row is written *before* `sender.send` and an `Err` from `appendAudit` returns `AUDIT_FAILED`, we never act without being able to record it (SECURITY §8 "DB outage", I5/I6). |
+| **RPC down** | Nothing to send: the risk gate's `simulateProposalCalls` returns `Err TRANSPORT` and the caller never reaches `evaluate` with a simulation, so R11 denies (`simulation: null` ⇒ DENY). If it dies *after* a send, the confirmer simply keeps polling and ends at `timeout` = UNCERTAIN; it does not resend, and the breaker is not touched. |
+| **CDP down** | `sender.send` throws without a hash. `classifyError` labels it `NETWORK`/`SPONSORSHIP` ⇒ retryable, backoff 1/2/4/8 min, max 4 attempts, **same row**. After the last attempt the row is `failed` and audited; a new attempt then needs a new simulation and a new verdict. |
+| **Process dies between send and store** | The crash window. See below. |
+
+**Q5 — The crash window, and the reconciliation that closes it.**
+
+The order in `execute()` is deliberate: the `executions` row is inserted with status `pending`
+**before** `sender.send`, and the `EXECUTION_PENDING` audit row (carrying the calls and the receipt
+nonce) is written before it too. So a crash at any instant leaves evidence:
+
+| Crash point | What survives | Recovery |
+|---|---|---|
+| before the claim | nothing | the proposal can simply be re-decided |
+| after the claim, before the send | `pending` row, no hash | the chain shows no agent-wallet movement ⇒ `reconcileExecution` marks it `failed` ("the send never happened"), which is the state that allows the loop to re-propose *with a new simulation and verdict* |
+| after the send, before the status update | `pending` row, no hash, **a transaction on-chain** | `reconcileExecution` scans the policy token's `Transfer` logs for the agent wallet since the row was created; any hit ⇒ the row becomes `timeout` (UNCERTAIN / needs-reconcile), an `EXECUTION_TIMEOUT` audit row records the candidate tx hashes, and the owner is notified. **Never resent.** |
+| after the status update | `submitted` row with the hashes | ordinary confirmer path |
+
+`listCrashWindow(db, walletId?)` returns every `pending`/`submitted` row (oldest first) and
+`reconcileExecution(deps, row, agentWalletAddress)` decides each one. Implemented and tested now
+(`confirmer.test.ts` › "crash-window reconciliation" ×3); the **boot hook** that calls them is
+Phase 6.6, as the task allows. The lookback window is derived from the row's age at ~2 s per Base
+block and capped at 5,000 blocks, so a crash older than ~2.7 hours cannot be scanned automatically —
+recorded as a known issue.
+
+**Residual risks (recorded, not fixed here):**
+- **RR-10 — an ambiguous timeout inside `send`.** Retrying is safe only because `send` resolves
+  *after* the user operation is accepted, so a throw means nothing was accepted. A request that times
+  out while awaiting acceptance would still be classified `NETWORK` (retryable). The bound is the
+  spend permission plus the fact that a second identical `pull_allowance`/transfer would need the
+  same nonce — but it is a real window, and the honest mitigation is the confirmer's UNCERTAIN state
+  rather than cleverness in the retry loop.
+- **RR-11 — the ledger values USDC at $1.00.** `ledger_entries.usd_micro` is the absolute base-unit
+  amount, which is exact for a 6-decimal dollar stablecoin and wrong the moment a second token
+  exists. R07's rolling window reads that column, so a multi-token MVP would need the decision-time
+  quote stored per entry.
+- **RR-12 — the breaker counts confirmer failures only.** An execution that never reaches the
+  confirmer (refused receipt, cancelled by a freeze) does not move the counter, by design: those are
+  refusals, not failures. A bug that produces only refusals therefore loops without opening the
+  breaker; R14's rate limit is what bounds that, and Phase 6 must call `tripBreaker` on an R14 breach.
 
 ## Phase 4 — tasks (all done 2026-09-21)
 - [x] 4.1 `ServClient` interface + `LiveServClient` (openai SDK, `baseURL`, 30 s timeout,
@@ -469,7 +727,52 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | D-38 | 2026-09-21 | **The sanitizer redacts, it does not only strip.** Addresses / long hex runs become `[redacted-address]` and unbroken alphanumeric runs ≥ 32 chars (keys, tokens, base64) become `[redacted-token]`; both emit an injection signal. So no prompt can carry a destination or a credential even out of untrusted text (I4, I9, NFR-5), and the redaction is evidence rather than silent data loss. The Unicode TAG block `U+E0000–E007F` is stripped too (review-gate case G05) | Prompts are shared with OpenServ; an address in a memo has no legitimate use | Pass memos through verbatim (rejected) |
 | D-39 | 2026-09-21 | **The adversarial suite assumes the LLM layer is compromised.** The classifier always answers "not suspected", the verifier always AGREEs, the simulation always succeeds with the true deltas, and the guarantee is the strict one: a malicious case may never end in ALLOW for **any** non-`noop` kind (stronger than TESTING.md's "to a non-treasury destination"). Reported recall is informational only | If the guarantee needs the classifier, it is not a guarantee | Score the classifier and let it carry cases (rejected) |
 
+| D-40 | 2026-09-21 | **Simulation is `eth_simulateV1`** (viem `simulateCalls`), with the balance deltas measured by injecting `balanceOf` reads before and after the real calls in the same simulated block. Lookup that changed code: both targets answer the method — anvil 1.5.1 and the public `https://sepolia.base.org` were each probed with a raw `eth_simulateV1` request and returned a block. Sequential `eth_call` was rejected because it cannot carry state between the calls of one action (the deposit would see no allowance); an anvil fork per simulation was rejected as production infrastructure. An RPC without the method is an `Err`, never a silent downgrade | State carry-over is mandatory for approve+deposit and redeem+transfer | sequential `eth_call` (rejected); anvil fork per simulation (rejected) |
+| D-41 | 2026-09-21 | **`packages/risk` stays free of `@steward/db`** (ARCHITECTURE §2 grants it `shared` only). It returns results and row *shapes* (`simulationRow`, `priceSnapshotRow`); the `simulations` / `price_snapshots` / `vault_snapshots` rows are written by the caller through new thin repos in `@steward/db` (`insertSimulation`, …). PHASES 5.1 says "store a `simulations` row"; it is stored, one module over | Widening an import boundary to save one function call is the wrong trade | give risk a db dependency (rejected); pass a callback (rejected: an interface with one implementation) |
+| D-42 | 2026-09-21 | **The executor owns its own send port.** `TxSender { getAddress(); send(calls) }` is declared inside `executor.ts`, so the single-writer rule survives dependency injection; Phase 2's narrower `TxSender` (one `approveWithSignature`) was renamed **`ApprovalSender`** so the two never blur. Fork tests inject a local anvil account, production injects the CDP smart account, and neither can widen what the executor will send | The port has to live inside the boundary it protects | one shared sender type (rejected: two very different authorities) |
+| D-43 | 2026-09-21 | **A retry is only ever attempted when `send` threw without yielding a hash.** `send` resolves only after the user operation is accepted, so a throw means nothing was accepted. There is no third "uncertain" error class: uncertainty is an execution *status* (`timeout`), because the only wrong answer is to resend | Retrying a transaction that may be in flight is how you double-spend | an UNCERTAIN error class that retries cautiously (rejected) |
+| D-44 | 2026-09-21 | **`timeout` is the UNCERTAIN / needs-reconcile status.** DATA_MODEL's `executions.status` has no separate value and the schema is the source of truth, so `timeout` carries that meaning, with `error` explaining and an `EXECUTION_TIMEOUT` audit row carrying `needsReconcile: true`. The breaker counter moves **only** on FAILED (AGENTKIT §4 step 7) | Do not grow the schema for a state it already has | add an `uncertain` enum value (rejected: migration + spec drift) |
+| D-45 | 2026-09-21 | **The confirmer verifies the effect, not the receipt.** `status === 'success'` is necessary but not sufficient (Phase 2 lesson: a stale-state gas estimate produced a receipt whose transaction reverted out of gas). It nets the receipt's own ERC-20 `Transfer` logs per holder, compares them to `expectedDeltas` (exact for transfers, ±50 bps for vault maths, same tolerance as R11) and additionally re-reads balance state pinned to the receipt's block with 0.5/1/2/4 s backoff — one read is not state | A receipt is not success | trust `status` (rejected) |
+| D-46 | 2026-09-21 | **`sweep_home`'s `expectedDeltas` are NET, not gross**: `agent: −agentUsdcBalance`, `treasury: +(agentUsdc + redeemable)`. The redeemed assets arrive and leave inside the same batch, so the agent's measured balance change is only the USDC it already held. R11 compares measured deltas, so declaring the gross figure would have denied every real sweep | Found while wiring the fork test; the EVM decides what "delta" means | declare the gross flow (rejected: it is not what any balance changes by) |
+| D-47 | 2026-09-21 | **depcruise's `exclude` was narrowed so `@coinbase/cdp-sdk` and `@coinbase/agentkit` stay visible.** The old pattern excluded all of `node_modules` (and any `dist/`), so a rule about those packages could never match anything. It now excludes `.next`/`.turbo`, *our* `dist` folders, and node_modules **except** paths containing those two packages (pnpm's `.pnpm/` layout needs the `.*` form). They are still `doNotFollow`, so nothing inside them is cruised: +4 modules, +9 dependencies | A rule that cannot fire is not a control | enforce it with eslint `no-restricted-imports` instead (kept as a fallback; depcruise already owns the boundary table) |
+| D-48 | 2026-09-21 | Deps added (Phase 5): `viem` in `packages/risk` (the simulation client), `@steward/risk` in `packages/wallet` (`sweepHome` must simulate before it evaluates), `@steward/wallet` + `viem` + `zod` in `apps/worker` (the `exec.confirm` handler and its payload schema), and `@steward/db`/`@steward/policy`/`@steward/risk`/`drizzle-orm` as root devDependencies so `scripts/live` typechecks. No new third-party dependency | Each is an existing workspace package or viem, already in the stack | — |
+| D-49 | 2026-09-21 | **`scripts/live/executor-e2e.ts` mints an ephemeral 32-byte receipt key when `RECEIPT_HMAC_SECRET` is absent** (it is not in `.env.local` today, and the task forbids editing that file), and defaults `DATABASE_URL` to the documented docker-compose URL. The property the executor relies on — a receipt must be signed with the key the executor holds — is preserved exactly by a per-run key. The key is never printed or persisted, and the script says loudly that it did this | The alternative was not running the live gate | edit `.env.local` (forbidden); skip the live gate (rejected) |
+| D-50 | 2026-09-21 | **`exec.confirm` is registered in `apps/worker` but nothing enqueues it yet.** PHASES 5.5 asks for the handler; 6.5/6.6 own scheduling and the boot-time resume. The live script and the fork tests call `confirmExecution` directly, so the code path is exercised end to end regardless | Keeps the phase boundary honest | schedule it now (rejected: Phase 6 scope) |
+
 ## Known issues / risks
+### Phase 5
+- **`.env.local` is missing `RECEIPT_HMAC_SECRET`, `DATABASE_URL` and `SESSION_SECRET`** (it carries
+  only the CDP / SERV / RPC values). The live run worked around the first two (D-49), but **Phase 6
+  cannot**: the web app signs receipts and the worker verifies them, so they must share one
+  `RECEIPT_HMAC_SECRET`. **Human action:** add `RECEIPT_HMAC_SECRET` (32+ random bytes),
+  `DATABASE_URL`, `SESSION_SECRET`, plus `MOCK_VAULT_ADDRESS`/`MOCK_PRICE_FEED_ADDRESS` from
+  `docs/addresses.md`, to `.env.local`.
+- **The MockPriceFeed quote was 41,828 s old during the live run**, so R12 (max age 60 s) would have
+  denied every price-sized action. The run fell back to the I11 parity (fenced to 84532) and said so.
+  Phase 6/9 need a `price.refresh` job that calls `setPrice` as the demo admin, or the demo will
+  fail closed on stage.
+- **The fork harness cannot batch.** An impersonated anvil EOA sends the calls of one action
+  sequentially, so for `sweep_home` the last receipt shows the gross transfer rather than the net
+  batch effect; the fork test therefore asserts the on-chain outcome instead of the log-based effect
+  check. The live run (one batched user operation) covers the batched path.
+- **Stale `anvil` processes break the fork suite.** A leftover anvil on port 8545/8546 from an
+  aborted run serves a chain with previous state; the Phase 2 suite failed exactly that way once
+  during this phase and passed after killing it. The suites should bind a random port (or probe and
+  refuse) — not done.
+- **The retry backoff sleeps in-process** (up to 15 minutes for four attempts). Correct and testable
+  via the injected `sleep`, but Phase 6 should hand the backoff to pg-boss retries so a worker
+  restart does not lose the schedule.
+- **`reconcileExecution`'s lookback is capped at 5,000 blocks** (~2.7 h on Base). An older crash
+  cannot be scanned automatically and must be reconciled by hand; the audit trail has the calls and
+  the receipt nonce, so it is always possible, just manual.
+- **`confirmExecution` polls in-process for up to 3 minutes.** Fine as a pg-boss job, but Phase 6.5
+  should give the job a matching visibility timeout.
+- **The notification body is plain text with no localisation or templating** — Phase 8.5 owns
+  notifications properly; these rows exist so the breaker and the UNCERTAIN state are not silent.
+- Phase 3's open item "`simulation.approvals` must actually be populated" is now **closed**:
+  `extractApprovals` fills it from the calls the risk gate simulated, and the fork test asserts the
+  deposit produces exactly `[{token: USDC, spender: VAULT, amount}]`.
+
 ### Phase 4
 - **The verifier does not know about R20.** Live example D: the proposer correctly proposed
   `risk_exit`, and the verifier DISAGREEd because the exit reduces liquidity — which would turn a
@@ -533,9 +836,79 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 4 is complete; waiting for the human to say "continue". Phase 5 (risk gate, executor,
-  confirmer) requires Opus (`/model opus`).**
-- Do not start Phase 5 before that.
+- **Phase 5 is complete; waiting for the human to say "continue". Phase 6 (decision loop, scheduler,
+  obligations, risk exits) requires Opus (`/model opus`).**
+- Do not start Phase 6 before that.
+- Before Phase 6: add `RECEIPT_HMAC_SECRET`, `DATABASE_URL`, `SESSION_SECRET`, `MOCK_VAULT_ADDRESS`
+  and `MOCK_PRICE_FEED_ADDRESS` to `.env.local` (see Phase 5 known issues).
+
+### Public API of `packages/risk` (what Phase 6 calls)
+```ts
+// 5.1 simulation — eth_simulateV1, never throws
+simulateProposalCalls(input: SimulateInput): Promise<Result<SimulationResult, SimulateError>>
+type SimulateInput = { publicClient; calls: readonly SimCall[]; from: Address; token: Address;
+                       holders: { agent; treasury; recipient? } }
+type SimulationResult = { ok: boolean; deltas: Delta[]; approvals: SimulatedApproval[];
+                          blockNumber: bigint; gasUsed: bigint; error?: string }
+type SimulateErrorCode = 'UNSUPPORTED' | 'TRANSPORT' | 'MALFORMED'
+extractApprovals(calls): SimulatedApproval[]      // -> EvaluationInput.simulation.approvals (R18)
+simulationRow({ decisionId, calls, callsHash, result })   // -> db.insertSimulation
+
+// 5.2 prices
+interface PriceAdapter { name; getPrice(token): Promise<Result<PriceQuoteResult>> }
+mockPriceFeedAdapter({ publicClient, feed, token, chainId, demoMode }): Result<PriceAdapter>  // I11
+priceSnapshotRow(token, quote)                    // -> db.insertPriceSnapshot
+
+// 5.3 triggers — pure
+detectRiskTriggers({ vaults: {vaultId,current,previous?}[], vaultDrawdownBps,
+                     depegThresholdBps, assetMicroUsd? }): RiskTrigger[]
+```
+
+### Public API of the Phase 5 half of `@steward/wallet`
+```ts
+// 5.4 executor — the ONLY module that may broadcast a proposal's calls
+execute(deps: ExecuteDeps, input: ExecuteInput): Promise<Result<ExecuteOutcome, ExecError>>
+type ExecuteDeps  = { db; sender: TxSender; receiptKey: Uint8Array; now: () => Date; sleep? }
+type ExecuteInput = { walletId; decisionId; proposal; policy; receipt: AllowReceipt;
+                      buildContext: BuildContext; simulatedCallsHash: Hex }
+type ExecuteOutcome = { status: 'submitted'; execution; calls }
+                    | { status: 'duplicate'; execution }          // I10 — nothing sent
+                    | { status: 'cancelled'; execution; reason }  // frozen/breaker — nothing sent
+interface TxSender { getAddress(): Address; send(calls): Promise<{ userOpHash?; txHash? }> }
+
+// 5.6 error taxonomy
+classifyError(e): ExecError                       // { code, message, class: 'retryable'|'fatal' }
+RETRY_BACKOFF_MS = [60_000, 120_000, 240_000, 480_000] ; MAX_SEND_ATTEMPTS = 4
+
+// 5.5 confirmer + 5.7 breaker
+confirmExecution(deps: ConfirmDeps, input: ConfirmInput): Promise<Result<ConfirmOutcome, string>>
+type ConfirmDeps  = { db; publicClient; now; sleep?; resolveTxHash?; timeoutMs?; pollIntervalMs? }
+type ConfirmInput = { executionId; expectedDeltas; token; holders; obligationId?; counterpartyLabel? }
+type ConfirmOutcome = {status:'confirmed'|'failed'|'timeout'|'settled'; …}   // timeout = UNCERTAIN
+tripBreaker(db, walletId, reason, now): Promise<Result<true, string>>        // call on an R14 breach
+observedDeltas(receipt, token, holders) / compareDeltas(expected, observed, toleranceBps)
+BREAKER_FAILURE_THRESHOLD = 3 ; CONFIRM_TIMEOUT_MS = 180_000
+
+// crash window (boot hook is Phase 6.6)
+listCrashWindow(db, walletId?): Promise<ExecutionRow[]>          // pending + submitted
+reconcileExecution(deps, execution, agentWalletAddress)
+  => 'has-hash' | 'uncertain' | 'never-sent'                     // never sends
+
+// 5.8 owner path
+sweepHome(deps: SweepDeps, walletId): Promise<Result<{verdict; execution?}, SweepError>>
+type SweepDeps = { db; publicClient; sender; receiptKey; now; decisionId;
+                   spendPermissionManagerAddress; allowMainnet?; usdcQuote? }
+assertAllowedTargets(calls, policy, ctx)          // now exported (the executor re-checks pre-send)
+```
+New in `@steward/db`: `claimExecutionSlot` (the atomic nonce burn + idempotent execution claim),
+`getExecutionById`, `updateExecution`, `listUnresolvedExecutions`, `getWalletById`,
+`bumpBreakerFailures`, `resetBreakerFailures`, `openBreaker`, `insertLedgerEntry`, `outflowsSince`,
+`countExecutionsSince`, `recentProposalHashes`, `getActivePolicy`, `insertSimulation`,
+`insertPriceSnapshot`, `insertVaultSnapshot`, `latestVaultSnapshot`, `insertNotification`,
+`setObligationStatus`, `getUserIdForWallet`.
+New in `apps/worker`: `registerConfirmJob({ boss, db, env })`, `EXEC_CONFIRM_QUEUE = 'exec.confirm'`,
+`zConfirmJob` (the job payload schema — deltas travel as decimal strings).
+New in `@steward/shared`: `SimulatedApproval` type, `MOCK_PRICE_FEED_ADDRESS` env var (optional).
 
 ### Public API of `packages/context` (what Phase 6 calls)
 ```ts
