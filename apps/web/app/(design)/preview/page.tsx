@@ -33,7 +33,7 @@ const S = (d: string) =>
     );
   };
 
-const IconApprovals = S('M12 3v11M12 18v2M4 21h16');
+const IconApprovals = S('M4 13v7h16v-7M4 13h5l1 2h4l1-2h5M12 3v8M9 8l3 3 3-3');
 const IconRecipients = S(
   'M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
 );
@@ -90,7 +90,7 @@ function Money({
   return (
     <span className="tabular">
       {amount}
-      {minor ? <span className="text-line">{minor}</span> : null}
+      {minor ? <span className="text-minor">{minor}</span> : null}
       {token ? ` ${token}` : null}
       {usd ? <span className="text-muted"> ({usd})</span> : null}
     </span>
@@ -123,7 +123,7 @@ function VerdictBadge({ tone, label }: { tone: Verdict; label?: string }) {
 }
 
 function Chip({ tone = 'neutral', children }: { tone?: 'neutral' | 'warn'; children: ReactNode }) {
-  const cls = tone === 'warn' ? 'bg-escalate/15 text-escalate' : 'bg-surface-2 text-muted';
+  const cls = tone === 'warn' ? 'bg-escalate-tint text-escalate' : 'bg-surface-2 text-muted';
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 font-mono text-label tracking-[0.08em] uppercase ${cls}`}
@@ -319,13 +319,11 @@ function Dashboard() {
   return (
     <>
       <Header />
-      <div className="flex items-center gap-2 bg-escalate/15 px-4 py-2">
-        <span className="font-mono text-label font-semibold tracking-[0.12em] text-escalate uppercase">
+      <div className="flex items-center gap-2 bg-escalate-tint px-4 py-2">
+        <span className="shrink-0 font-mono text-label font-semibold tracking-[0.12em] text-escalate uppercase">
           Demo data
         </span>
-        <span className="text-small text-escalate">
-          Prices and rates are mocked on Base Sepolia.
-        </span>
+        <span className="truncate text-small text-escalate">Mocked prices, Base Sepolia.</span>
       </div>
 
       <div className="px-4 pt-4">
@@ -334,7 +332,7 @@ function Dashboard() {
             Treasury
           </p>
           <p className="pt-2 text-balance font-bold tracking-[-0.02em] text-ink tabular">
-            $12,480<span className="text-line">.00</span>
+            $12,480<span className="text-minor">.00</span>
           </p>
           <p className="pt-1.5 text-small text-muted">
             <span className="text-allow tabular">+$38.20</span> today · 4.12% APY
@@ -798,7 +796,7 @@ function StatesColumn() {
           <StatusPill state="degraded" />
           <StatusPill state="frozen" />
         </div>
-        <p className="rounded-md bg-surface-2 p-3 text-small text-escalate">
+        <p className="rounded-md bg-escalate-tint p-3 text-small text-escalate">
           SERV is unreachable. Steward is not proposing. Freeze still works.
         </p>
         <div className="flex items-center justify-between rounded-md bg-surface-2 p-3">
@@ -910,7 +908,7 @@ export default async function PreviewPage({
   const { theme } = await searchParams;
   const mode = theme === 'light' ? 'light' : 'dark';
   return (
-    <main data-theme={mode} className="min-h-dvh bg-ground">
+    <main data-theme={mode} className="min-h-dvh bg-ground font-sans text-body text-ink">
       <Board />
     </main>
   );

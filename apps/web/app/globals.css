@@ -23,6 +23,9 @@
   --st-ink: #ffffff;
   --st-muted: #b3b6be;
   --st-faint: #7e838d;
+  --st-minor: #626974;
+  --st-escalate-tint: #33260c;
+  --st-deny-tint: #2e1210;
 
   --st-accent: #aef07a;
   --st-accent-press: #98de5f;
@@ -58,6 +61,9 @@
     --st-ink: #0b0f16;
     --st-muted: #525a68;
     --st-faint: #6e7684;
+    --st-minor: #858d9b;
+    --st-escalate-tint: #fdf0dc;
+    --st-deny-tint: #fdeae7;
 
     --st-accent: #aef07a;
     --st-accent-press: #98de5f;
@@ -90,6 +96,9 @@
   --st-ink: #0b0f16;
   --st-muted: #525a68;
   --st-faint: #6e7684;
+  --st-minor: #858d9b;
+  --st-escalate-tint: #fdf0dc;
+  --st-deny-tint: #fdeae7;
 
   --st-accent: #aef07a;
   --st-accent-press: #98de5f;
@@ -120,6 +129,9 @@
   --st-ink: #ffffff;
   --st-muted: #b3b6be;
   --st-faint: #7e838d;
+  --st-minor: #626974;
+  --st-escalate-tint: #33260c;
+  --st-deny-tint: #2e1210;
 
   --st-accent: #aef07a;
   --st-accent-press: #98de5f;
@@ -150,6 +162,9 @@
   --color-ink: var(--st-ink);
   --color-muted: var(--st-muted);
   --color-faint: var(--st-faint);
+  --color-minor: var(--st-minor);
+  --color-escalate-tint: var(--st-escalate-tint);
+  --color-deny-tint: var(--st-deny-tint);
 
   --color-accent: var(--st-accent);
   --color-accent-press: var(--st-accent-press);
