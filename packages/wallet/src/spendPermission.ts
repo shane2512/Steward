@@ -416,7 +416,7 @@ export const isApproved = readBool('isApproved');
 export const isValid = readBool('isValid');
 
 /** Minimal surface of the AgentKit wallet provider that may broadcast. Kept narrow on purpose. */
-export type TxSender = {
+export type ApprovalSender = {
   getAddress(): string;
   sendTransaction(tx: { to: Address; data: Hex; value: bigint }): Promise<Hex>;
   waitForTransactionReceipt(hash: Hex): Promise<unknown>;
@@ -435,7 +435,7 @@ export type EnsureApprovedResult =
  */
 export async function ensureApprovedOnchain(args: {
   publicClient: PublicClient;
-  sender: TxSender;
+  sender: ApprovalSender;
   manager: Address;
   permission: SpendPermission;
   signature: Hex;

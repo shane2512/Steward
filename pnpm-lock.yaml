@@ -227,6 +227,9 @@ importers:
       '@steward/policy':
         specifier: workspace:*
         version: link:../policy
+      '@steward/risk':
+        specifier: workspace:*
+        version: link:../risk
       '@steward/shared':
         specifier: workspace:*
         version: link:../shared

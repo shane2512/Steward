@@ -47,7 +47,7 @@ import {
   spendPermissionHash,
   validateSpendPermission,
   type SpendPermission,
-  type TxSender,
+  type ApprovalSender,
 } from '@steward/wallet';
 import {
   CHAIN_ID,
@@ -197,8 +197,8 @@ console.log(`D-5 owner-account check: ${kind.value} (signature ${signature.lengt
 // ── 3. ensureApprovedOnchain ─────────────────────────────────────────────────────────────────────
 step(3, 'ensureApprovedOnchain (approveWithSignature, first use)');
 
-/** Adapter from the CDP smart account to the narrow TxSender the product code accepts. */
-const sender: TxSender = {
+/** Adapter from the CDP smart account to the narrow ApprovalSender the product code accepts. */
+const sender: ApprovalSender = {
   getAddress: () => agent,
   sendTransaction: async ({ to, data, value }) => {
     const op = await cdp.evm.sendUserOperation({

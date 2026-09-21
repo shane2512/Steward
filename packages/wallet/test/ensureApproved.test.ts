@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeFunctionData, type Hex, type PublicClient } from 'viem';
 import { SPEND_PERMISSION_MANAGER_ABI } from '../src/abi';
-import { ensureApprovedOnchain, type TxSender } from '../src/spendPermission';
+import { ensureApprovedOnchain, type ApprovalSender } from '../src/spendPermission';
 import { AGENT, ATTACKER, MANAGER, permission } from './fixtures';
 
 const SIG = `0x${'ab'.repeat(65)}` as Hex;
@@ -20,7 +20,7 @@ const client = (state: { revoked?: boolean; approved?: boolean; throws?: boolean
 
 function sender(address = AGENT, fail = false) {
   const sent: { to: string; data: Hex; value: bigint }[] = [];
-  const tx: TxSender = {
+  const tx: ApprovalSender = {
     getAddress: () => address,
     sendTransaction: async (t) => {
       if (fail) throw new Error('userOp reverted');

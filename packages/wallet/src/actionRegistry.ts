@@ -78,7 +78,12 @@ export function allowedTargets(policy: Policy, ctx: BuildContext): Set<Address> 
   return set;
 }
 
-function assertAllowedTargets(
+/**
+ * Re-check finished calls against the Policy-derived allowlist. `buildCalls` runs this before
+ * returning; `executor.ts` runs it again immediately before broadcasting (5.4), so the check sits
+ * on both sides of anything that could have touched the calls in between.
+ */
+export function assertAllowedTargets(
   calls: Call[],
   policy: Policy,
   ctx: BuildContext,
