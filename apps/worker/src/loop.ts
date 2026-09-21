@@ -24,6 +24,7 @@
 import { buildContext, factIds, type Context } from '@steward/context';
 import {
   appendAudit,
+  getWalletById,
   insertAgentDecision,
   listUnresolvedExecutions,
   updateAgentDecision,
@@ -38,7 +39,7 @@ import {
   type CallMeta,
   type ServClient,
 } from '@steward/reasoning';
-import { addressEquals, type Proposal, type ProposalKind } from '@steward/shared';
+import { addressEquals, createLogger, type Proposal, type ProposalKind } from '@steward/shared';
 import { gather, type GatherDeps, type Gathered } from './gather';
 import { preChecks, type DecisionTrigger, type PreCheckObligation } from './prechecks';
 import { runPipeline, type PipelineDeps, type PipelineOutcome } from './pipeline';
@@ -52,6 +53,8 @@ import { runPipeline, type PipelineDeps, type PipelineOutcome } from './pipeline
  * closes that hole without a prompt change and without re-recording the golden fixtures (D-52).
  * `sweep_home` is absent because R03 requires `source: 'owner'`.
  */
+const log = createLogger('loop');
+
 export const DISCRETIONARY_KINDS: ProposalKind[] = [
   'pull_allowance',
   'vault_deposit',
@@ -99,6 +102,22 @@ export async function runIteration(
 ): Promise<DecisionOutcome> {
   const { db } = deps;
   const now = deps.now();
+  // 6.9 — step timings (NFR-2 evidence). A structured log line, not an OpenTelemetry dependency:
+  // the SDK would add four packages to ship the same six numbers. `timings` also rides along in
+  // `serv_meta`, so the Phase 7 timeline can show where an iteration spent its time.
+  const timings = stepTimer();
+
+  // ARCHITECTURE §5: the frozen / breaker check comes BEFORE the context is built. It is the
+  // cheapest possible read and it must not depend on an RPC being up — the owner freezing a wallet
+  // has to stop the loop even with the chain, the oracle and SERV all unreachable (I7).
+  const wallet = await getWalletById(db, walletId).catch(() => null);
+  if (!wallet)
+    return { status: 'failed', code: 'DB_UNAVAILABLE', message: `wallet ${walletId} unreadable` };
+  if (wallet.frozen || wallet.breakerOpen) {
+    const reason = wallet.frozen ? 'wallet is frozen' : 'circuit breaker is open';
+    await skipAudit(db, walletId, now, reason, trigger);
+    return { status: 'skipped', reason };
+  }
 
   // 6.6 — never re-propose while an execution for this wallet is unresolved. Until the confirmer
   // (or reconciliation) has settled it we do not know the balances, so any new proposal would be
@@ -113,17 +132,19 @@ export async function runIteration(
   }
 
   // ── gather (db + chain + oracle) ───────────────────────────────────────────────────────────────
-  const gathered = await gather(
-    {
-      db,
-      publicClient: deps.publicClient,
-      spendPermissionManagerAddress: deps.spendPermissionManagerAddress,
-      allowMainnet: deps.allowMainnet,
-      now: deps.now,
-      priceAdapter: deps.priceAdapter,
-      extraUntrusted: deps.extraUntrusted,
-    },
-    walletId,
+  const gathered = await timings.step('gather', () =>
+    gather(
+      {
+        db,
+        publicClient: deps.publicClient,
+        spendPermissionManagerAddress: deps.spendPermissionManagerAddress,
+        allowMainnet: deps.allowMainnet,
+        now: deps.now,
+        priceAdapter: deps.priceAdapter,
+        extraUntrusted: deps.extraUntrusted,
+      },
+      walletId,
+    ),
   );
   if (!gathered.ok) {
     await skipAudit(
@@ -136,12 +157,6 @@ export async function runIteration(
     return { status: 'failed', code: gathered.error.code, message: gathered.error.message };
   }
   const g = gathered.value;
-
-  if (g.wallet.frozen || g.wallet.breakerOpen) {
-    const reason = g.wallet.frozen ? 'wallet is frozen' : 'circuit breaker is open';
-    await skipAudit(db, walletId, now, reason, trigger);
-    return { status: 'skipped', reason };
-  }
 
   // ── pre-checks, BEFORE any SERV call (SERV §7 budget) ──────────────────────────────────────────
   const degraded = deps.degraded === true || deps.serv === undefined;
@@ -275,7 +290,8 @@ export async function runIteration(
     screen = await screenLocal(deps, ctx, degraded, servMeta);
     ctx = { ...ctx, screen };
   } else {
-    if (!deps.serv)
+    const serv = deps.serv;
+    if (!serv)
       return {
         status: 'failed',
         code: 'NO_SERV',
@@ -283,16 +299,18 @@ export async function runIteration(
         decisionId,
       };
 
-    screen = await screenLocal(deps, ctx, degraded, servMeta);
+    screen = await timings.step('screen', () => screenLocal(deps, ctx, degraded, servMeta));
     ctx = { ...ctx, screen };
 
-    const proposed = await propose({
-      client: deps.serv.client,
-      model: deps.serv.proposerModel,
-      ctx,
-      usdcAddress: g.usdc,
-      decimals: g.decimals,
-    });
+    const proposed = await timings.step('propose', () =>
+      propose({
+        client: serv.client,
+        model: serv.proposerModel,
+        ctx,
+        usdcAddress: g.usdc,
+        decimals: g.decimals,
+      }),
+    );
     servMeta['propose'] = metaOf(proposed.meta, proposed.issues);
     if (proposed.issues.length > 0) deps.onServFailure?.('propose', proposed.issues.join('; '));
     else deps.onServSuccess?.();
@@ -330,14 +348,17 @@ export async function runIteration(
   }
 
   // ── the shadow verifier (skipped for deterministic proposals: R15 exempts them) ────────────────
-  if (pre.kind !== 'deterministic' && deps.serv) {
-    const verified = await verify({
-      client: deps.serv.client,
-      model: deps.serv.verifierModel,
-      ctx,
-      proposal,
-      decimals: g.decimals,
-    });
+  const serv = deps.serv;
+  if (pre.kind !== 'deterministic' && serv) {
+    const verified = await timings.step('verify', () =>
+      verify({
+        client: serv.client,
+        model: serv.verifierModel,
+        ctx,
+        proposal,
+        decimals: g.decimals,
+      }),
+    );
     verifier = verified.verifier;
     servMeta['verify'] = metaOf(verified.meta, []);
     if (verified.verifier.verdict === 'UNSURE') deps.onServFailure?.('verify', 'UNSURE');
@@ -366,16 +387,44 @@ export async function runIteration(
 
   await updateDecision(db, decisionId, { proposal, screen, verifier, servMeta, status: 'noop' });
 
-  const outcome = await runPipeline(deps, {
-    g,
-    decisionId,
-    proposal,
-    screen,
-    verifier,
-    contextFactIds: factIds(ctx),
-    ownerApproval: null,
-  });
+  const outcome = await timings.step('pipeline', () =>
+    runPipeline(deps, {
+      g,
+      decisionId,
+      proposal,
+      screen,
+      verifier,
+      contextFactIds: factIds(ctx),
+      ownerApproval: null,
+    }),
+  );
+  servMeta['timings'] = timings.all();
+  await updateDecision(db, decisionId, { proposal, screen, verifier, servMeta, status: 'noop' });
+  log.info(
+    { walletId, decisionId, trigger, status: outcome.status, timings: timings.all() },
+    'iteration step timings',
+  );
   return { decisionId, ...outcome };
+}
+
+/**
+ * 6.9 — the smallest thing that satisfies NFR-2: elapsed milliseconds per named step.
+ * Uses `performance.now()` for the measurement (a monotonic duration, not a policy input — the
+ * injected clock still owns every `now` the engine sees, I2).
+ */
+function stepTimer() {
+  const ms: Record<string, number> = {};
+  return {
+    async step<T>(name: string, fn: () => Promise<T>): Promise<T> {
+      const started = performance.now();
+      try {
+        return await fn();
+      } finally {
+        ms[name] = Math.round(performance.now() - started);
+      }
+    },
+    all: () => ({ ...ms }),
+  };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────────────────────────
