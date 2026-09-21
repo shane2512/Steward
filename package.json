@@ -26,7 +26,9 @@
     "check:lint:fixture": "node scripts/check-lint-fixture.mjs",
     "test:policy": "vitest run --config packages/policy/vitest.config.ts --coverage",
     "test:record": "tsx scripts/live/record-serv-fixtures.ts",
-    "live:executor": "tsx scripts/live/executor-e2e.ts"
+    "live:executor": "tsx scripts/live/executor-e2e.ts",
+    "live:loop": "tsx scripts/live/loop-e2e.ts",
+    "live:env": "tsx scripts/live/env-check.ts"
   },
   "devDependencies": {
     "@coinbase/cdp-sdk": "^1.56.0",
@@ -50,6 +52,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.0",
     "viem": "^2.56.8",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "pg-boss": "^12.33.2",
+    "pg": "^8.23.0"
   }
 }
