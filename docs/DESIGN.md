@@ -1,659 +1,756 @@
 # DESIGN — Steward
 
-Status: v1.0, design pass for Phase 7 (2026-09-21). Authority: this file governs Phase 7 UI work.
-It does not override `SECURITY.md`, `POLICY_ENGINE.md` or `UX_FLOWS.md` — where `UX_FLOWS.md` fixes
-copy or structure, it wins and this file only says how it looks.
+Status: **v2.0** — Solflare-referenced redesign (2026-09-22). Authority: this file governs Phase 7 UI
+work. It does not override `SECURITY.md`, `POLICY_ENGINE.md` or `UX_FLOWS.md` — where `UX_FLOWS.md`
+fixes copy or structure, it wins and this file only says how it looks.
 
-Reference research: `docs/design/refs/REFERENCE.md` (Solflare, Coinbase Wallet, Rainbow, sampled live).
+Measured reference: `docs/design/refs/REFERENCE.md`. The client's own screenshots live in
+`docs/design/Photos/` and are **git-ignored** (third-party app art is never committed).
+
+---
+
+## v2 changelog — what changed and why
+
+The client supplied 26 screenshots of the Solflare mobile app and asked for **the same style and the
+same UI language, with the yellow replaced by a light green**, adapted to Steward's context. v1 was a
+light-first, blue-sealed, editorial-leaning system of our own invention. v2 replaces it.
+
+| # | Changed | Why |
+|---|---|---|
+| 1 | **Default theme flipped to dark.** All 26 reference frames are dark. Light is now the alternate, not the source of truth. | Match the reference. |
+| 2 | **Whole neutral ramp replaced** with the measured values: ground `#090C11`, surfaces `#111419` / `#1B1E23` / `#24272F`, hairline `#2A2D31`, muted `#B3B6BE`. | Measured from the frames, not invented. |
+| 3 | **Accent: blue `--seal` retired → light green `#AEF07A`** with near-black ink on it, in exactly the 8 roles the yellow occupied. | The client's core instruction. |
+| 4 | **Verdict green moved off the accent hue** to teal `#2FD9A6`, and every verdict now carries an icon + a word. | The brand accent is now green; "green = safe" by colour alone would be ambiguous. See §4. |
+| 5 | **Radii grew and became pill-first**: cards 24, sheets 28-top, rows 20, controls fully rounded. v1's 8/12/18/24 squircle scale is gone. | The reference is pill-first; v1 read as a document, not a wallet. |
+| 6 | **Balance-first home** with a 5-across circular action row, a bottom tab bar and full-bleed pressed rows. v1's header-nav + card-grid dashboard is gone. | The reference's core grammar. |
+| 7 | **Fonts: Public Sans + IBM Plex Mono → Figtree + Geist Mono.** | Figtree's single-storey `g`, tall x-height and geometric-humanist build are the closest free/OFL match to the reference's FK Grotesk. See `PROGRESS.md` D-65. |
+| 8 | **The limit-line meter device survives**, restyled onto the new ramp. | It is ours, it is the one thing in the product that explains the whole idea, and it tested well. |
+| 9 | Glass policy unchanged in spirit, re-scoped to the new surfaces. | Still "only where needed". |
+
+**What v2 does *not* take from the reference:** its name, wordmark, blackletter `S`, mascot and
+skeleton artwork, card renders, photography, copy, or any image asset. Steward ships its own mark,
+its own accent, and its own words. We replicate **layout patterns, proportions, hierarchy, radii,
+spacing and surface treatment** — the shared grammar of every wallet — and nothing that identifies
+someone else's brand.
 
 ---
 
 ## 1. The idea
 
-Steward is a wallet that operates itself inside a fence the owner drew. Every screen has to answer
-three questions at a glance: **what can it touch, what did it do, how do I stop it.**
-
-So the design's one memorable device is **the limit line**: a 2px `ink` wall standing on a capsule
-track, with the track continuing past it as recessed ground Steward may never reach. It marks the
-boundary between the money the agent can touch and the money it cannot, and it appears on the
-allowance meter and on the runway-vs-buffer bar. It is the only ornament in the system, and it is
-not ornament — it is the product's core fact drawn once and reused.
-
-A limit line only earns its place when the limit sits *inside* the range. A meter whose limit is
-simply the end of its own track gets no line: the track end is the line. That is why the allowance
-meter is drawn at **cap × ~1.15**, so the wall is visible and the dead ground beyond it is legible —
-the first version put the tick at 100% and it disappeared into the track's edge.
-
-Everything around it stays quiet: one accent, hairline rules, tabular figures, sentence case, no
-gradients behind text, no decorative cards.
+Steward is a treasury that runs itself inside a fence the owner drew. The interface has one job:
+make the fence visible at all times, and make stopping the agent the easiest thing on screen.
 
 ### Principles
 
-1. **A number is a promise.** Money is always `amount TOKEN ($usd)`, tabular figures, minor units
-   dimmed. The same number never renders two ways in two places.
-2. **Cards are objects, rows are records.** A card is used only for a thing that exists (the
-   treasury, an approval, a recipient). Anything that is a log, a list of rules, or a sequence is
-   rows on one surface with hairlines — never a grid of identical rounded cards.
-3. **Glass marks "this floats above your money", nothing else.** See §6.
-4. **Certainty is styled, uncertainty is stated.** Stale, degraded, mocked and parked states get
-   visible words on the surface that is wrong, not a global apology banner.
-5. **Freeze is always one reach away and never shouts until pressed.**
-6. **Nothing moves unless the person moved it.** See §8.
+1. **Balance first, fence second, everything else third.** The first screenful answers "how much do
+   I have, how much may Steward move, and can I stop it".
+2. **The agent proposes, the fence disposes.** Every row that represents an agent action shows the
+   verdict that let it through, as an icon plus a word. Never colour alone.
+3. **Calm until it matters.** One accent. No ambient motion except while the agent is actually
+   running. Freeze is always present and always quiet until pressed.
+4. **Dense data is solid.** Glass is for chrome and for things that float. Numbers, rules and forms
+   sit on opaque surfaces so they can be read.
+5. **Nothing decorative claims to be data.** No fake charts, no invented precision, no status dots
+   that mean nothing.
 
-### Inherited vs. original
+### The one device: the limit line
 
-| Inherited from the wallet grammar | Original to Steward |
-|---|---|
-| Balance-first hierarchy; giant figure with dimmed minor units | The limit line and the whole allowance/at-risk vocabulary |
-| Equal-weight action row directly under the balance | Verdict-led decision rows (glyph gutter + sentence + rule chips) |
-| Row lists with tabular right-aligned amounts | The literal-signing-message block (mono, copyable, never rebuilt) |
-| Pill controls, generous card radii, hairline separators | Palette, typography, the narrow centred column, the parked/degraded states |
-
-Explicitly **not** taken from Solflare: its yellow, FK Grotesk, its mark, illustrations, photography,
-marketing colour blocks, tracked-out ALL-CAPS micro labels, and its layouts.
+A horizontal meter whose track is split by a 2px vertical rule. Left of the rule is the spend
+permission Steward may use; right of the rule, recessed to ground colour, is money it can never
+touch. The fill is the accent. The rule is ink. It appears on the dashboard, in the approval sheet
+and in policy explanations, and nowhere else. It is original to Steward.
 
 ---
 
 ## 2. Palette
 
-Two themes. Both are driven by `prefers-color-scheme` **and** overridable with `data-theme="light|dark"`
-on `<html>`. Light is the default and the one the demo runs in.
+All values measured or computed. Dark is the default; light is the alternate. One accent, page-wide.
 
-### Named base (6)
+### Neutral ramp — dark (default)
 
-| Token | Light | Dark | Role |
-|---|---|---|---|
-| `ground` | `#F2F4F7` | `#070A0F` | page background |
-| `surface` | `#FFFFFF` | `#131923` | solid card / sheet / row container |
-| `ink` | `#0F141B` | `#E7EDF6` | primary text |
-| `muted` | `#5A6472` | `#98A3B4` | secondary text, labels, dimmed minor units |
-| `line` | `#DDE2EA` | `#232B38` | hairline separators (decorative) |
-| `seal` | `#2A46A6` | `#8FA8F5` | brand, primary action, focus ring, link |
-
-Plus `line-strong` (`#77818F` / `#586679`) for **interactive** boundaries — inputs, unfilled
-buttons, checkbox edges — which must clear 3:1.
-
-### Semantic (3)
-
-| Token | Light | Dark | Meaning |
-|---|---|---|---|
-| `ok` | `#14713F` | `#4ED18C` | ALLOW, executed, healthy, within limit |
-| `warn` | `#8A5300` | `#E3B15A` | ESCALATE, needs you, ≥80% of a limit, stale/degraded |
-| `stop` | `#B3261E` | `#FF8A80` | DENY, blocked, frozen, breaker tripped, over limit |
-
-Colour is never the only signal: every verdict carries a glyph and a word as well (WCAG 1.4.1).
-
-### Why this palette and not the obvious one
-
-The three semantics are load-bearing in a policy product, so the brand accent may not be green,
-amber or red. That leaves blue/violet/teal. Teal-cyan on blue-black is Coinbase Wallet; yellow is
-Solflare. A deep registrar-ink indigo (`seal`) is left, and it is used as **ink and structure**
-rather than as a bright fill — filled `seal` appears on exactly one control per screen.
-
-A bronze accent for the allowance meter was drafted and cut: the meter's colour is *semantic*
-(`seal` → `warn` at 80% → `stop` at 100%), which is better information than a decorative accent,
-and it keeps the palette to one hue plus the three states.
-
-### Contrast (computed, sRGB, WCAG 2.1)
-
-All text pairs are AA at minimum; most are AAA.
-
-| Pair | Light | Dark |
+| Token | Hex | Use |
 |---|---|---|
-| `ink` on `ground` | 16.77 | 16.84 |
-| `ink` on `surface` | 18.48 | 14.98 |
-| `muted` on `surface` | 6.00 | 6.91 |
-| `seal` on `surface` | 8.32 | 7.63 |
-| `ok` on `surface` | 6.06 | 9.09 |
-| `warn` on `surface` | 6.33 | 8.99 |
-| `stop` on `surface` | 6.54 | 7.72 |
-| `line-strong` on `surface` (UI boundary, needs 3.0) | 3.95 | 3.02 |
-| Filled primary: text on `seal` | 8.32 (white) | 8.58 (`ground`) |
-| Filled danger: text on `stop` | 6.54 (white) | 8.68 (`ground`) |
+| `ground` | `#090C11` | page background |
+| `surface` | `#111419` | tab bar, sheets, popovers, sticky header base |
+| `surface-2` | `#1B1E23` | cards, icon chips, disabled controls, token pills |
+| `surface-3` | `#24272F` | circular action buttons, pressed/hover rows, segmented-active |
+| `line` | `#2A2D31` | hairlines, input borders, dimmed minor units |
+| `line-strong` | `#5A616B` | control boundaries that must be seen (3.13:1 on ground) |
+| `ink` | `#FFFFFF` | primary text |
+| `muted` | `#B3B6BE` | secondary text, inactive tab labels, placeholders |
+| `faint` | `#7E838D` | eyebrow labels, timestamps, grabber |
 
-**Glass surfaces, worst case.** Glass is only ever laid over `ground`…`line` (never over imagery or
-a gradient — see §6), so the composite is bounded. At α = 0.72 the composite range is
-`#FBFCFD`…`#F5F7F9` (light) and `#10151D`…`#171E29` (dark):
+### Neutral ramp — light (alternate)
 
-| Text on glass, worst backdrop | Light | Dark |
+`ground #F4F6FA` · `surface #FFFFFF` · `surface-2 #EEF1F6` · `surface-3 #E4E8EF` ·
+`line #D6DBE4` · `line-strong #5A6270` · `ink #0B0F16` · `muted #525A68` · `faint #6E7684`.
+
+### Accent
+
+| Token | Hex | Notes |
 |---|---|---|
-| `ink` | 17.21 | 14.23 |
-| `muted` | 5.59 | 6.56 |
-| `seal` | 7.74 | 7.25 |
+| `accent` | **`#AEF07A`** | hue 94°, L 0.727. Replaces the reference's `#FFEF46` (hue 55°, L 0.834) at near-identical luminance, so the whole value structure of the reference survives the swap. |
+| `accent-press` | `#98DE5F` | hover / pressed / active |
+| `on-accent` | `#0B120B` | the only text colour ever placed on the accent. 14.06:1. |
+| `accent-ink` | `#3F6B1A` | accent-*coloured text* in the **light** theme only (5.83:1). In light, the accent is a fill, never a text colour. |
+
+**The 8 accent roles** (the complete list, inherited one-for-one from the reference):
+primary CTA fill · bottom-tab active indicator (a 3px bar *above* the tab) · underline-tab active
+rule · toggle "on" track · unread dot · top-of-page loading bar · the brand mark · the limit-line
+fill. Outside those eight, the accent does not appear. It is never a surface tint, never body text,
+and **never a status**.
+
+### Semantic (never the accent)
+
+| Token | Dark | Light | Always paired with |
+|---|---|---|---|
+| `allow` | `#2FD9A6` (teal) | `#067A59` | a **filled** check glyph + the word "Allowed" |
+| `escalate` | `#FFB020` (amber) | `#8A5300` | an **outlined** ring glyph + the word "Needs you" |
+| `deny` | `#FF6A5E` (red) | `#C42A1B` | a **filled** slash glyph + the word "Denied" |
+| `deny-fill` | `#D92D1E` | `#C42A1B` | filled danger control, white label (4.83:1 / 5.68:1) |
+| `info` | `#7C8CFF` | `#3B45C9` | neutral notices, links |
 
 ---
 
 ## 3. Typography
 
-Two families, both OFL, both loaded through `next/font/google` with `display: swap` and a subset.
+**Figtree** (OFL, variable, `next/font/google`) for everything. **Geist Mono** (OFL,
+`next/font/google`) for addresses, hashes, tx ids and the eyebrow micro-labels. No third family.
 
-- **Public Sans** — UI, headings, money. Chosen deliberately: it is a Libre-Franklin-derived
-  grotesque commissioned for US government services, i.e. drawn for plain-language, high-trust,
-  accessibility-audited interfaces. It has true tabular figures and a variable weight axis. It is
-  not the reflex family (Inter / Geist / Satoshi) and it is not Solflare's FK Grotesk.
-- **IBM Plex Mono** — **machine data only**: addresses, tx and proposal hashes, rule codes (`R07`),
-  policy JSON, and the literal EIP-191 message to sign. Mono is forbidden for prose labels, eyebrows
-  or decorative micro-type; if a human wrote it, it is not mono.
+Figtree is the substitute for the reference's FK Grotesk: single-storey `g`, tall x-height,
+geometric-humanist grotesk, lining figures. It is free, variable, and loaded through `next/font` so
+there is no render-blocking `<link>`.
 
 ### Scale
 
-| Role | Size / line-height | Weight | Tracking | Notes |
-|---|---|---|---|---|
-| `balance` | 40 / 1.0 (mobile) · 48 / 1.0 (≥640) | 700 | −0.02em | tabular, slashed zero |
-| `h1` | 28 / 1.15 | 700 | −0.015em | |
-| `h2` | 20 / 1.3 | 600 | −0.01em | |
-| `h3` | 17 / 1.35 | 600 | 0 | row titles |
-| `body` | 16 / 1.55 | 400 | 0 | max **68ch** |
-| `small` | 14 / 1.5 | 400 | 0 | secondary row text |
-| `label` | 12.5 / 1.4 | 500 | 0 | sentence case, `muted` — **never ALL CAPS** |
-| `mono` | 13 / 1.6 | 400 | 0 | machine data |
-
-### Money rendering (one rule, everywhere)
-
-```
-font-variant-numeric: tabular-nums slashed-zero;
-```
-`10,000` at full size and `ink`; `.00` at `0.72em` and `muted`; ` USDC` at `small`/`muted`;
-`($10,000.00)` at `small`/`muted` on the line beneath. Negative amounts take a real minus (−), not
-a hyphen. Base units are formatted from `bigint` — no `number` ever reaches the formatter (I12).
-
-### Banned typographic defaults
-
-Tracked-out ALL-CAPS eyebrows; a single word in a headline coloured or italicised; `A · B · C`
-middle-dot meta strings; `WORD — fragment` labels; `→` appended to button text; `01 / 02 / 03`
-markers except in the onboarding wizard and the freeze flow, which genuinely *are* sequences.
-
----
-
-## 4. Space, radius, elevation
-
-**Space** (4px base): `1=4 2=8 3=12 4=16 5=20 6=24 8=32 10=40 14=56 18=72`.
-Card padding 20 mobile / 24 desktop. Row height min 56 (comfortably over the 44px target).
-Section gap 24 mobile / 32 desktop.
-
-**Radius**: `sm 8` (chips, inputs), `md 12` (rows, small cards), `lg 18` (cards, balance card),
-`xl 24` (sheets, modals; mobile sheets are `24 24 0 0`), `pill 999` (buttons, status pills, meters).
-Radii are concentric — a chip inside a `lg` card at 16px inset uses `sm`, not `lg`.
-
-**Elevation** — three levels only.
-
-| Level | Light | Dark | Used for |
+| Token | px / line-height | Weight | Use |
 |---|---|---|---|
-| `e0` | none, `1px line` border | none, `1px line` border | rows, tables, forms, policy sentences |
-| `e1` | `0 1px 2px rgba(15,20,27,.06)` + `1px line` | `1px` lightened border only | cards |
-| `e2` | `0 16px 40px -12px rgba(15,20,27,.22)` + `1px line` | `0 16px 40px -12px rgba(0,0,0,.6)` + `1px line-strong` | sheets, modals, the sticky header when scrolled |
+| `balance` | 44 / 1.0, `-0.02em` | 700 | the treasury figure. Minor units dimmed to `line`. |
+| `balance-lg` | 52 / 1.0 | 700 | desktop balance |
+| `h1` | 28 / 1.15, `-0.015em` | 700 | screen titles on full-screen states |
+| `h2` | 20 / 1.3 | 700 | sheet titles, empty-state titles |
+| `h3` | 17 / 1.35 | 600 | list-row primary |
+| `body` | 16 / 1.55 | 400 | prose, max 65ch |
+| `small` | 15 / 1.5 | 400 | list-row secondary, sheet body |
+| `label` | 11 / 1.4, `0.12em`, uppercase | 600 | eyebrows (`BALANCE`, `RECIPIENTS`) — Geist Mono |
+| `mono` | 13 / 1.6 | 400 | addresses, hashes, amounts in detail rows |
 
-Shadows do not read on dark grounds, so dark mode expresses elevation with border luminance instead.
-There is no fourth level and no coloured shadow anywhere.
+### Money, one rule everywhere
 
----
+`10,000 USDC ($10,000)` — token amount first with its symbol, USD in parentheses. Always
+`font-variant-numeric: tabular-nums slashed-zero`. On the balance card only, the minor units are
+rendered in `line` colour at the same size (`$12,480` bright, `.00` dim), exactly as the reference
+does it. Never round. Never use a JS `number` to produce it.
 
-## 5. Motion
+### Banned
 
-- Motion answers an action, never announces a page. No scroll-reveal, no staggered section
-  entrances, no hover transforms on cards.
-- Durations: 120ms (state/colour), 180ms (popover, chip), 240ms (sheet/modal). Easing
-  `cubic-bezier(.32,.72,0,1)` for enter, `cubic-bezier(.4,0,1,1)` for exit.
-- Sheets slide from the bottom on mobile, fade+8px rise on desktop. Modals fade the scrim only.
-- The **one** non-user-triggered motion in the product: the status pill's 2px dot performs a slow
-  2.4s breathing opacity cycle while the agent is running. It stops on `idle`, `degraded`, `frozen`
-  and under reduced motion (where it becomes a static filled dot).
-- `@media (prefers-reduced-motion: reduce)` → all durations 0.01ms, no transforms, opacity swaps only.
-
----
-
-## 6. Glass policy
-
-"Liquid glass" is a **signal**, not a texture. It means: *this layer is temporarily above your money
-and will go away*. If a surface is permanent or holds dense data, it is solid.
-
-### Allowed (4 places, no more)
-
-| Surface | Spec |
-|---|---|
-| Sticky app header (S4's only Freeze entry point) | `bg: surface/72%`, `backdrop-filter: blur(20px) saturate(160%)`, bottom `1px line`. Transparent (no blur, no border) until `scrollY > 8`. |
-| Bottom sheets / modals (approval sheet, freeze modal, recipient confirmation) | `bg: surface/76%`, `blur(28px) saturate(160%)`, `1px line-strong` inner hairline, `e2`. Scrim: the `.scrim` token (`color-mix(in srgb, ground 60%, transparent)`), never a Tailwind opacity modifier — those resolve in oklab and cannot be contrast-checked in sRGB. |
-| The balance card — the single hero surface | `bg: surface/72%`, `blur(24px)`, `1px line`, `e1`, sitting on a soft radial of `seal` at 6% alpha. This is the only place in the product with a coloured wash, and no text below 16px sits on it. |
-| Toasts / the DEMO DATA banner | `bg: surface/80%`, `blur(16px)`. |
-
-### Forbidden (always solid `surface`)
-
-Decision timeline rows · policy sentence lists · rule-check tables · every form, input and slider ·
-the recipients list · policy JSON view · audit export screens · settings · anything with text below
-16px · anything a screenshot might be taken of for an audit.
-
-A translucent layer's alpha is **never below 0.72**, and nothing but flat `ground`…`line` tokens may
-sit behind a glass surface — no photos, no gradients, no video. That is what makes the contrast
-figures in §2 valid rather than aspirational.
-
-### Fallbacks (all three, in this order)
-
-```css
-.glass { background: var(--surface); }                 /* 1. solid by default   */
-@supports (backdrop-filter: blur(1px)) {               /* 2. opt in when able   */
-  .glass { background: color-mix(in srgb, var(--surface) 72%, transparent);
-           backdrop-filter: blur(20px) saturate(160%); }
-}
-@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-  .glass { background: var(--surface); backdrop-filter: none; }   /* 3. opt back out */
-}
-```
-Under `forced-colors`, borders switch to `CanvasText` and the coloured wash is removed.
+No `Inter`. No serif anywhere. No all-caps beyond the `label` token. No em-dashes (`—`) or en-dashes
+in any visible string — use a plain hyphen. No emoji. No gradient text. No text shadows. No orphan
+words in headlines (`text-wrap: balance` on h1/h2).
 
 ---
 
-## 7. Component inventory
+## 4. The accent-vs-verdict conflict, solved
 
-Every component below is what Phase 7 builds. Names are the component names to use.
+The brand accent is now green. Our "allowed" verdict was green. Left alone, a green pill would mean
+either "brand" or "safe" and the user could not tell which. Resolution, in force everywhere:
 
-| Component | Behaviour |
-|---|---|
-| `BalanceCard` | Glass hero. Label "Treasury" → balance (money rule) → delta line → `AllowanceMeter` → `MaxAtRiskChip` → equal-weight action row (Add funds · Activity · Recipients). Freeze is **not** repeated here: it lives in the header and only there, so there is one red control per screen. |
-| `AllowanceMeter` | Pill track drawn at **cap × 1.15**, so the **limit line** stands at ~86% with recessed ground after it. Fill = amount used today; `seal`, `warn` ≥80%, `stop` ≥100%. Caption: "5,800 of today's 10,000 USDC limit used. Steward stops at the line." `role="meter"` with `aria-valuenow/min/max/valuetext`. |
-| `RunwayBar` | Same track, limit line at the buffer floor. Caption names runway in months. |
-| `MaxAtRiskChip` | Pill, `line-strong` border, no fill. "Maximum at risk 12,400 USDC" + info affordance explaining agent balance + vault position + allowance remaining. |
-| `StatusPill` | `running` (dot breathes, `ok`) · `idle` (static dot, `muted`) · `degraded` (`warn`, "Safe mode — scheduled payments and risk exits only") · `frozen` (`stop`, "Frozen") · `parked` (`warn`, RR-14) · `breaker` (`stop`). Lives in an `aria-live="polite"` region; the live region announces the word, not the colour. |
-| `ParkedNotice` | **RR-14.** When the latest `NOOP` audit row carries a stuck-obligation reason, a solid `warn`-bordered notice sits directly under the balance card: "Steward is holding still. It can't pay {recipient} ({amount}) inside today's limit, and it won't deploy idle cash while a payment is due. Nothing is wrong with your funds." + "See why" → the decision detail. This is never hidden behind an expander. |
-| `DemoBanner` | I11. Full-width, sticky under the header, glass, `warn` border, text "Demo data — prices and rates are simulated on Base Sepolia." Present whenever `DEMO_MODE && chainId === 84532`. Not dismissible. |
-| `DecisionRow` | Solid row. 20px glyph gutter (✓ `ok` / ⚠ `warn` / ✕ `stop` / · `muted` for noop) · one-sentence explanation (`h3` weight 500) · relative time (`small`/`muted`) · right-aligned amount. Expands in place to Context / Proposal / Verifier / Policy checks / Simulation / Transaction. Denied rows get a `stop` left edge (2px) and a "Why was this blocked?" block. |
-| `RuleChip` | `R07` in mono + the rule sentence + glyph. `sm` radius, `line-strong` border, tinted background only for `stop`. Never a bare code without its sentence. |
-| `ApprovalCard` / `ApprovalSheet` | Card on the list, glass sheet when opened (full-screen on mobile). Order: action sentence → amounts → "You'll see these changes" simulation deltas → rationale → triggered `RuleChip`s → expiry countdown → `SigningMessage` → Approve / Reject. |
-| `SigningMessage` | **The literal `message` string from `GET /api/approvals`, rendered verbatim in mono, `pre-wrap`, solid surface, with a copy button.** The UI must never rebuild or reformat it (SECURITY §5). Above it, one line: "This is exactly what your wallet will show you." |
-| `FreezeButton` | Header, right — the product's only Freeze entry point. Outline only: `stop` text + `stop` border, transparent fill, pill, min 44×44. Never filled, never animated, no icon-only version. |
-| `FreezeModal` | Glass, `e2`. Three numbered steps (a genuine sequence): 1 Freeze now · 2 Revoke spending permission · 3 Bring funds home. Each step shows idle / running / done / failed + retry. The step-1 button is the only filled `stop` control in the product. Confirmation text: "Steward is stopped. No further actions will be taken." |
-| `Empty` | Icon-free. One `h2` line + one `body` line + one primary action. "No activity yet. Steward checks your treasury every five minutes and will explain anything it does here." |
-| `ErrorState` | What happened · **whether money moved** · what to do next. Never apologises, never says "Oops". `stop` border on a solid surface. |
-| `Loading` | Skeletons only where the shape is known (balance, rows), matching the real layout's metrics so nothing shifts. No spinners except inside a pressed button. Skeletons are `line` at 1.6s ease-in-out opacity, disabled under reduced motion. |
-| `StaleBadge` | Inline on the card whose data is old: "Updated 6 min ago" in `warn`. Per-card, never global. |
-| `Money` | The single formatter component. Takes `bigint` base units + decimals + optional micro-USD. Nothing else formats money. |
+1. **Verdicts are never the accent.** `allow` is teal `#2FD9A6`, hue 160°, measured ΔE 41 from the
+   accent — a different hue family, not a shade of it.
+2. **Every verdict carries a glyph and a word.** `Allowed` / `Needs you` / `Denied`. Colour is the
+   third channel, never the first.
+3. **Glyph fill is a second non-colour channel.** `allow` is a filled disc, `escalate` is an
+   outlined ring, `deny` is a filled disc with a slash. Distinguishable in greyscale.
+4. **The accent never means "safe".** It means "this is the primary thing to press" or "this is
+   Steward". An accent-filled button inside an approval sheet says *approve*, not *this is fine*.
+5. **Verified under simulated deuteranopia** (Brettel/Viénot matrix, `scratchpad/color.py`):
+   accent `#AEF07A` → `#DFDF7D`, allow `#2FD9A6` → `#BBBBA9`. ΔE between them after simulation is
+   **42** — still clearly separable. Amber and red converge under the same simulation (`#CBCB06` vs
+   `#9C9C1B`), which is precisely why rule 2 exists and is not optional.
+
+## 5. Freeze
+
+Freeze is on every authenticated screen, in the sticky header, right-aligned.
+
+- **Resting:** a fully-rounded outlined control. `deny` text and icon, `deny` border at 40% alpha,
+  transparent fill. Calm. It does not compete with the accent.
+- **Hover/focus:** border to full `deny`, fill `deny` at 12%.
+- **Pressed:** opens the freeze modal, never acts directly.
+- **In the modal:** the confirm control is filled `deny-fill` with white text (4.83:1 dark,
+  5.68:1 light). It is the only filled red in the product.
+- **When frozen:** the header control becomes a filled `deny-fill` chip reading "Frozen", a
+  persistent banner sits under the header, and the balance card's action row is disabled with the
+  reason inline. `aria-live="assertive"` announces the state change.
+- Freeze never calls the reasoning layer, so it never shows a loading state longer than the
+  round-trip to our own API.
+
+---
+
+## 6. Space, radius, elevation
+
+Spacing scale: `4 8 12 16 20 24 32 40 48 64`. Side gutter is **16** at every width. Row pitch 52.
+Section gap 32.
+
+| Radius | px | Applied to |
+|---|---|---|
+| `pill` | 999 | buttons, chips, toggles, segmented controls, action circles, avatars |
+| `xl` | 28 | bottom-sheet top corners |
+| `lg` | 24 | balance card, modals, hero cards |
+| `md` | 20 | list-row pressed fill, inputs, popovers, mini stat cards |
+| `sm` | 12 | icon chips inside rows, inline code |
+
+Concentric rule: a child inside a padded container gets `parent radius - padding`. A 24px card with
+16px padding holds 8px children; do not nest two 24s.
+
+Elevation is **surface colour, not shadow**. `ground → surface → surface-2 → surface-3` is the
+entire ladder. The only shadows in the product: `e2` under a sheet or modal
+(`0 -24px 48px -12px rgb(0 0 0 / .55)` dark, `/.18` light) and a 1px inset top highlight on glass.
+No `shadow-md`, no coloured glows, no drop shadows on cards.
+
+---
+
+## 7. Motion
+
+`--ease-enter: cubic-bezier(0.32, 0.72, 0, 1)` · `--ease-exit: cubic-bezier(0.4, 0, 1, 1)`.
+
+| Thing | Duration | Motion |
+|---|---|---|
+| Press feedback | 120ms | `scale(0.97)` on the pressed element |
+| Row hover/press fill | 160ms | background only |
+| Sheet in | 320ms enter | `translateY(100%) → 0`, scrim fades |
+| Modal in | 220ms enter | `scale(0.96) → 1` + scrim |
+| Tab switch | 200ms | the accent indicator slides; content cross-fades |
+| Loading | — | a 3px accent bar pinned to the top of the page, indeterminate |
+| Agent running | 2.4s loop | the status pill's dot breathes 1 → 0.35 opacity |
+
+Nothing else moves. No scroll-hijack, no parallax, no marquee, no entrance staggers on a treasury
+dashboard. Everything animates `transform` / `opacity` only. All of it collapses under
+`prefers-reduced-motion: reduce`; the breathing dot becomes static.
+
+---
+
+## 8. Glass policy
+
+Glass is a material for things that float over content. It is not a decoration.
+
+**Allowed, and nowhere else:**
+1. the sticky header (56px),
+2. the balance card,
+3. sheets and modals — approval, freeze, add-recipient, confirmations,
+4. toasts.
+
+**Always solid:** the timeline, policy sentences, rule tables, every form and input, settings rows,
+positions list, the tab bar, empty and error states. If a user has to read a number off it, it is
+opaque.
+
+Construction: `background: color-mix(in srgb, var(--surface) 72%, transparent)` +
+`backdrop-filter: blur(20px) saturate(160%)` + a 1px `inset 0 1px 0 rgb(255 255 255 / .06)` top
+highlight for edge refraction. Sheets use 76% / 28px.
+
+**Three fallbacks, in this order** (all already in `globals.css`):
+`@supports (backdrop-filter: blur(1px))` gates the whole effect on;
+`@media (prefers-reduced-transparency: reduce)` returns every glass surface to opaque `surface`;
+`@media (forced-colors: active)` does the same and drops the accent wash.
+The contrast table in §12 is computed against the **opaque** value, so the floor holds in all four
+cases.
+
+---
+
+## 9. Component inventory
+
+Each entry: anatomy, then states.
+
+| Component | Anatomy | States |
+|---|---|---|
+| `AppHeader` | 56px, glass, sticky. Avatar-or-mark left · `StatusPill` centre · `FreezeButton` right. | default · frozen · degraded |
+| `BalanceCard` | 24r glass card, 140px. Eyebrow `TREASURY` · balance with dimmed minor units · delta line · `AllowanceMeter` at the foot. | loading (skeleton) · stale (muted + "as of") · frozen (dimmed) · demo (banner above) |
+| `ActionRow` | 4 circular 34px `surface-3` buttons + 15/600 labels: Approvals · Recipients · Activity · Add funds. | default · badge count on Approvals · disabled-with-reason when frozen |
+| `AllowanceMeter` | The limit line. Track `line`, fill `accent`, recessed `ground` beyond, 2px `ink` rule at the cap. Caption: `2,400 USDC of 10,000 used today`. | under · near cap (fill `escalate`) · at cap (fill `deny`, caption explains) |
+| `StatusPill` | Pill, `surface-2`, 8px dot + label. Dot breathes only while running. | idle · running · escalating · frozen · degraded |
+| `FreezeButton` | Outlined pill, `deny`. | resting · hover · pressed · frozen |
+| `ListRow` | 52px pitch, full-bleed. 24px glyph · 17/600 primary + 15/400 muted secondary · right slot (amount, verdict, chevron, toggle, external-link glyph). | default · pressed (`surface-3`, 20r) · selected · disabled |
+| `VerdictBadge` | Glyph + word + colour, per §4. | allow · escalate · deny |
+| `TimelineRow` | `ListRow` + timestamp in `mono faint` + `VerdictBadge`. Expands in place. | collapsed · expanded · pending · failed |
+| `TimelineDetail` | Inside the expanded row, solid `surface-2`, 20r: the proposal sentence, the rule checks as a list of `VerdictBadge` + rule id + one line each, the simulation result, then the tx link in `mono`. | — |
+| `ApprovalSheet` | Bottom sheet, 28r top, glass, grabber. Title · the **literal message to be signed** in `mono` on solid `surface-2` · recipient with full checksummed address · amount in the money rule · `AllowanceMeter` showing the effect · rule checks · Approve (accent) / Reject (ghost). | idle · submitting · expired · error |
+| `FreezeModal` | Centre modal, 24r, glass, scrim. What freezing does, in three plain lines. Confirm = `deny-fill`, white. | idle · submitting · done |
+| `AddRecipientSheet` | Bottom sheet. Label input · address input (`mono`, checksum echoed back character-grouped) · a warning that addresses are matched exactly · Add (accent). | idle · invalid · duplicate · submitting |
+| `SegmentedControl` | Pill track `surface-2`, active segment `surface-3` pill, `ink` label. | — |
+| `Chip` | Small pill. neutral `surface-2`/`muted` · tinted (`escalate` at 16% + `escalate` text). | — |
+| `Toggle` | Pill track; on = `accent`, knob `#F5F8FF`. | on · off · disabled |
+| `Input` | 20r, transparent fill, 1px `line` border, leading glyph, label **above**, error **below**. | rest · focus (2px accent ring, offset 2) · error · disabled |
+| `PrimaryButton` | Fully-rounded pill, 56px, `accent` fill, `on-accent` label 17/700. Full-bleed at the foot of a full-screen state. | default · hover (`accent-press`) · pressed (`scale .97`) · disabled (`surface-2` + `muted`) · loading |
+| `GhostButton` | Same shape, transparent, 1px `line-strong`, `ink` label. | — |
+| `TabBar` | Mobile only. `surface`, 5 items: Home · Activity · Approvals · Recipients · Settings. Active = `ink` + a 3px `accent` bar above the item. | — |
+| `StepProgress` | Thin segmented bars pinned to the top. Active `ink`, rest `surface-3`. | — |
+| `EmptyState` | Centred flat two-tone glyph (our own, geometric, chamfered), h2 title, body `muted` max 46ch, one CTA. | — |
+| `DemoBanner` | Full-width, `escalate` at 16%, `escalate` text, "DEMO DATA" in the `label` token. Never dismissible. | — |
+| `Toast` | Glass pill, bottom, `aria-live="polite"`. | info · success · error |
 
 ### Copy voice
 
-Sentence case everywhere. Plain verbs. "Steward" or "your agent", never "the AI". One name per
-action through the whole flow — the button that says **Freeze** produces the word **Frozen**; the
-button that says **Approve** produces **Approved**. Amounts always carry token *and* USD. Errors
-state what happened, whether money moved, and the next step. Nothing apologises.
+Sentence case. Plain verbs. "Steward" as the subject, never "the AI" or "the agent" in user-facing
+copy. Amounts always as `10,000 USDC ($10,000)`. No exclamation marks. No "Oops". Say what happened
+and what to do: *"Steward could not reach the vault. It retried twice and stopped. Nothing moved."*
+Errors are inline and specific. No version stamps, no scroll cues, no locale strips, no
+section-number eyebrows.
 
 ---
 
-## 8. Layout
+## 10. Layout
 
-**Mobile-first, and the desktop keeps the phone.** A wallet is a phone object; a 1200px dashboard
-would make it feel like an admin console and undermine the "it is your wallet" framing.
+Mobile-first at **390px**. Column is 390 - 32 = 358.
 
-- Base column: `min(100% - 32px, 440px)`, centred, at every breakpoint.
-- **Wide variant** (`max 1040px`, two columns) only on `/app/activity` and `/app/policy`, where a
-  detail pane genuinely earns the width. Everything else stays 440.
-- Alignment: left-aligned throughout, except the balance figure and its label block, which are
-  centred on the balance card only (the wallet convention), and amounts in rows, which are right
-  aligned to a tabular column.
-- Sticky header, 56px, glass: wordmark left · `StatusPill` centre · `FreezeButton` right.
-- Mobile: no bottom tab bar in MVP — the balance card's action row is the navigation.
+Desktop is the same phone-width column, centred, max 440, on `ground`. Three screens earn a wider
+two-column variant at `>= 1024px`, and only these three: the **timeline** (list left 440, detail
+right, sticky), the **policy** view (sentences left, rule table right), the **approval queue**
+(queue left, sheet content inlined right instead of as a sheet). Everything else stays 440 — a
+treasury dashboard stretched to 1400px is a worse dashboard.
 
-### Wordmark
+The mobile tab bar is replaced on desktop by a 56px left rail of the same five items.
 
-Set "Steward" in Public Sans 600 at `-0.02em`, with the **limit line** as the mark: a 2px `seal`
-rule under the final three letters, stopping short of the `d` — the fence that does not reach the
-end. No logo file, no icon, no gradient. Original to us.
+### Mark and wordmark
+
+"Steward" set in Figtree 700 at `-0.02em`. The mark is the **limit line**: a 2px `accent` rule under
+the final three letters that stops short of the `d` — the fence that does not reach the end. No logo
+file, no icon font, no gradient. Original to us, and deliberately nothing like a letterform mark.
 
 ---
 
-## 9. Wireframes
+## 11. Wireframes (S1-S11, 390px)
 
-### S1 Landing `/` (mobile 390)
+### S1 Landing `/`
 
 ```
-┌──────────────────────────────┐
-│ Steward            Connect   │  header, transparent until scroll
-├──────────────────────────────┤
-│                              │
-│  The self-driving treasury   │  h1, 28/700, 2 lines, left
-│  that can't run off with     │
-│  the money.                  │
-│                              │
-│  Steward keeps your idle     │  body, 68ch max
-│  USDC working, pays your     │
-│  team on schedule, and       │
-│  cannot exceed the limit     │
-│  you signed.                 │
-│                              │
-│  [ Connect wallet ]          │  filled seal, pill, 48h, full width
-│                              │
-│ ┌──────────────────────────┐ │  the hero proof — a live-looking
-│ │ Treasury                 │ │  BalanceCard with the limit line,
-│ │      124,000.00 USDC     │ │  static and labelled "Example"
-│ │ Steward can move at most │ │
-│ │ ▓▓▓▓▓▓░░░░░│░░░░░░░░░░   │ │  ← the limit line, the one device
-│ │ 10,000 USDC a day        │ │
-│ └──────────────────────────┘ │
-│                              │
-│  Earns on idle cash          │  three rows, hairlines, no cards,
-│  ───────────────────────────  │  no icons, no numbered markers
-│  Pays your team on time      │
-│  ───────────────────────────  │
-│  Attacks blocked      1,204  │  tabular, right
-│                              │
-└──────────────────────────────┘
++----------------------------------------+
+|  Steward___                     Connect|  56 glass header
++----------------------------------------+
+|                                        |
+|   The self-driving treasury            |  h1 28/700, 2 lines max
+|   that can't run off with              |
+|   the money.                           |
+|                                        |
+|   Write the mandate in plain           |  body muted, <= 20 words
+|   English. Steward keeps the rest.     |
+|                                        |
+|   [ Connect wallet ]                   |  PrimaryButton, accent
+|   Read how the fence works             |  text link, info
+|                                        |
++----------------------------------------+
+|  +----------------------------------+  |
+|  | TREASURY                         |  |  a live-looking BalanceCard
+|  | $12,480.00                       |  |  as the hero visual (mock,
+|  | [====|-------]  limit line       |  |  labelled "example")
+|  +----------------------------------+  |
++----------------------------------------+
+|  (o) Reasoning proposes                |  three ListRows, no cards
+|  (o) The policy engine disposes        |
+|  (o) A spend permission caps it        |
++----------------------------------------+
 ```
-Desktop: same 440 column, centred, with the headline allowed to 560 above it. No hero image, no
-feature grid, no gradient wash.
 
 ### S2 Connect `/connect`
 
 ```
-┌──────────────────────────────┐
-│ Steward                      │
-├──────────────────────────────┤
-│  Connect your wallet         │  h1
-│  Steward never sees a seed   │  body/muted
-│  phrase and never holds      │
-│  your funds.                 │
-│ ┌──────────────────────────┐ │
-│ │ Coinbase Smart Wallet    │ │  row, 56h, solid, chevron
-│ │ Passkey — no extension   │ │
-│ └──────────────────────────┘ │
-│                              │
-│  States (replace the row):   │
-│  · Connecting…  skeleton row │
-│  · Wrong network → inline    │
-│    notice + [ Switch to      │
-│    Base Sepolia ]            │
-│  · Signature rejected →      │
-│    "You declined the         │
-│    signature. Nothing was    │
-│    sent." [ Try again ]      │
-│  · Unsupported wallet →      │
-│    explanation + link        │
-└──────────────────────────────┘
++----------------------------------------+
+|  X                                     |
+|                                        |
+|              [ glyph ]                 |  flat two-tone, chamfered
+|                                        |
+|        Connect your wallet             |  h2, centred
+|   Steward never holds your keys. You   |  small muted, centred, 46ch
+|   grant a capped spend permission and  |
+|   you can revoke it at any time.       |
+|                                        |
+|  (o) Base Sepolia only        [chip]   |  ListRow, chip = "TESTNET"
+|  (o) Read-only until you sign          |
+|                                        |
++----------------------------------------+
+|  [    Connect wallet    ]              |  full-bleed PrimaryButton
+|  By connecting you agree to the Terms. |  small faint
++----------------------------------------+
 ```
 
-### S3 Onboarding `/onboarding` (5 steps — a real sequence, so numbered)
+### S3 Onboarding `/onboarding` (5 steps)
 
 ```
-┌──────────────────────────────┐
-│ Steward              Step 3/5│
-│ ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░ │  2px seal progress rule
-├──────────────────────────────┤
-│  Write your mandate          │  h1
-│  Plain English. Steward      │
-│  turns it into rules you     │
-│  approve before anything     │
-│  runs.                       │
-│                              │
-│  [Startup] [DAO] [Creator]   │  template chips, sm radius
-│ ┌──────────────────────────┐ │
-│ │ Keep six months of       │ │  textarea, SOLID, line-strong
-│ │ runway liquid…           │ │  border, 8 rows, 16px text
-│ └──────────────────────────┘ │
-│  [ Compile ]                 │
-│  ── after compile ──         │
-│  Rules                       │  h2
-│  · Steward can move at most  │  sentence list, solid rows,
-│    10,000 USDC a day.        │  hairlines — NOT cards
-│  · Steward can only pay      │
-│    recipients you added.     │
-│  Assumptions                 │
-│  · Buffer means liquid USDC. │
-│  Questions                   │
-│  · Should vendor payments    │
-│    count toward the cap?     │
-│  Issues                      │
-│ ┌──────────────────────────┐ │  stop-bordered solid notice
-│ │ ✕ R-CEIL  A daily cap of │ │  inline at the rule it affects
-│ │   500,000 exceeds the    │ │
-│ │   system ceiling.        │ │
-│ │   Try 100,000 or less.   │ │
-│ └──────────────────────────┘ │
-│  [ Edit mandate ] [Recompile]│
-└──────────────────────────────┘
+ ====  ----  ----  ----  ----            StepProgress, active = ink
++----------------------------------------+
+|  <-                        Step 2 of 5 |  faint, mono
+|                                        |
+|   What should Steward do               |  h1
+|   with idle USDC?                      |
+|                                        |
+|  +----------------------------------+  |
+|  | Keep 20,000 USDC liquid. Put     |  |  textarea, 20r, solid
+|  | the rest in Aave. Pay the        |  |  surface-2, mono 13
+|  | contractors every Friday.        |  |
+|  +----------------------------------+  |
+|  Plain English. Steward compiles it    |  small muted
+|  into a policy you approve next.       |
++----------------------------------------+
+|  [       Continue       ]              |
++----------------------------------------+
 ```
-Step 4 (spending limit) is the same column: allowance slider (solid), end-date input, then a live
-`MaxAtRiskChip` and the sentence "Steward can move at most 10,000 USDC per day until 31 Dec 2026.
-The most it could ever hold is 12,400 USDC." Then the signing sheet.
 
-### S4 Dashboard `/app` (mobile 390 — the primary screen)
+Step 4 is the compiled policy, shown as numbered plain sentences on solid `surface-2`, each with the
+rule id in `mono faint` on the right. Step 5 is the spend permission, shown as an `AllowanceMeter`
+at its proposed cap plus the literal message to sign.
+
+### S4 Dashboard `/app` — the primary screen
 
 ```
-┌──────────────────────────────┐
-│ Steward   ● Running   Freeze │  glass header, 56h
-├──────────────────────────────┤
-│ Demo data — prices and rates │  DemoBanner (I11), glass, warn
-│ are simulated on Base Sep.   │
-├──────────────────────────────┤
-│ ┌ ── glass, lg radius ─────┐ │
-│ │ Treasury                 │ │  label 12.5 muted, centred
-│ │                          │ │
-│ │     124,000.00 USDC      │ │  balance 40/700, .00 dimmed
-│ │      ($124,000.00)       │ │  small/muted
-│ │                          │ │
-│ │ Allowance left today     │ │
-│ │ ▓▓▓▓▓▓░░░░░│░░░░░░░░░░░  │ │  AllowanceMeter + limit line
-│ │ 4,200 of 10,000 USDC     │ │
-│ │                          │ │
-│ │ ( Maximum at risk        │ │  MaxAtRiskChip, outline pill
-│ │   12,400 USDC  ⓘ )       │ │
-│ │                          │ │
-│ │ [Add funds][Activity][❄] │ │  equal-weight row, pill, 44h
-│ └──────────────────────────┘ │
-│                              │
-│ ⚠ Steward is holding still.  │  ParkedNotice (RR-14) — solid,
-│   It can't pay Acme (8,000   │  warn border. Only when parked.
-│   USDC) inside today's limit │
-│   and won't deploy idle cash │
-│   while a payment is due.    │
-│   Nothing is wrong with your │
-│   funds.  See why            │
-│                              │
-│ Working in vaults            │  h2
-│ ┌──────────────────────────┐ │  solid card, e1
-│ │ Aave USDC        44,000  │ │  rows, tabular right
-│ │ 4.8% APY · updated 2m    │ │
-│ └──────────────────────────┘ │
-│                              │
-│ Liquid runway                │  h2
-│ ▓▓▓▓▓▓▓▓▓▓▓│░░░░░░░░░░░░░░  │  RunwayBar, limit line = buffer
-│ 7.4 months · buffer 6.0      │
-│                              │
-│ Next up                      │  h2
-│ Acme Design   1 Oct   8,000  │  rows, hairlines
-│ Payroll       5 Oct  22,400  │
-│                              │
-│ Recent activity   View all   │
-│ ✓ Deposited 44,000 to Aave   │  DecisionRows, solid
-│ ⚠ Waiting for you: pay Acme  │
-│ ✕ Blocked a payment to an    │
-│   address not on your list   │
-│                              │
-│ Attacks blocked 3 · checked  │  small/muted, no card
-│ 40 seconds ago               │
-└──────────────────────────────┘
++----------------------------------------+
+|  (S)      * Running        [ Freeze ]  |  glass header; dot breathes
++----------------------------------------+
+|  ! DEMO DATA                           |  DemoBanner (only if on)
++----------------------------------------+
+|  +----------------------------------+  |
+|  | TREASURY                     ... |  |  glass card, 24r
+|  |                                  |  |
+|  | $12,480.00                       |  |  44/700, .00 dimmed
+|  | +$38.20 today   4.1% APY         |  |  small; delta in allow
+|  |                                  |  |
+|  | [=====|---------]                |  |  AllowanceMeter
+|  | 2,400 USDC of 10,000 used today  |  |  label, faint
+|  +----------------------------------+  |
++----------------------------------------+
+|   (!)      (:)      (~)      (+)       |  34px circles, surface-3
+| Approvals Recipients Activity Add funds|  15/600, badge on Approvals
++----------------------------------------+
+|  POSITIONS                             |  label eyebrow
+|  (o) Aave USDC          8,100 USDC     |  ListRow, amount tabular
+|      4.12% APY            ($8,100)     |
+|  (o) Idle in treasury   4,380 USDC     |
+|      not earning          ($4,380)     |
++----------------------------------------+
+|  RECENT                                |
+|  (o) Paid Mara Okonjo   1,200 USDC     |
+|      2h ago  (v) Allowed               |  VerdictBadge
+|  (o) Deposit to Aave    3,000 USDC     |
+|      6h ago  (v) Allowed               |
+|  (o) Pay unknown addr        blocked   |
+|      9h ago  (x) Denied  R-04          |
+|                          View all >    |
++----------------------------------------+
+| Home  Activity  Approvals  Recip  Set  |  TabBar, accent bar above
++----------------------------------------+
 ```
-Desktop: identical 440 column. The only change is the header gains the wordmark's full lockup and
-the action row sits on one line.
 
-### S5 Timeline `/app/activity` (wide variant)
+### S5 Timeline `/app/activity`
 
 ```
-mobile 390                         desktop 1040 (two columns)
-┌──────────────────────────┐       ┌──────────────┬──────────────────────┐
-│ Activity                 │       │ Activity     │ Deposited 44,000     │
-│ [All][Allowed][Blocked]  │       │ [filters]    │ 12:04 · R00 R03 R07  │
-│ ✓ Deposited 44,000 USDC  │       │ ✓ Deposit…   │ ┌──────────────────┐ │
-│   to Aave     12:04      │       │ ⚠ Waiting…   │ │Context│Proposal│…│ │
-│ ─────────────────────────│       │ ✕ Blocked…   │ └──────────────────┘ │
-│ ⚠ Waiting for you        │       │ · No action  │ Policy checks        │
-│   pay Acme 8,000  11:59  │       │              │ ✓ R00 Kind allowed   │
-│ ─────────────────────────│       │              │ ✓ R03 Recipient on   │
-│ ┃✕ Blocked a payment to  │       │              │      your list       │
-│ ┃  an address not on     │       │              │ ✕ R07 Over today's   │
-│ ┃  your list     11:47   │       │              │      limit           │
-│ ┃  Why was this blocked? │       │              │ Transaction 0x9a…3f  │
-└──────────────────────────┘       └──────────────┴──────────────────────┘
++----------------------------------------+
+|  <-        Activity             [Freeze]|
++----------------------------------------+
+|  [ All | Allowed | Needs you | Denied ] |  SegmentedControl
++----------------------------------------+
+|  (o) Paid Mara Okonjo   1,200 USDC  v   |  collapsed row
+|      14:22  (v) Allowed                 |
+|  ....................................   |
+|  (o) Deposit to Aave    3,000 USDC  ^   |  EXPANDED
+|      09:04  (v) Allowed                 |
+|  +----------------------------------+   |
+|  | Steward proposed moving 3,000    |   |  solid surface-2, 20r
+|  | USDC ($3,000) into Aave USDC.    |   |
+|  |                                  |   |
+|  | (v) R-01 daily cap    2.4k/10k   |   |  each check: badge + id
+|  | (v) R-03 allowlist    exact match|   |  + one plain line
+|  | (v) R-07 depeg guard  1.0000     |   |
+|  | (v) Simulation        no revert  |   |
+|  |                                  |   |
+|  | tx 0x9f3c...a21b            [->] |   |  mono, external link
+|  +----------------------------------+   |
+|  ....................................   |
+|  (o) Pay 0x7ac1...  blocked             |
+|      08:51  (x) Denied                  |
++----------------------------------------+
 ```
-Expanded tabs, in order: Context · Proposal · Verifier · Policy checks · Simulation · Transaction.
-Every rule renders as `RuleChip` (code + sentence). No tab is a card grid.
+
+Desktop `>= 1024`: list left at 440, the detail pane sticky on the right.
 
 ### S6 Approvals `/app/approvals` + sheet
 
 ```
-list (440)                         sheet (glass, full-screen ≤640)
-┌──────────────────────────┐       ┌──────────────────────────────┐
-│ Waiting for you      (1) │       │ ✕                            │
-│ ┌──────────────────────┐ │       │ Pay Acme Design              │  h1
-│ │ Pay Acme Design      │ │       │ 8,000.00 USDC ($8,000.00)    │  money
-│ │ 8,000.00 USDC        │ │       │                              │
-│ │ Expires in 5h 12m    │ │       │ You'll see these changes     │  h2
-│ │ [ Review ]           │ │       │ Agent wallet  −8,000.00 USDC │  rows
-│ └──────────────────────┘ │       │ Acme Design   +8,000.00 USDC │
-│                          │       │                              │
-│ expired:                 │       │ Why Steward proposed this    │  h2
-│ [ Review ] disabled +    │       │ The 1 Oct invoice is due and │
-│ "This expired. Ask       │       │ sits above the amount it can │
-│  Steward to re-evaluate."│       │ pay on its own.              │
-│                          │       │                              │
-│ policy changed:          │       │ Rules that triggered         │  h2
-│ "Your policy changed, so │       │ ⚠ R10 Above autonomous limit │  RuleChips
-│  Steward cancelled this. │       │ ✓ R03 Recipient on your list │
-│  It will re-evaluate on  │       │                              │
-│  the next check."        │       │ What you will sign           │  h2
-└──────────────────────────┘       │ ┌──────────────────────────┐ │
-                                   │ │Steward approval          │ │  SOLID,
-                                   │ │Wallet: 7f3c…             │ │  mono,
-                                   │ │Proposal: 0x9a41…         │ │  verbatim,
-                                   │ │Policy: v3                │ │  copy btn
-                                   │ │Expires: 2026-09-21T18:…  │ │
-                                   │ └──────────────────────────┘ │
-                                   │ This is exactly what your    │
-                                   │ wallet will show you.        │
-                                   │ Expires in 5h 12m            │  warn <1h
-                                   │ [   Approve   ] [  Reject  ] │  48h, 12 gap
-                                   └──────────────────────────────┘
++----------------------------------------+        sheet over the queue:
+|  <-       Approvals   2      [Freeze]  |     +------------------------+
++----------------------------------------+     |          ---          |  grabber
+|  (!) Pay Devon Achebe   4,000 USDC     |     | Approve this payment  |  h2
+|      over the 2,500 cap  (!) Needs you |     |                       |
+|  (!) New recipient      (!) Needs you  |     | To   Devon Achebe     |
+|      0x4b2e...9f10                     |     |      0x4b2e ... 9f10  |  mono, grouped
++----------------------------------------+     | Amount 4,000 USDC     |
+|            (empty variant)             |     |        ($4,000)       |
+|              [ glyph ]                 |     |                       |
+|        Nothing needs you               |     | [====|====----]       |  meter, after
+|  Steward is inside every limit you     |     | Would use 6,400 of    |
+|  set. It will ask before it isn't.     |     | 10,000 today          |
++----------------------------------------+     |                       |
+                                               | You will sign:        |  label
+                                               | +-------------------+ |
+                                               | | Steward: approve  | |  mono on
+                                               | | payment 4000 USDC | |  surface-2
+                                               | | to 0x4b2e...9f10  | |
+                                               | | nonce 84 exp 15m  | |
+                                               | +-------------------+ |
+                                               |                       |
+                                               | (!) R-02 over cap     |  the failing
+                                               | (v) R-03 allowlisted  |  check first
+                                               |                       |
+                                               | [   Approve   ]       |  accent
+                                               | [    Reject    ]      |  ghost
+                                               +------------------------+
 ```
 
-### S7 Policy `/app/policy` (wide variant)
+### S7 Policy `/app/policy`
 
-Left: sentences, one per solid row, grouped by heading (Limits · Recipients · Vaults · Risk).
-Right: read-only JSON in mono on a solid surface with a copy button. A `Sentences | JSON` segmented
-control on mobile. "Edit mandate" → recompile → diff view: added rows get an `ok` left edge, removed
-rows `stop` + strikethrough, changed rows `warn` with before/after on two lines. Then the signing
-sheet. Never a side-by-side diff on mobile.
+```
++----------------------------------------+
+|  <-         Policy            [Freeze] |
++----------------------------------------+
+|  Your mandate, compiled                |  h2
+|                                        |
+|  1. Keep at least 4,000 USDC   R-06    |  numbered sentences, solid
+|     liquid in the treasury.            |  surface-2, rule id mono
+|  2. Move no more than 10,000   R-01    |  faint, right
+|     USDC in any 24 hours.              |
+|  3. Pay only the 4 recipients  R-03    |
+|     on your list.                      |
+|  4. Exit any vault if USDC     R-07    |
+|     moves 0.5% off a dollar.           |
+|                                        |
+|  [ Edit mandate ]                      |  ghost
++----------------------------------------+
+```
+
+Desktop `>= 1024`: sentences left, the full rule table right.
 
 ### S8 Recipients `/app/recipients`
 
 ```
-┌──────────────────────────────┐
-│ Recipients        [ Add ]    │
-│ Acme Design                  │  rows, solid
-│ 0x7f3c…9a41 · max 10,000     │  address in mono
-│ ─────────────────────────────│
-│ Add (sheet):                 │
-│  Label        [__________]   │  solid inputs, line-strong
-│  Address      [__________]   │  mono input
-│  Max per payment [_______]   │
-│  Monthly on day  [_______]   │
-│ ┌──────────────────────────┐ │  confirmation block, solid
-│ │ 0x7f3c 9d21 88ab c410    │ │  full address, 4-char chunks,
-│ │ 6e5f 1a2b 3c4d 5e6f 9a41 │ │  mono, first/last 6 in ink,
-│ │ Checksum valid           │ │  middle in muted
-│ └──────────────────────────┘ │
-│ ⚠ This looks like Acme Ops   │  poisoning heuristic, warn,
-│   (0x7f3c…9a4f). Check every │  never blocks — warns
-│   character before signing.  │
-│ [ Sign and add recipient ]   │
-└──────────────────────────────┘
++----------------------------------------+
+|  <-       Recipients             +     |
++----------------------------------------+
+|  ( Search                          )   |  Input, 20r
++----------------------------------------+
+|  ALLOWLIST                             |  label
+|  (MO) Mara Okonjo        1,200 USDC    |  avatar pill, initials
+|       0x1d4f...c802      paid Fri      |
+|  (DA) Devon Achebe       4,000 USDC    |
+|       0x4b2e...9f10      pending       |
++----------------------------------------+
+        sheet: Add recipient
+        Label  ( Mara Okonjo            )
+        Address( 0x1d4f 2a99 ... c802   )  mono, 4-char groups
+        (!) Steward matches this address exactly.
+            No ENS, no lookalikes. Check it.
+        [        Add recipient         ]
 ```
 
-### S9 Freeze (modal, global — reachable from every authenticated screen)
+### S9 Freeze (modal, global)
 
 ```
-┌──────────────────────────────┐
-│ ▒▒▒▒▒ scrim ground/60 ▒▒▒▒▒▒ │
-│ ┌ glass, xl radius, e2 ────┐ │
-│ │ Stop Steward             │ │  h1 — not "Emergency!"
-│ │ Freezing stops every     │ │
-│ │ action immediately. Your │ │
-│ │ funds stay where they    │ │
-│ │ are and you can undo     │ │
-│ │ this in Settings.        │ │
-│ │                          │ │
-│ │ 1 Freeze now             │ │  genuine sequence
-│ │   [ Freeze now ]         │ │  ← the ONLY filled stop button
-│ │ 2 Revoke spending        │ │
-│ │   permission             │ │
-│ │   [ Revoke ] (outline)   │ │
-│ │ 3 Bring funds home       │ │
-│ │   [ Sweep ]   (outline)  │ │
-│ │                          │ │
-│ │ done →  ✓ Frozen at      │ │
-│ │           14:02          │ │
-│ │ failed → ✕ Revoke failed.│ │
-│ │   Nothing moved.         │ │
-│ │   [ Try again ]          │ │
-│ │                          │ │
-│ │ [ Close ]                │ │
-│ └──────────────────────────┘ │
-└──────────────────────────────┘
+        +--------------------------------+
+        |  Freeze Steward                |  h2
+        |                                |
+        |  Steward stops proposing and   |  body
+        |  stops executing, right now.   |
+        |  Your spend permission is      |
+        |  revoked on-chain.             |
+        |  Nothing in the treasury moves |
+        |  until you unfreeze.           |
+        |                                |
+        |  [     Freeze now      ]       |  deny-fill, white
+        |  [        Cancel        ]      |  ghost
+        +--------------------------------+
 ```
-After step 1, the whole app chrome switches: `StatusPill` → `frozen` (`stop`), the balance card
-loses its `seal` wash, and a persistent solid bar reads "Steward is stopped. No further actions will
-be taken. Unfreeze in Settings."
 
 ### S10 Settings `/app/settings`
 
-Grouped solid rows: Notifications (Telegram link) · Export audit (CSV / JSON) · Verify audit chain
-(runs and shows "365 rows verified, chain intact" or the first bad row) · Unfreeze (signature) ·
-Close account. Destructive rows are last, with `stop` text and no fill.
+```
++----------------------------------------+
+|  (S)          Settings                 |
++----------------------------------------+
+|  (o) Mandate                       >   |  ListRow, no cards
+|      Edit what Steward may do          |
+|  (o) Spend permission              >   |
+|      10,000 USDC per day               |
+|  (o) Recipients                    >   |
+|      4 allowlisted addresses           |
+|  (o) Notifications                 >   |
+|      Tell me when Steward needs me     |
+|  (o) Export audit log              >   |  replaces "Private key"
+|      Download every decision as JSON   |
+|  (o) Verify audit chain            >   |
+|      Check the log has not been edited |
+|  (o) Network                  [chip]   |  chip: "BASE SEPOLIA"
+|  (o) Revoke permission             >   |  deny glyph + deny label
+|      Steward can no longer spend       |
+|  (o) Close account                 >   |  deny glyph + deny label
++----------------------------------------+
+|  Steward runs on Base Sepolia.         |  faint, centred
++----------------------------------------+
+```
 
-### S11 Account closure
+Steward never displays a private key or a recovery phrase — it does not hold them. The reference's
+"Export private key" row is replaced by **Export audit log** and **Verify audit chain**, which are
+the equivalent "prove it is yours" affordances for this product.
 
-A single checklist on one solid card — a genuine sequence, so numbered: 1 Freeze · 2 Revoke ·
-3 Bring funds home · 4 Export audit · 5 Delete personal data. Each line shows done / pending and
-cannot be reached out of order. Footer: "Audit rows are kept, with your personal details removed."
+### S11 Account closure `/app/close`
+
+```
++----------------------------------------+
+|  <-       Close account                |
++----------------------------------------+
+|  Four things happen, in order:         |  h2
+|                                        |
+|  (o) 1. Steward freezes                |  checklist rows; each turns
+|  (o) 2. The spend permission is        |  into an allow badge as it
+|        revoked on-chain                |  completes
+|  (o) 3. Everything sweeps home to      |
+|        your wallet                     |
+|  (o) 4. The audit log is exported      |
+|                                        |
+|  Your funds never leave your wallet's  |  small muted
+|  control. This does not delete the     |
+|  audit log - you keep a copy.          |
++----------------------------------------+
+|  [    Start closing    ]               |  deny-fill
++----------------------------------------+
+```
 
 ### Global states
 
-- Worker offline > 10 min → solid `warn` bar under the header: "Steward is paused (service issue).
-  Your funds are safe; nothing will move."
-- `degraded: true` from `GET /api/wallet` → `StatusPill` = `degraded` + the sentence "Safe mode —
-  scheduled payments and risk exits only."
-- Stale RPC → per-card `StaleBadge`, never a global banner.
+| State | Treatment |
+|---|---|
+| Loading | 3px accent bar at the top of the page + skeletons shaped like the final rows. Never a spinner. |
+| Empty | `EmptyState`: our own flat chamfered glyph, h2, one line of body, one CTA. |
+| Error | Solid `surface-2` panel, `deny` glyph, what failed and what did not move, a Retry ghost button. Never a toast for a persistent error. |
+| Stale | Data stays visible at `muted`, with `as of 14:02` in `mono faint` and a Refresh affordance. Never blank the screen. |
+| Degraded | `StatusPill` reads "Degraded", a banner names the subsystem ("SERV is unreachable. Steward is not proposing. Freeze still works."). |
+| Frozen | Header chip `deny-fill`, persistent banner, action row disabled with reason, balance card dimmed to 60%. |
+| Parked | A position that could not be exited shows a `escalate` chip "Parked" and the reason, with the retry time. |
 
 ---
 
-## 10. Accessibility floor
+## 12. Accessibility floor
 
-Non-negotiable for Phase 7 (NFR-7).
+Non-negotiable. A phase does not pass if any of these regress.
 
-- **Focus**: `outline: 2px solid seal; outline-offset: 2px` on every interactive element. Never
-  removed, never replaced with a shadow. Visible in both themes (seal clears 3:1 on both grounds).
-- **Targets**: 44×44 minimum, including the freeze button, the status pill's info affordance and
-  every row chevron. Rows are 56px tall.
-- **Keyboard**: approve and freeze are both fully operable from the keyboard with no pointer.
-  Sheets and modals trap focus, restore it on close, close on Escape, and have their heading as
-  `aria-labelledby`. The freeze button is the last stop in the header landmark and is reachable in
-  ≤ 3 tabs from the top of any authenticated page; a skip link jumps to main content.
-- **Announcements**: agent status, approval counts and freeze completion sit in `aria-live="polite"`
-  regions that announce words ("Frozen", "Waiting for you: 1"), not colours. Errors use
-  `aria-live="assertive"` once, then stop.
-- **Meters**: `role="meter"` with `aria-valuetext` in the same sentence the caption uses.
-- **Colour independence**: every verdict is glyph + word + colour.
-- **Motion / transparency**: `prefers-reduced-motion` and `prefers-reduced-transparency` respected
-  as in §5 and §6; `forced-colors` supported.
-- **Text**: body is 16px, never below 12.5px anywhere, and the layout survives 200% zoom and
-  400% reflow at 320px width without horizontal scroll.
+- **Targets** 44x44 minimum, including the action-row circles (34px glyph inside a 44px hit area)
+  and the tab bar items.
+- **Focus** never removed. 2px `accent` outline at 2px offset in dark; 2px `accent-ink` in light.
+  Focus order follows DOM order. Sheets and modals trap focus and restore it on close.
+- **Keyboard path for the two acts that matter:** `Tab` to the Approvals action, `Enter`, `Tab` to
+  Approve, `Enter`. And from anywhere: `Tab` to Freeze in the header (it is the last header item and
+  the first in the tab order after the skip link), `Enter`, `Tab` to Freeze now, `Enter`. Both paths
+  are tested in `pnpm test:e2e`.
+- **Skip link** to `#main` as the first focusable element.
+- **`aria-live`:** `polite` on the status pill and toasts; `assertive` on freeze confirmation and on
+  any verdict change that needs the owner.
+- **Verdicts carry text.** Every `VerdictBadge` renders its word visibly, not as a `title`.
+- **Addresses** are announced in 4-character groups via `aria-label`, and are never truncated in the
+  accessible name.
+- **Contrast:** every text/surface pair below, computed, in both themes, over glass at its opaque
+  fallback value (the worst case for glass is the opaque surface, which is what we measure).
+
+### Contrast table — dark (default)
+
+| Pair | fg | bg | ratio | |
+|---|---|---|---|---|
+| body text on ground | `#FFFFFF` | `#090C11` | 19.58 | AAA |
+| body text on surface | `#FFFFFF` | `#111419` | 18.45 | AAA |
+| body text on surface-2 | `#FFFFFF` | `#1B1E23` | 16.71 | AAA |
+| body text on surface-3 | `#FFFFFF` | `#24272F` | 14.93 | AAA |
+| body text on glass | `#FFFFFF` | `#1A1F27` | 16.55 | AAA |
+| muted on ground | `#B3B6BE` | `#090C11` | 9.65 | AAA |
+| muted on surface-2 | `#B3B6BE` | `#1B1E23` | 8.24 | AAA |
+| muted on surface-3 | `#B3B6BE` | `#24272F` | 7.36 | AAA |
+| muted on glass | `#B3B6BE` | `#1A1F27` | 8.16 | AAA |
+| faint label on ground | `#7E838D` | `#090C11` | 5.15 | AA |
+| faint label on surface-2 | `#7E838D` | `#1B1E23` | 4.39 | AA large / UI |
+| accent text on ground | `#AEF07A` | `#090C11` | 14.50 | AAA |
+| accent text on surface-2 | `#AEF07A` | `#1B1E23` | 12.37 | AAA |
+| accent text on glass | `#AEF07A` | `#1A1F27` | 12.25 | AAA |
+| on-accent on accent | `#0B120B` | `#AEF07A` | 14.06 | AAA |
+| on-accent on accent-press | `#0B120B` | `#98DE5F` | 11.71 | AAA |
+| allow on ground | `#2FD9A6` | `#090C11` | 10.81 | AAA |
+| allow on surface-2 | `#2FD9A6` | `#1B1E23` | 9.23 | AAA |
+| allow on glass | `#2FD9A6` | `#1A1F27` | 9.14 | AAA |
+| escalate on ground | `#FFB020` | `#090C11` | 10.71 | AAA |
+| escalate on surface-2 | `#FFB020` | `#1B1E23` | 9.14 | AAA |
+| escalate on glass | `#FFB020` | `#1A1F27` | 9.05 | AAA |
+| deny on ground | `#FF6A5E` | `#090C11` | 6.97 | AAA |
+| deny on surface-2 | `#FF6A5E` | `#1B1E23` | 5.95 | AA |
+| deny on glass | `#FF6A5E` | `#1A1F27` | 5.89 | AA |
+| white on deny-fill | `#FFFFFF` | `#D92D1E` | 4.83 | AA |
+| line-strong on ground (UI) | `#5A616B` | `#090C11` | 3.13 | AA UI |
+
+### Contrast table — light (alternate)
+
+| Pair | fg | bg | ratio | |
+|---|---|---|---|---|
+| body text on ground | `#0B0F16` | `#F4F6FA` | 17.74 | AAA |
+| body text on surface | `#0B0F16` | `#FFFFFF` | 19.19 | AAA |
+| body text on surface-2 | `#0B0F16` | `#EEF1F6` | 16.95 | AAA |
+| body text on surface-3 | `#0B0F16` | `#E4E8EF` | 15.62 | AAA |
+| body text on glass | `#0B0F16` | `#F0F3F8` | 17.26 | AAA |
+| muted on ground | `#525A68` | `#F4F6FA` | 6.42 | AAA |
+| muted on surface-2 | `#525A68` | `#EEF1F6` | 6.14 | AAA |
+| muted on surface-3 | `#525A68` | `#E4E8EF` | 5.66 | AA |
+| muted on glass | `#525A68` | `#F0F3F8` | 6.25 | AAA |
+| faint label on surface | `#6E7684` | `#FFFFFF` | 4.58 | AA |
+| faint label on ground | `#6E7684` | `#F4F6FA` | 4.23 | AA large / UI |
+| accent-ink text on ground | `#3F6B1A` | `#F4F6FA` | 5.83 | AA |
+| accent-ink text on surface | `#3F6B1A` | `#FFFFFF` | 6.31 | AAA |
+| on-accent on accent | `#0B120B` | `#AEF07A` | 14.06 | AAA |
+| allow on ground | `#067A59` | `#F4F6FA` | 4.93 | AA |
+| allow on surface-2 | `#067A59` | `#EEF1F6` | 4.71 | AA |
+| escalate on ground | `#8A5300` | `#F4F6FA` | 5.85 | AAA |
+| escalate on surface-2 | `#8A5300` | `#EEF1F6` | 5.59 | AA |
+| deny on ground | `#C42A1B` | `#F4F6FA` | 5.25 | AA |
+| deny on surface-2 | `#C42A1B` | `#EEF1F6` | 5.02 | AA |
+| white on deny-fill | `#FFFFFF` | `#C42A1B` | 5.68 | AA |
+| line-strong on ground (UI) | `#5A6270` | `#F4F6FA` | 5.68 | AA UI |
+
+**In light theme the raw accent `#AEF07A` is 1.25:1 on ground — it is a fill only, never a text or
+icon colour.** Accent-coloured text in light uses `accent-ink`. This is enforced by the token names.
 
 ---
 
-## 11. Handover rules for Phase 7 engineers
+## 13. Reference flow → Steward screen mapping
 
-1. Tokens live in `apps/web/app/globals.css` under `@theme`. Do not hardcode a hex in a component.
-2. All money goes through `<Money />`. Never `Number(...)` a base-unit value (I12).
-3. The approval message is rendered from the API's `message` field verbatim. Rebuilding it is a
-   security bug, not a style bug (SECURITY §5).
-4. The freeze path's components import nothing from reasoning, policy or executor packages (I7,
-   `pnpm check:arch`).
-5. `DEMO DATA` is driven by server state, never a client constant (I11).
-6. Before adding a card, ask whether the content is an object or a record. Records are rows.
-7. Before adding glass, check §6's allowed list. If it is not on the list, it is solid.
-8. `docs/design/preview` (`/preview`) is the living reference; keep it in sync when a component
-   changes.
+| Reference flow | Steward screen | Note |
+|---|---|---|
+| Home | **S4 dashboard** | Balance card = treasury USDC. Action row is **ours**: Approvals / Recipients / Activity / Add funds. **Not** Send/Swap/Buy — the agent moves money, the owner does not make free-form transfers. |
+| Wallet | **S4 positions list** | Vault positions instead of token balances. |
+| Activity details | **S5 timeline detail** | Rule checks, simulation, tx link. |
+| Stats | **S4 widgets** | The allowance meter and the APY/delta line. No trading charts. |
+| Send Coins | **S6 approval sheet** + **S8 add recipient** | The "to / amount / confirm" anatomy becomes the approval sheet with the literal message to sign. |
+| Stake Coins | **S4 position row → read-only explainer** | What Steward does with idle USDC, and the APY. No user-initiated staking. |
+| Authentication, Verify, Onboarding, Waitlist, Add wallet | **S2 connect** + **S3 wizard** | Step-progress bars, centred glyph + title + body, bottom-pinned CTA. |
+| Settings, Notification settings, Privacy settings, Reset password, Logout | **S10 settings** | Flat rows, no cards, pressed fill, destructive rows in `deny`. |
+| Private Key | **S10 → Export audit log / Verify audit chain** | Steward never shows keys; it does not hold them. |
+| Delete Wallet | **S11 account closure** | A four-step checklist, not a confirm-and-vanish. |
+| Qr code, Scan qr | **Fund treasury** (sheet off "Add funds") | QR of the treasury address + copy-address, in `mono`, 4-char groups. |
+| Explore Market | *not used* | Steward has no discovery surface. Out of `PRD.md` scope. |
+| Swap Coins | *not used* | No user-initiated swaps. The agent does not swap; it deposits and withdraws. |
+| Buy coins | *not used* | No fiat on-ramp in scope. |
+| Create card | *not used* | No card product. |
+| Stories | *not used* | No promotional surface. Its step-progress bars were taken for S3. |
+| Edit and Customize Background | *not used* | No personalisation in MVP. The balance card's "carries an image" capability was noted but is not built. |
+
+Nothing above invents a feature that is not already in `docs/PRD.md`.
+
+---
+
+## 14. Handover rules for Phase 7 engineers
+
+1. Read tokens from `apps/web/app/globals.css`. Never write a hex literal in a component.
+2. The static preview at `/preview` is the reference implementation of every component in §9. If a
+   real screen disagrees with it, the preview is right.
+3. `pnpm check:arch` must stay green: the design layer imports nothing from `wallet`, `reasoning`,
+   or the policy executor.
+4. New dependency? One-line justification in `PROGRESS.md` → Decisions first.
+5. Any change to §2 (palette), §4 (verdict separation), §8 (glass) or §12 (a11y floor) needs the
+   contrast table recomputed and this file updated in the same commit.
