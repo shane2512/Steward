@@ -3,8 +3,8 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 5 complete (Opus)**, awaiting human "continue"; Phase 4 complete 2026-09-21
-Required model: Phase 6 = Opus
+Phase: **Phase 6 complete (Opus)**, awaiting human "continue"; Phase 5 complete 2026-09-21
+Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8)
 Last updated: 2026-09-21
 
 ## Phase status
@@ -16,10 +16,232 @@ Last updated: 2026-09-21
 | 3 | Policy Engine & mandate validator | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 129 modules/278 deps 0 violations + both violation fixtures fire, test 24 files/508 tests, `packages/policy` **100% branches (411/411)** enforced in its own vitest config |
 | 4 | SERV reasoning & injection defenses | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 153 modules/371 deps 0 violations + all three violation fixtures fire, test 32 files/621 tests (policy still 100% branches), `pnpm test:adversarial` **60 cases, guarantee 48/48 (100%), benign FP 0/12 (0%)**, live SERV smoke recorded (request ids below). 4.11 skipped (V-09 not confirmed) |
 | 5 | Risk gate, executor, confirmer | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch 170 modules/430 deps 0 violations + all **four** violation fixtures fire, test 35 files/673 tests (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, fork suite **2 files / 9 tests** (opt-in), and a LIVE Base Sepolia run: pull → deposit → payment → sweep, all through `executor.ts` (tx hashes below) |
-| 6 | Decision loop, scheduler, obligations, risk exits | Opus | ☐ | | |
+| 6 | Decision loop, scheduler, obligations, risk exits | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch **193 modules / 526 deps** 0 violations with **no rule changes** + all four fixtures fire, test **37 files / 729 tests** (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, Phase 6 fork suite **16/16** (opt-in), and a LIVE unattended Base Sepolia run through the real worker (below) |
 | 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
+
+## Phase 6 — tasks (all done 2026-09-21)
+- [x] 6.1 `runIteration(deps, walletId, trigger)` in `apps/worker/src/loop.ts` — ARCHITECTURE §5 in
+  order: lock → frozen/breaker SKIPPED → unresolved-execution SKIPPED → gather → PreChecks →
+  screen → propose → verify → simulate → evaluate → ALLOW/ESCALATE/DENY. An audit row at **every**
+  step (`SKIPPED`, `CONTEXT`, `PROPOSAL`, `VERIFICATION`, `SIMULATION`, `VERDICT`, `RECEIPT`, then
+  the executor's `EXECUTION_*`), and an `Err` from `appendAudit` aborts the iteration before
+  anything can be sent (I5/I6). The clock is injected throughout; no `Date.now()` decides anything.
+  The frozen check runs BEFORE the context is built, so freezing stops the loop with the RPC, the
+  oracle and SERV all down (I7) — proved by a test whose `PublicClient` rejects every call.
+- [x] 6.1 (lock) `apps/worker/src/lock.ts` — a **session** advisory lock on a dedicated pooled
+  connection, namespace **`0x4C4F4F50` ('LOOP')**, deliberately distinct from the audit chain's
+  `0x41554454` ('AUDT'): the loop holds its lock across `appendAudit` calls, which take their own,
+  and a shared namespace would deadlock on a key-hash collision. A tick that cannot take the lock
+  does **nothing** rather than queueing behind the running iteration.
+- [x] 6.2 `apps/worker/src/prechecks.ts` — PURE (no I/O, no SERV, no db, injected clock). Priority:
+  (a) risk trigger ⇒ `risk_exit`; (b) obligation due ⇒ `pay_recipient`, preceded by the funding
+  step it needs (`pull_allowance`, else `vault_withdraw`) and never half-paid; (c) idle cash above
+  `runwayBuffer + obligations30d` ⇒ `pull_allowance` then `vault_deposit`, keeping the 7-day payroll
+  float liquid and respecting R09 head-room. (c) exists because D-37 recorded that the live model
+  returns `noop` for idle deployment. Every deterministic proposal still goes through `buildCalls`,
+  the risk gate, the **real** `evaluate()`, a signed AllowReceipt and the executor — it skips only
+  the LLM proposer and (via R15's `source` exemption) the shadow verifier.
+- [x] 6.3 Discretionary path: `screenUntrusted` → `propose` → `verify` → `runPipeline`. `risk_exit`
+  is **removed from the kinds SERV may choose** (`DISCRETIONARY_KINDS`), which closes the Phase 4
+  known issue without a prompt change — see D-52.
+- [x] 6.4 `apps/worker/src/approvals.ts` + `POST /api/approvals/:id/approve`. The SECURITY §5 message
+  lives once, in `@steward/shared/approval.ts`, and is used by both sides. The signature is verified
+  **twice** — in the route (so a bad one never reaches the database) and again in the worker from
+  the stored bytes, before `ownerApproval` is built (RR-1). Refusals: not pending, expired, policy
+  version changed, signer ≠ owner, owner ≠ policy treasury, proposal-hash mismatch. A policy version
+  change also cancels every pending approval (`cancelApprovalsForPolicyChange`).
+- [x] 6.5 `apps/worker/src/jobs.ts` — `loop.tick` (cron every minute; in DEMO_MODE the handler also
+  queues a `singletonKey`'d half-step at +30 s, because cron's floor is one minute), `loop.run`,
+  `obligations.scan` (hourly, idempotent next-occurrence), `risk.scan` (every minute: vault + price
+  snapshots, flags the vault so R04 refuses new deposits, notifies, triggers the loop),
+  `approvals.expire` (every 5 min), `approvals.execute`, and a **DEMO_MODE + chain 84532 only**
+  `price.refresh` that re-publishes the MockPriceFeed quote so R12 does not fail closed on stage
+  (Phase 5 found the mock quote 41,828 s old).
+- [x] 6.6 Crash safety — `resumeCrashWindow()` runs on worker boot, before the first tick: every
+  `pending`/`submitted` row goes through Phase 5's `reconcileExecution`. A row with a hash is handed
+  back to the confirmer with the decision's stored `expectedDeltas`; a hash-less one is decided by
+  the on-chain scan and is **never re-sent**. Until a wallet's executions are resolved,
+  `runIteration` refuses to propose at all.
+- [x] 6.7 Degraded mode — `ServBreaker` (3 consecutive SERV failures open it, 5-minute cooldown, one
+  success closes it). While open only deterministic proposals run, and the heuristic half of the
+  injection screen still runs (a classifier being down never clears a signal, I5). Transitions write
+  `SERV_DEGRADED` / `SERV_RECOVERED` to the **system** audit chain, and `GET /api/wallet` returns
+  `degraded` by reading the latest transition — no new column, and the flag is as auditable as
+  everything else (D-53).
+- [x] 6.8 Routes in `apps/web`: `POST /api/agent/run`, `GET /api/decisions`, `GET /api/decisions/:id`,
+  `GET /api/approvals`, `POST /api/approvals/:id/approve`, `POST /api/approvals/:id/reject`, plus
+  `degraded` on `GET /api/wallet`. The web app **enqueues**; it never decides.
+  `apps/web/lib/queue.ts` is the only link to the worker (a pg-boss insert), so `apps/web` imports
+  no decision loop, no reasoning and no executor — `check:arch` passes with **no rule changes**.
+- [x] 6.9 Step timings — elapsed ms per named step (`gather`, `screen`, `propose`, `verify`,
+  `pipeline`) as one structured pino line and in `agent_decisions.serv_meta`. No OpenTelemetry
+  dependency for six numbers (D-54).
+- [x] RR-12 — `tripBreaker` is now called on an R14 rate-limit breach, inside `runPipeline`, right
+  after the verdict. The confirmer's breaker only counts *failures*; a refusal loop would otherwise
+  never open it.
+
+## Phase 6 Exit Gate result (2026-09-21)
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
+| `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
+| `pnpm check:arch` | ✅ 0 violations (**193 modules, 526 dependencies**), **no rule changes**; all four fixtures fire (`policy-only-shared`, `reasoning-no-wallet-db`, `owner-path-no-reasoning`, `cdp-only-in-wallet-bootstrap`); purity lint fixture 10 problems |
+| `pnpm test` | ✅ **37 files / 729 tests passed**, 3 files / 25 skipped (the three opt-in fork suites); `packages/policy` still **100% branches (411/411)**, 8 files / 344 tests |
+| `pnpm test:adversarial` | ✅ unchanged — 60 cases, guarantee **48/48 (100%)**, benign FP **0/12**, screen recall 35/40 |
+| Phase 6 fork suite (opt-in) | ✅ `STEWARD_FORK=1 npx vitest run apps/worker/test/fork` — **16/16 passed** |
+| Phase 5 fork suite (opt-in) | ✅ still 2 files / 9 tests |
+| live unattended run | ✅ see "Live unattended run" below |
+
+New Phase 6 test files: `apps/worker/test/prechecks.test.ts` (**26**, pure — no network, no db),
+`apps/worker/test/loop.test.ts` (**30**, real Postgres), `apps/worker/test/fork/loop.fork.test.ts`
+(**16**, opt-in fork + real Postgres).
+
+Required cases from PHASES 6 "Tests", and where each lives:
+
+| Required case | Test |
+|---|---|
+| DEMO golden table end to end | `fork/loop.fork.test.ts` x6: idle-cash deposit ALLOW, payroll ALLOW, vault drawdown ⇒ R20 `risk_exit`, injected memo ⇒ DENY (R16+R15), fabricated recipient ⇒ blocked pre-engine, over-threshold ⇒ ESCALATE → owner signature → ALLOW |
+| SERV outage ⇒ deterministic payments still execute | `fork` › "6.7 — with SERV down, a scheduled payment still executes" (+ "a DISCRETIONARY situation produces a NOOP, never a guess") |
+| worker killed mid-execution ⇒ resumes without duplicate | `fork` › "6.6 — a crash between claim and send is reconciled, and NOTHING is re-sent" |
+| concurrent triggers ⇒ single iteration | `loop.test.ts` › "concurrent triggers produce exactly ONE iteration" (5 parallel, 1 enters) + the namespace and release-on-throw tests |
+| approval replay / expired / wrong signer / wrong policy version | `loop.test.ts` x6 and `fork` x3 ("cannot be executed twice", "signed by the WRONG key", "a policy version bump between signing and execution") |
+| policy version change cancels pending approvals | `loop.test.ts` › "a policy version change cancels every pending approval and audits each one" |
+| frozen ⇒ SKIPPED with nothing sent | `loop.test.ts` › "SKIPPED when frozen, without touching the chain, and nothing is sent" |
+| never re-propose while an execution is unresolved | `loop.test.ts` x2 + `fork` › "a second iteration while the first execution is unresolved sends nothing" |
+| every loop step writes its audit row; `verifyChain` passes after a full run | `fork` › the golden deposit asserts the exact event sequence `CONTEXT, PROPOSAL, SIMULATION, VERDICT, RECEIPT` plus `EXECUTION_PENDING/SUBMITTED/CONFIRMED`; "the whole audit chain verifies after a mixed run" |
+| all unit tests run without network | `prechecks.test.ts` (26) imports nothing with I/O |
+
+Two real bugs were found by these suites and fixed, both worth naming:
+1. **R17 made approvals un-executable.** `gather` feeds R17 both executed and merely *decided*
+   proposal hashes (so the loop does not re-propose something already waiting on a human). On the
+   approval path that set always contains the proposal being approved, so every approval was denied.
+   The approval path now uses the execution-derived set only; the "already executed" half of R17 is
+   untouched and `claimExecutionSlot`'s unique index is still the backstop (I10).
+2. **`resumeCrashWindow` sent to a queue that did not exist yet.** It runs before `registerJobs` on
+   boot, so `boss.send('exec.confirm')` threw `Queue exec.confirm does not exist` and killed the
+   worker at startup — found by the first live run, fixed with an idempotent `createQueue`, and
+   covered by an assertion in the fork crash-window test.
+
+## Phase 6 — Opus review gate
+
+**Q1 — Trace one ALLOW and one DENY end to end through the audit rows, and show the decision is
+REPRODUCIBLE from the stored snapshot + policy version (NFR-4).**
+
+Reproducibility is not asserted here, it is *executed*: `replay(db, decisionId, walletId)`
+(`apps/worker/src/replay.ts`) re-runs the **same** `evaluate()` the loop calls, on inputs read back
+out of the **append-only, hash-chained** `audit_log` — not out of the mutable tables. `runPipeline`
+writes the complete `EvaluationInput` into the `VERDICT` audit row (`evaluationInput`: proposal,
+`now`, chainId, allowMainnet, demoStableParity, state, ledger, simulation, verifier, screen,
+contextFactIds, ownerApproval), minus the policy body, which is referenced by `policyVersion` and is
+itself immutable once activated. `replay` revives the three `Date` fields, re-parses with
+`zEvaluationInput`, re-evaluates, and compares **every rule result**, not just the verdict.
+
+The ALLOW trace (fork test "NFR-4 — an ALLOW replays identically…"), one deposit:
+
+```
+audit_log for entity_type='decision', entity_id=<decisionId>   (in order)
+  CONTEXT     contextHash 0x…, trigger schedule, preCheck deterministic, factIds […], policyVersion 1
+  PROPOSAL    kind vault_deposit, source deterministic, params {vaultId v1, amount 200000000}
+  SIMULATION  callsHash 0x…, ok true, deltas [{agent, -200000000}]
+  VERDICT     ALLOW, policyVersion 1, 22 rule results, evaluationInput {…}
+  RECEIPT     proposalHash 0x…, callsHash 0x…, nonce <uuid>, expiresAt …
+audit_log for entity_type='execution', entity_id=<executionId>
+  EXECUTION_PENDING    calls + receipt nonce, written BEFORE the broadcast
+  EXECUTION_SUBMITTED  userOpHash / txHash
+  EXECUTION_CONFIRMED  measured deltas matched
+replay() ⇒ identical: true, differences: []   (asserted)
+verifyChain(walletId) ⇒ ok                    (asserted)
+```
+
+The DENY trace (fork test "golden: an injected memo cannot move money…"):
+
+```
+  CONTEXT     untrusted U_1 = the fenced memo; screen.injectionSuspected true
+  PROPOSAL    kind pay_recipient, source serv, recipientId alex, amount 40000000
+  VERIFICATION DISAGREE
+  SIMULATION  ok true
+  VERDICT     DENY — R16 DENY (injection + value to a non-treasury holder),
+                      R15 DENY (verifier DISAGREE)
+  (no RECEIPT row, no execution row, sender never called)
+replay() ⇒ identical: true, differences: []   (asserted in the same test)
+```
+
+Both assertions are `expect(replayed.value.identical).toBe(true)` with `differences` printed on
+failure, and the live runner repeats the exercise over **every** decision a real run produced.
+`replay` refuses to guess: a decision with no `VERDICT` row, a `VERDICT` row without the stored
+inputs, or a missing policy version are all `Err`, each covered by a test.
+
+**Q2 — Prove no shortcut path exists from SERV output to the executor.**
+
+```
+$ grep -rn "signReceipt" --include=*.ts packages/*/src apps/web apps/worker/src
+packages/policy/src/receipt.ts:79:export function signReceipt(      # the only issuer
+packages/wallet/src/sweepHome.ts:237:  const receipt = signReceipt(…)   # owner path
+apps/worker/src/pipeline.ts:260:  const receipt = signReceipt(…)      # agent path
+
+$ grep -rn "execute(" --include=*.ts packages/*/src apps/web apps/worker/src
+packages/wallet/src/executor.ts:105:export async function execute(   # the only executor
+packages/wallet/src/sweepHome.ts:240:  const executed = await execute(
+apps/worker/src/pipeline.ts:274:  const executed = await execute(
+
+$ grep -rn "runPipeline(" --include=*.ts apps packages
+apps/worker/src/approvals.ts:202   apps/worker/src/loop.ts:391
+
+$ grep -rln "@steward/reasoning" apps/worker/src apps/web
+apps/worker/src/loop.ts      # propose / verify / screen
+apps/worker/src/runtime.ts   # constructs the SERV client, nothing else
+```
+
+So: `packages/wallet/src/executor.ts:243` (`sender.send`) is still the only line in product code that
+can broadcast a proposal's calls, and it is only reachable through `execute()`, which is only
+reachable with a verified `AllowReceipt`. `signReceipt` refuses any verdict whose
+`decision !== 'ALLOW'`, and its two callers are the owner sweep and `runPipeline` — which is the
+*only* function in Phase 6 that calls `evaluate()` on the agent path, and the only one either the
+loop or the approval handler can reach. A SERV proposal and a deterministic one enter that function
+through exactly the same parameter.
+
+Structurally, `packages/reasoning` cannot import `packages/wallet` or `packages/db`
+(`reasoning-no-wallet-db`), `packages/context` cannot either (`context-no-wallet-db`), and
+`packages/wallet` cannot import `packages/reasoning` (`wallet-no-reasoning` /
+`owner-path-no-reasoning`). `apps/web` imports **no** reasoning and **no** loop at all: its only
+link to the worker is a pg-boss insert in `apps/web/lib/queue.ts`. `pnpm check:arch` passes with
+**zero rule changes for Phase 6** (193 modules, 526 dependencies), and all four deliberate-violation
+fixtures still fire.
+
+One thing did move: SERV is no longer offered `risk_exit`. `DISCRETIONARY_KINDS` in `loop.ts` omits
+it, so a model-authored risk exit cannot exist, which is both the fix for the Phase 4 verifier
+defect and one fewer kind on the LLM's menu (D-52).
+
+**Q3 — Prove two loops can never run concurrently for one wallet.**
+
+`apps/worker/src/lock.ts` takes `pg_try_advisory_lock(0x4C4F4F50, hashtext(walletId))` on a
+**dedicated connection checked out of the pool**, because a session lock must live on one
+connection and an iteration spans many statements and a chain round trip. `try_` not `pg_advisory_lock`:
+a tick that cannot take the lock does nothing at all rather than queueing behind the running one —
+a tick that arrives mid-iteration has nothing new to say. The lock is taken in exactly **one** place,
+`runLocked` in `jobs.ts`, which wraps both `runIteration` and `executeApproval`; `runIteration`
+itself never touches the lock, so there is no second owner to get out of step. Release happens in a
+`finally`, and even a failed unlock statement ends the lock, because releasing the connection ends
+the session.
+
+The namespace is deliberately **not** the audit chain's `0x41554454` ('AUDT'): the loop holds its
+lock across every `appendAudit` call, each of which takes `pg_advisory_xact_lock` on its own chain
+key, and sharing a namespace would let two different keys collide into a deadlock.
+
+Evidence (`apps/worker/test/loop.test.ts`, real Postgres): the namespace assertion; "a second
+acquisition for the same wallet is refused while the first is held" (and succeeds again after
+release); "a different wallet is not blocked"; "concurrent triggers produce exactly ONE iteration"
+(5 parallel `withWalletLock` calls, `entered === 1`, exactly one `acquired`); "releases the lock even
+when the body throws".
+
+Belt and braces beneath the lock: `claimExecutionSlot` still makes the receipt nonce and
+`(wallet_id, proposal_hash)` single-use in one transaction (I10), so even a lock failure could not
+produce a double send — proved in Phase 5 by five parallel `execute()` calls yielding one send.
+
+**Q4 — Where the deterministic path could still go wrong (recorded, not hidden).** See RR-13–RR-16
+under "Known issues".
 
 ## Phase 5 — tasks (all done 2026-09-21)
 - [x] 5.1 `packages/risk/src/simulate.ts` — `simulateProposalCalls` via **`eth_simulateV1`** (viem
@@ -737,8 +959,56 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | D-48 | 2026-09-21 | Deps added (Phase 5): `viem` in `packages/risk` (the simulation client), `@steward/risk` in `packages/wallet` (`sweepHome` must simulate before it evaluates), `@steward/wallet` + `viem` + `zod` in `apps/worker` (the `exec.confirm` handler and its payload schema), and `@steward/db`/`@steward/policy`/`@steward/risk`/`drizzle-orm` as root devDependencies so `scripts/live` typechecks. No new third-party dependency | Each is an existing workspace package or viem, already in the stack | — |
 | D-49 | 2026-09-21 | **`scripts/live/executor-e2e.ts` mints an ephemeral 32-byte receipt key when `RECEIPT_HMAC_SECRET` is absent** (it is not in `.env.local` today, and the task forbids editing that file), and defaults `DATABASE_URL` to the documented docker-compose URL. The property the executor relies on — a receipt must be signed with the key the executor holds — is preserved exactly by a per-run key. The key is never printed or persisted, and the script says loudly that it did this | The alternative was not running the live gate | edit `.env.local` (forbidden); skip the live gate (rejected) |
 | D-50 | 2026-09-21 | **`exec.confirm` is registered in `apps/worker` but nothing enqueues it yet.** PHASES 5.5 asks for the handler; 6.5/6.6 own scheduling and the boot-time resume. The live script and the fork tests call `confirmExecution` directly, so the code path is exercised end to end regardless | Keeps the phase boundary honest | schedule it now (rejected: Phase 6 scope) |
+| D-51 | 2026-09-21 | **The decision loop lives in `apps/worker/src`, not a new package.** It needs `reasoning` + `policy` + `risk` + `wallet` + `db` + `context` together, which no existing package may import; a new package would have added a build target and a barrel for one consumer | Fewest moving parts; `packages-no-apps` already forbids the wrong direction | a `packages/agent` package (rejected: one consumer) |
+| D-52 | 2026-09-21 | **SERV is not offered `risk_exit`.** `DISCRETIONARY_KINDS` omits it, so a model-authored risk exit cannot exist and the Phase 4 defect (the verifier reads an exit as a liquidity breach and DISAGREEs ⇒ R15 DENY on a pre-authorised safety action) is unreachable. Risk exits are a deterministic trigger (6.2a) and skip R15 by `source` | Closes the hole without a prompt v3, without re-recording the golden fixtures, and without re-running the 60-case adversarial corpus against a changed prompt. One fewer kind on the LLM's menu is strictly safer | verifier prompt v3 + re-record (rejected for this phase; still the right move if a SERV-sourced risk exit is ever wanted) |
+| D-53 | 2026-09-21 | **The `degraded` flag is published as audit events, not a column.** The SERV breaker lives in the worker process; it writes `SERV_DEGRADED` / `SERV_RECOVERED` to the system audit chain and `GET /api/wallet` reads the latest transition | No migration, and the flag is append-only and hash-chained like every other state change | a `wallets.degraded` column (rejected: a migration for a process-local, service-wide flag) |
+| D-54 | 2026-09-21 | **6.9 is a structured timing log, not OpenTelemetry.** Elapsed ms per step (`gather`, `screen`, `propose`, `verify`, `pipeline`) in one pino line and in `agent_decisions.serv_meta` | PHASES 6.9 explicitly allows this ("skip if it needs heavy deps"); the OTel SDK is four packages to ship six numbers | @opentelemetry/sdk-node (deferred) |
+| D-55 | 2026-09-21 | **The web app enqueues; it never decides.** `/api/agent/run` and the approval handler insert a pg-boss job (`apps/web/lib/queue.ts`); the worker re-verifies the owner signature, re-gathers state, re-simulates and re-evaluates | Keeps `check:arch`'s owner-path rules true by construction and means a compromised web process can ask for an iteration but cannot perform one. **No dependency-cruiser rule was changed in Phase 6** | calling the loop inline from the route (rejected) |
+| D-56 | 2026-09-21 | **`packages/wallet/src/demoOracle.ts` takes a structural `CdpDemoAdmin` port instead of importing `@coinbase/cdp-sdk`.** The DEMO-only `price.refresh` job therefore needed **no** change to `cdp-only-in-wallet-bootstrap` | The rule stays exactly as Phase 5 left it. The module is still fenced at construction (DEMO_MODE + chain 84532), encodes only `setPrice(uint256)` from a 1-entry ABI, targets only the configured feed, and moves no tokens | adding demoOracle.ts to the allowlist (rejected: weakening a rule we were told never to weaken) |
+| D-57 | 2026-09-21 | **New dependencies:** `pg-boss` + `pg` added to `apps/web` (the queue insert) and to the repo root devDependencies (the live runner); `@types/pg` + the existing workspace packages added to `apps/worker`. No new third-party runtime dependency was introduced — all of these were already in the lockfile for other workspaces | justification required by CLAUDE.md §7 | none |
+| D-58 | 2026-09-21 | **`scripts/live/loop-e2e.ts` derives the owner key from `SESSION_SECRET` instead of generating a random one per run.** Still in memory only: never written to disk, never printed, never sent anywhere; the script refuses anything but chain 84532 with DEMO_MODE on | A fresh random key per run strands that run's testnet USDC at an address whose key is gone the moment the run crashes — which happened twice, and the CDP faucet is rate-limited per project. Deriving it makes the treasury stable on this machine and nowhere else | keep it random and re-faucet each time (rejected: the faucet is the bottleneck) |
 
 ## Known issues / risks
+### Phase 6
+- **RR-13 — PreChecks size proposals at the $1 parity when there is no oracle quote.**
+  `microUsdToBase` converts `runwayBufferMicroUsd` / `perTxMicroUsd` with the quote when one exists
+  and with $1.00 otherwise. That only decides *how big a proposal to write down*; the Policy Engine
+  redoes the conversion properly and R08/R06/R10/R12 deny or escalate if the sizing was wrong. It is
+  a heuristic that can produce a proposal the engine then refuses — never one it wrongly permits.
+- **RR-14 — R17 and the deterministic path interact.** Because deterministic proposals are a pure
+  function of balances, two ticks with unchanged balances produce the *same* proposal hash, which
+  R17 denies for 24 h. In practice a successful action changes the balances, so the next hash
+  differs; but an action that is denied for another reason will keep producing the same hash and
+  will be denied by R17 from the second tick onwards, with the original reason no longer visible in
+  the verdict's top line. The audit row still carries every rule result.
+- **RR-15 — the payroll-before-yield ordering differs from DEMO.md's narration.** PreChecks pay an
+  obligation that is due *before* deploying idle cash (6.2 priority b before c), so a live run emits
+  pull → pay → pull → deposit rather than DEMO.md's "pull 50k → deposit 44k → pay". The safer order
+  was kept; Phase 9's demo script should either seed the obligation as due tomorrow or narrate the
+  actual order.
+- **RR-16 — `untrusted` is currently only the vault names plus whatever the caller injects.**
+  `gather` fences every policy vault's on-chain `name` (a genuinely attacker-controlled string for
+  any vault we did not deploy) and accepts `extraUntrusted` from the caller. There is no memo store
+  yet, so the DEMO attack beat needs Phase 9's `scripts/demo/attack.ts` to supply the memo through
+  that seam. RR-7 is therefore only half closed.
+- **The `exec.confirm` job's visibility timeout is still pg-boss's default** while
+  `confirmExecution` polls in-process for up to 3 minutes (carried from Phase 5). A worker restart
+  mid-confirm leaves the row for `resumeCrashWindow` on the next boot, which is correct but slower
+  than a matching `expireInSeconds` would be.
+- **The retry backoff still sleeps in-process** (Phase 5 note, unchanged): up to 15 minutes inside
+  one `execute()` call. It should become a pg-boss retry so a restart does not lose the schedule.
+- **`loop.tick`'s DEMO half-step is best-effort.** It is queued by the handler with
+  `singletonKey: 'demo-half-step'`, so at most one is pending; if the worker restarts between the
+  cron tick and the half-step, that 30-second slot is simply skipped.
+- **`risk.scan` writes a vault snapshot every minute per wallet** with no retention. Fine at
+  hackathon volume, unbounded growth in principle.
+- **The SERV breaker is per-process.** A second worker instance would keep its own counter. The
+  worker is single-instance in the MVP (ARCHITECTURE §7) and the advisory lock is what makes scaling
+  safe; the breaker would need to move into the database first.
+- **Two runs of the live script were lost to testnet funding, not to code.** The CDP faucet is
+  rate-limited per project, and the first two runs each stranded their USDC at an ephemeral
+  treasury. Fixed by D-58; recorded because the Phase 9 demo will hit the same faucet limit.
+
 ### Phase 5
 - **`.env.local` is missing `RECEIPT_HMAC_SECRET`, `DATABASE_URL` and `SESSION_SECRET`** (it carries
   only the CDP / SERV / RPC values). The live run worked around the first two (D-49), but **Phase 6
@@ -835,11 +1105,100 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 5 is complete; waiting for the human to say "continue". Phase 6 (decision loop, scheduler,
-  obligations, risk exits) requires Opus (`/model opus`).**
-- Do not start Phase 6 before that.
-- Before Phase 6: add `RECEIPT_HMAC_SECRET`, `DATABASE_URL`, `SESSION_SECRET`, `MOCK_VAULT_ADDRESS`
-  and `MOCK_PRICE_FEED_ADDRESS` to `.env.local` (see Phase 5 known issues).
+- **Phase 6 is complete; waiting for the human to say "continue". Phase 7 (web app UX) requires
+  Sonnet (`/model sonnet`), with Opus sub-tasks 7.6 and 7.8.**
+- Do not start Phase 7 before that.
+- `.env.local` now carries everything the worker and the live runner need (verified by
+  `pnpm live:env`, which prints variable NAMES only). `USDC_ADDRESS` and
+  `SPEND_PERMISSION_MANAGER_ADDRESS` are absent and fall back to the verified defaults in
+  `packages/shared/src/env.ts`.
+
+### Public API of Phase 6 (what the Phase 7 UI and Phase 8 consume)
+```ts
+// apps/worker/src/loop.ts
+runIteration(deps: DecisionLoopDeps, walletId: string, trigger: DecisionTrigger)
+  => Promise<DecisionOutcome>
+type DecisionTrigger = 'schedule'|'balance'|'obligation'|'risk'|'owner'|'approval'
+type DecisionOutcome = { status: 'locked' }
+                     | { status: 'skipped'; reason }
+                     | { status: 'noop'; decisionId; reason }
+                     | { status: 'failed'; code; message; decisionId? }
+                     | ({ decisionId } & PipelineOutcome)
+DISCRETIONARY_KINDS                     // the kinds SERV may choose (no risk_exit, D-52)
+
+// apps/worker/src/pipeline.ts — build -> simulate -> evaluate -> ALLOW/ESCALATE/DENY
+runPipeline(deps: PipelineDeps, input: PipelineInput) => Promise<PipelineOutcome>
+type PipelineOutcome = { status:'executed'; verdict; execution }
+                     | { status:'escalated'; verdict; approval }
+                     | { status:'denied'; verdict }
+                     | { status:'failed'; verdict?; code; message }
+serializeEvaluationInput(i)             // what the VERDICT audit row stores for replay
+
+// apps/worker/src/prechecks.ts — PURE
+preChecks(input: PreCheckInput): PreCheck   // skip | noop | deterministic | discretionary
+MIN_ACTION_BASE_UNITS = 100_000n ; PAYROLL_FLOAT_DAYS = 7
+
+// apps/worker/src/gather.ts
+gather(deps: GatherDeps, walletId): Promise<Result<Gathered, GatherError>>
+buildContextOf(g, manager, allowMainnet)   // -> BuildContext for buildCalls/executor
+
+// apps/worker/src/approvals.ts
+verifyApprovalSignature(publicClient, { owner, message, signature })
+executeApproval(deps, approvalId): Promise<Result<PipelineOutcome, ApprovalError>>
+cancelApprovalsForPolicyChange(db, walletId, newVersion, now)   // call from /api/policy/activate
+rejectApproval(db, approvalId, now)
+
+// apps/worker/src/replay.ts — NFR-4
+replay(db, decisionId, walletId): Promise<Result<ReplayResult, ReplayError>>
+type ReplayResult = { decisionId; stored; replayed: Verdict; identical: boolean;
+                      differences: string[]; auditRowId: number }
+
+// apps/worker/src/lock.ts
+tryWalletLock(pool, walletId) / withWalletLock(pool, walletId, fn)
+LOOP_LOCK_NAMESPACE = 0x4C4F4F50          // distinct from the audit chain's 0x41554454
+
+// apps/worker/src/jobs.ts
+registerJobs(deps: JobDeps): Promise<void>
+resumeCrashWindow({ boss, db, publicClient, now? })
+  => { resumed; uncertain; neverSent }     // never sends
+addOneMonth(dueDate: 'YYYY-MM-DD'): string // day clamped to 28
+LOOP_TICK_QUEUE='loop.tick'  LOOP_RUN_QUEUE='loop.run'
+OBLIGATIONS_SCAN_QUEUE='obligations.scan'  RISK_SCAN_QUEUE='risk.scan'
+APPROVALS_EXPIRE_QUEUE='approvals.expire'  APPROVALS_EXECUTE_QUEUE='approvals.execute'
+PRICE_REFRESH_QUEUE='price.refresh'        EXEC_CONFIRM_QUEUE='exec.confirm'
+
+// apps/worker/src/runtime.ts
+publicClientFor(env) / receiptKeyFor(env) / servClientFor(env) / priceAdapterFor(env, pc)
+demoPriceRefresherFor(env) / senderFactory(env)
+class ServBreaker    // SERV_FAILURE_THRESHOLD = 3, SERV_COOLDOWN_MS = 5 min
+```
+
+HTTP routes Phase 7 consumes (all owner-session authenticated, zod-validated, no secrets out):
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/agent/run` | enqueues `loop.run`; 409 while frozen or breaker-open; `{ enqueued, jobId }` |
+| GET | `/api/decisions?cursor=&limit=` | `{ decisions: [{ id, trigger, status, proposal, proposalHash, proposalSource, contextHash, screen, createdAt, verdict }], nextCursor }` |
+| GET | `/api/decisions/:id` | `{ decision (incl. contextSnapshot, verifier, servMeta), verdict (all rule results), simulation, execution, approval, audit[] }` |
+| GET | `/api/approvals?status=pending` | `{ approvals: [{ id, decisionId, proposalHash, status, message, expiresAt, decidedAt, proposal, rationale }] }` — **`message` is the literal text to sign; the UI must not rebuild it** |
+| POST | `/api/approvals/:id/approve` | `{ signature }`; 409 `policy_version_changed`, 410 `expired`, 401 `bad_signature`, 403 `owner_mismatch`, 409 `not_pending` |
+| POST | `/api/approvals/:id/reject` | no signature required (rejecting only ever prevents an action) |
+| GET | `/api/wallet` | now also returns `degraded: boolean` (6.7) |
+
+New in `@steward/shared`: `approvalMessage(input)` (SECURITY §5, verbatim) and `APPROVAL_TTL_MS`.
+New in `@steward/db`: `listActiveWalletIds`, `listRecipients`, `listVaultRows`, `setVaultFlagged`,
+`listObligationsDue`, `listObligationsUntil`, `ensureNextOccurrence`, `insertAgentDecision`,
+`updateAgentDecision`, `getAgentDecision`, `listAgentDecisions`, `insertVerdict`,
+`getVerdictForDecision`, `getSimulationForDecision`, `getPolicyVersion`, `insertApproval`,
+`getApproval`, `listApprovals`, `decideApproval`, `expirePendingApprovals`,
+`cancelPendingApprovals`, `listNotifications`, `recentDecisionProposalHashes`,
+`pendingApprovalHashes`, `setWalletFrozen`, `listAuditForEntity`.
+New in `@steward/wallet`: `createCdpClient`, `cdpTxSender`, `demoPriceRefresher` (DEMO-only, I11).
+
+**Phase 8 must call `cancelApprovalsForPolicyChange` from `/api/policy/activate` and from the freeze
+path** — the helper exists and is tested, but nothing calls it yet (the routes it belongs in are
+Phase 7/8 work). Until then, a policy bump is still safe: `executeApproval` refuses a stale message
+outright (`POLICY_VERSION_CHANGED`), so the cancellation is hygiene, not the control.
 
 ### Public API of `packages/risk` (what Phase 6 calls)
 ```ts
