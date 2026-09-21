@@ -1061,7 +1061,67 @@ forbids `wallet → reasoning`, and no AgentKit LLM adapter (`agentkit-langchain
 | V-09 | NOT CONFIRMED -> fallback | PromptGuard / Shadow Agents / decision trails appear in OpenServ marketing/console (https://console.openserv.ai/, https://docs.openserv.ai/what-is-serv) but no API parameter or response field is documented in the chat-completions reference. Fallback: own screen + verifier (already designed); Phase 4.11 skipped | 2026-09-20 |
 | V-12 | VERIFIED | https://www.openserv.ai/hackathon : AgentKit track; hackathon Sep 14-28 2026; submissions close **Sep 28 00:00 UTC**; submission = public X post tagging @openservai (name, concept, images, GitHub/demo links) + submission form; project must be new, functional, demonstrable; judged on creativity, user-readiness, revenue potential; human must enable data collection at console.openserv.ai/settings/organization (prompts shared with OpenServ -> keep secrets/PII out, NFR-5). No explicit OpenServ agent registration requirement found | 2026-09-20 |
 
-## Phase 7 - design pass (Opus, done 2026-09-21, before the build)
+## Phase 7 - design pass **v2, Solflare-referenced redesign** (Opus, done 2026-09-22)
+
+The human supplied 26 screenshots of the **Solflare mobile app** in `docs/design/Photos/` (git-ignored)
+and asked for the same style and the same UI language with the **yellow replaced by a light green**,
+adapted to Steward's context. Design-only again: no product screens, no backend or security code
+touched, no dependency added.
+
+- [x] Opened all 26 frames and sampled them with a Pillow script rather than by eye. Measured ground
+      `#090C11`, surfaces `#111419` / `#1B1E23` / `#24272F`, hairline `#2A2D31`, muted `#B3B6BE`,
+      accent **`#FFEF46`** (and its eight roles), plus the positive/negative/warning hues.
+      Written up in `docs/design/refs/REFERENCE.md` under "v2".
+- [x] `docs/DESIGN.md` rewritten as **v2** with a changelog at the top: dark is now the default, the
+      whole neutral ramp is the measured one, radii are pill-first, the home screen is balance-first
+      with a circular action row and a bottom tab bar, and the accent is light green.
+- [x] Solved the accent-vs-verdict collision (DESIGN.md 4): verdicts moved to a different hue family
+      and every verdict ships a glyph **and** a word. Verified under a simulated deuteranopia matrix.
+- [x] Tokens rewritten in `apps/web/app/globals.css`; fonts swapped in `apps/web/app/layout.tsx`.
+- [x] `/preview` rebuilt from scratch in the new language: dashboard, timeline with an expanded row,
+      approval sheet with the literal signing message, freeze modal, recipients, add-recipient sheet,
+      onboarding step, settings, and the loading/empty/error/stale/degraded/frozen/parked states,
+      in both themes.
+- [x] Reference-flow to S1-S11 mapping recorded, including the six flows deliberately **not used**
+      (Explore Market, Swap, Buy, Card, Stories, Edit background) with a reason each.
+- [x] Gates: `pnpm typecheck`, `pnpm lint`, `pnpm check:arch` green. `pnpm test` fails only the six
+      Postgres-backed suites because Docker was not running on this machine - the same set fails on
+      the parent commit, and no web test regressed.
+- [x] Screenshots regenerated into `docs/design/shots/` (mobile + desktop, light + dark).
+
+### Skills used (the human named them)
+
+| Skill | What it contributed |
+|---|---|
+| `redesign-existing-projects` | The audit-then-targeted-fix sequence and the fix-priority order (font swap, palette, states, spacing). Used as the spine of the pass. |
+| `design-taste-frontend` | Theme lock, colour-consistency lock, shape-consistency lock, the em-dash ban, "motion must be motivated", the states-are-not-optional rule. |
+| `high-end-visual-design` | The concentric-radius rule, `backdrop-filter` only on fixed/sticky surfaces, custom cubic-beziers, and GPU-only animation. |
+| `minimalist-ui` | Only its generic anti-slop rules (no emoji, no Lorem, no AI cliche copy, restraint in shadows). Its light warm-monochrome palette, serif display and small square radii were **set aside** - they contradict the reference photos and the brief. |
+| `full-output-enforcement` | No shortcut placeholders: `globals.css` and the preview page are complete files. |
+| `gpt-taste` | The 2-line headline rule and gapless-grid discipline. Its Python-randomised layout-variance engine was **set aside**: this is a fidelity brief, not a variance brief. |
+| `tastemaker` | Run in **audit** mode for the final rating (below). Its `anti_slop_scan.py` and `audit_motion.py` were run against the changed files. |
+| `brandkit`, `imagegen-frontend-mobile`, `imagegen-frontend-web`, `image-to-code`, `stitch-design-taste`, `design-taste-frontend-v1` | Reviewed and **set aside**. The first three are image-generation skills and no image-gen tool is available here (and the brand boundary forbids generating anything that reads as the reference's identity); `image-to-code` and `stitch-design-taste` are transcribe-a-mockup workflows whose extraction rules were already satisfied, more strictly, by the pixel-sampling script; `design-taste-frontend-v1` is superseded by the v2 that was loaded. |
+| `industrial-brutalist-ui` | Used only as the **negative check** the human asked for: nothing in the output is harsh, raw-bordered or monospace-shouting. |
+
+### Tastemaker ratings (audit mode, /10)
+
+Two passes. "Before" is the first build; "after" is the same page once the findings were fixed.
+
+| Dimension | Before | After | What moved it |
+|---|---|---|---|
+| Fidelity to the reference frames, with the green swap | 8 | 9 | Measured, not guessed. Short of 10: no dot-matrix texture on the balance card. |
+| Minimal wallet feel | 9 | 9 | Balance-first, one accent, flat rows, no decorative cards. |
+| Glass only where justified | 9 | 9 | Four places, three fallbacks, all dense data solid. |
+| Contrast / accessibility, computed not eyeballed | **5** | 9 | The first build leaked the dark theme's white text into the light theme, so row amounts rendered white-on-white. Fixed by giving the theme wrapper its own `text-ink`. Full two-theme table recomputed. |
+| Typography and money | 8 | 9 | Added a measured `--minor` token so the dimmed balance decimals clear 3:1 at 44px instead of 1.3:1. |
+| Copy | 9 | 9 | Sentence case, plain failure language, no em-dashes, no exclamation marks. |
+| Trust legibility | 10 | 10 | Verdict glyph + word + rule id on every agent action; the literal signing message; Freeze on every screen. |
+| Anti-slop / originality of identity | 7 | 8 | `anti_slop_scan.py` clean. `audit_motion.py` HIGH (`ease-in` on the skeleton pulse) fixed. Held at 8: the icons are hand-rolled rather than pulled from a set, and the empty-state art is geometric rather than illustrator-grade. |
+
+Two `audit_motion.py` MEDIUM findings are kept deliberately: the 1.4s loading bar and the 1.6s
+skeleton pulse are indeterminate ambient loaders, both gated by `prefers-reduced-motion`.
+
+## Phase 7 - design pass v1 (Opus, done 2026-09-21, superseded by v2 above)
 
 A design-only pass. No product screens, no backend or security code touched, no dependency added.
 
@@ -1205,6 +1265,12 @@ Screenshots: `docs/design/shots/` (390px and 1280px, light and dark).
 | D-62 | 2026-09-21 | **No new dependency for the design pass.** Screenshots come from `scripts/design-shots.mjs`, which drives the Chrome already installed on the machine over the DevTools protocol using Node 22's built-in `WebSocket`. `eslint.config.js` gained Node globals for `**/*.mjs` | Playwright/Puppeteer is a browser download for four PNGs. Chrome's `--window-size` will not go below ~500px on Windows, so the 390px shots need `Emulation.setDeviceMetricsOverride` regardless | `playwright` (rejected), `--screenshot` alone (rejected: cannot reach 390px) |
 | D-63 | 2026-09-21 | **Scrims and other translucent surfaces use explicit `color-mix(in srgb, ...)` tokens, never Tailwind's `/60` opacity modifier.** | The opacity modifier resolves in **oklab**, and its computed value cannot be composited and contrast-checked in sRGB - which is how the sheet's real contrast went unverified in the first pass | `bg-ground/60` (rejected once it proved unmeasurable) |
 | D-64 | 2026-09-21 | **Third-party reference imagery is studied, not committed.** `docs/design/refs/` holds sampled tokens and measurements in `REFERENCE.md`; `*.png|jpg|jpeg|webp` there is git-ignored | Committing Solflare's marketing art to a repo that may go public is redistribution; the measurements are what the design pass actually needs | committing the screenshots (rejected: safer option per CLAUDE.md 2) |
+| D-65 | 2026-09-22 | **Accent is one light green `#AEF07A`** (hover `#98DE5F`, ink on it `#0B120B`), replacing the reference's measured `#FFEF46` in all eight of its roles | Hue 94 deg at luminance 0.727 against the yellow's 0.834: near-identical value, so the value structure of the reference survives the swap, and near-black ink on it is 14.06:1 | the pastel mint `#A8F0B8`-`#C6F6D5` family the brief suggested (rejected: hue 133 sits on top of the verdict green, making the collision worse, and it loses the yellow's punch) |
+| D-66 | 2026-09-22 | **The "allowed" verdict moves off the accent hue to teal `#2FD9A6`, and every verdict always renders a glyph and a word.** Glyph fill is a third channel (filled disc / outlined ring / filled disc with slash) | The brand accent is now green, so green-means-safe would be ambiguous. Measured dE 41 between accent and allow, and dE 42 after a Brettel/Vienot deuteranopia simulation. Amber and red converge under that simulation, which is exactly why the glyph-and-word rule is not optional | keeping green for "allow" and shading the accent (rejected: unverifiable at a glance) |
+| D-67 | 2026-09-22 | **Dark is the default theme; light is the alternate.** `:root` carries the dark values and `prefers-color-scheme: light` opts out | All 26 reference frames are dark. v1 was light-first | keeping light-first (rejected: contradicts the brief) |
+| D-68 | 2026-09-22 | **Fonts are Figtree + Geist Mono, both OFL, via `next/font/google`**, replacing Public Sans + IBM Plex Mono (supersedes D-61) | Figtree has the single-storey `g`, tall x-height and geometric-humanist build of the reference's FK Grotesk (commercial, so unusable) and is variable. Public Sans is a different register and no longer matches the reference | Plus Jakarta Sans, Outfit (rejected: double-storey `g`, further from the reference); licensing FK Grotesk (out of scope) |
+| D-69 | 2026-09-22 | **A `--minor` token (`#626974` dark / `#858D9B` light) for the dimmed minor units of the balance figure**, rather than reusing `--line` | The reference dims the decimals to near-invisibility. At `--line` that is 1.3:1; at `--minor` it is 3.3:1, which is the AA floor for text at 44px/700. The cents stay legible to anyone who looks for them | reusing `--line` (rejected: fails even the large-text floor), `aria-hidden` on the decimals (rejected: makes the announced amount wrong) |
+| D-70 | 2026-09-22 | **Still no new dependency.** The preview's icons are inline SVG paths built from one 1.75px-stroke geometric family | `design-taste-frontend` and `tastemaker` both discourage hand-rolled icons, but adding Phosphor or Iconify to ship a design-only preview page is a production dependency for a reference artifact. Recorded as the reason the anti-slop score is held at 8 | `@phosphor-icons/react` (deferred: revisit if the Phase 7 build needs an icon set for real screens) |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks
@@ -1361,8 +1427,9 @@ Screenshots: `docs/design/shots/` (390px and 1280px, light and dark).
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 6 is complete and the Phase 7 *design pass* is done** (`docs/DESIGN.md`, tokens, and the
-  static `/preview` page). Waiting for the human to say "continue" before any screen is built.
+- **Phase 6 is complete and the Phase 7 *design pass v2* is done** (`docs/DESIGN.md` v2, the v2
+  tokens, the Figtree/Geist Mono swap, and the rebuilt static `/preview` page). Waiting for the
+  human to say "continue" before any screen is built.
 - **Phase 7 build: Sonnet for 7.1-7.5, 7.7, 7.9, 7.10 using `docs/DESIGN.md`; Opus for 7.6 and 7.8.**
   Run `/model sonnet` for the Sonnet tasks. Every screen follows `docs/DESIGN.md` 11's handover
   rules - tokens only, `<Money />` only, the approval message verbatim, and glass only where 6

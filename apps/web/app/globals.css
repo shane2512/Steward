@@ -368,7 +368,7 @@
 .skeleton {
   background-color: var(--st-surface-3);
   border-radius: var(--radius-sm);
-  animation: st-shimmer 1.6s ease-in-out infinite;
+  animation: st-shimmer 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

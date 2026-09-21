@@ -843,7 +843,7 @@ function Recipients() {
             <span className="block truncate font-mono text-mono text-muted">{addr}</span>
           </span>
           <span className="shrink-0 text-right text-small">
-            <Money amount={amt} token="" />
+            <Money amount={amt} />
             <span className="block font-mono text-label text-faint">{when}</span>
           </span>
         </div>
