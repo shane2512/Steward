@@ -12,7 +12,7 @@
     "typecheck": "turbo run typecheck && tsc --noEmit -p scripts/live/tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "test": "vitest run && pnpm test:policy",
-    "test:adversarial": "node scripts/not-yet.mjs test:adversarial 4",
+    "test:adversarial": "tsx packages/reasoning/adversarial/run.ts",
     "test:e2e": "node scripts/not-yet.mjs test:e2e 7",
     "check:arch": "depcruise apps packages --config .dependency-cruiser.cjs && node scripts/check-arch-fixture.mjs && node scripts/check-lint-fixture.mjs",
     "check:arch:fixture": "node scripts/check-arch-fixture.mjs",
@@ -24,7 +24,8 @@
     "contracts:deploy": "tsx scripts/live/deploy-contracts.ts",
     "live:spend-permission": "tsx scripts/live/spend-permission-e2e.ts",
     "check:lint:fixture": "node scripts/check-lint-fixture.mjs",
-    "test:policy": "vitest run --config packages/policy/vitest.config.ts --coverage"
+    "test:policy": "vitest run --config packages/policy/vitest.config.ts --coverage",
+    "test:record": "tsx scripts/live/record-serv-fixtures.ts"
   },
   "devDependencies": {
     "@coinbase/cdp-sdk": "^1.56.0",

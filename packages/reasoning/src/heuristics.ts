@@ -19,7 +19,11 @@ const AI_ADDRESSED =
 const SECRECY =
   /\b(do not|don'?t|never)\b[^.]{0,20}\b(tell|inform|notify|alert|mention|log|report)\b/i;
 const ROLE_MARKER =
-  /(<\|?im_(start|end)\|?>|<\/?(system|assistant|user|tool|function|untrusted_data|instructions?)[ >]|\[\/?INST\]|\[\/?SYS\]|^\s*(system|assistant|developer|tool_call)\s*:|###\s*(instruction|system)|\{\{|«system»)/im;
+  /(<\|?im_(start|end)\|?>|<\/?(system|assistant|user|tool|function|untrusted_data|instructions?)[ >]|\[\/?INST\]|\[\/?SYS\]|(?:^|[\s("[{·])(system|assistant|developer|tool_call)\s*:|###\s*(instruction|system)|\{\{|«system»)/im;
+
+/** Instructions aimed at Steward's own machinery rather than at the money (found by corpus A04). */
+const DISABLE_CONTROL =
+  /\b(skip|bypass|disable|turn off|ignore|no need for|already (passed|checked|approved|verified))\b[^.]{0,40}\b(verifier|verification|shadow|check|checks|review|approval|screening|classifier|policy|limit|limits|rule|rules|guardrail)/i;
 
 const VALUE_VERB =
   /\b(send|transfer|pay|approve|withdraw|migrate|forward|route|sweep|redirect|wire)\b/i;
@@ -58,6 +62,7 @@ const RULES: readonly Rule[] = [
   { signal: 'addresses_the_model', test: (t) => AI_ADDRESSED.test(t) },
   { signal: 'requests_secrecy', test: (t) => SECRECY.test(t) },
   { signal: 'fake_role_marker', test: (t) => ROLE_MARKER.test(t) },
+  { signal: 'disable_control', test: (t) => DISABLE_CONTROL.test(t) },
   { signal: 'value_move_totality', test: (t) => VALUE_VERB.test(t) && TOTALITY.test(t) },
   { signal: 'new_destination', test: (t) => NEW_DESTINATION.test(t) },
   {
