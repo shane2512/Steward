@@ -20,6 +20,7 @@ import {
   getApproval,
   getUserById,
   getWalletById,
+  recentProposalHashes,
   type ApprovalRow,
   type Db,
 } from '@steward/db';
@@ -152,6 +153,23 @@ export async function executeApproval(
   );
   if (!gathered.ok) return fail(gathered.error.code, gathered.error.message);
 
+  // R17 must not refuse the very proposal the owner just approved.
+  //
+  // `gather` feeds R17 from two sources: proposal hashes that were EXECUTED in the last 24 h, and
+  // hashes that were merely DECIDED (so the loop does not re-propose something already waiting on a
+  // human). On this path the second set always contains this proposal — it is the escalated
+  // decision itself — which would make every approval un-executable. So the approval path uses the
+  // execution-derived set only. The "already executed" half of R17 is untouched: if this action has
+  // actually been sent in the window, R17 still denies it, and `claimExecutionSlot`'s unique index
+  // is the backstop either way (I10).
+  const g = gathered.value;
+  g.ledger = {
+    ...g.ledger,
+    recentProposalHashes: (
+      await recentProposalHashes(db, approval.walletId, new Date(now.getTime() - 24 * 3_600_000))
+    ).filter((h): h is Hex => h.startsWith('0x')),
+  };
+
   const audited = await appendAudit(db, {
     walletId: approval.walletId,
     actor: 'owner',
@@ -182,7 +200,7 @@ export async function executeApproval(
     null;
 
   const outcome = await runPipeline(deps, {
-    g: gathered.value,
+    g,
     decisionId: approval.decisionId,
     proposal,
     screen,
