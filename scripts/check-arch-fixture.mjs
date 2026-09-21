@@ -13,7 +13,12 @@ const r = spawnSync(process.execPath, [bin, 'packages', '--config', config, '--n
 });
 process.stdout.write(r.stdout);
 process.stderr.write(r.stderr);
-const expected = ['policy-only-shared', 'reasoning-no-wallet-db'];
+const expected = [
+  'policy-only-shared',
+  'reasoning-no-wallet-db',
+  'owner-path-no-reasoning',
+  'cdp-only-in-wallet-bootstrap',
+];
 const missing = expected.filter((rule) => !r.stdout.includes(rule));
 if (r.status === 0 || missing.length > 0) {
   console.error(`FAIL: dependency-cruiser did NOT flag: ${missing.join(', ') || '(exit 0)'}`);

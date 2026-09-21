@@ -66,17 +66,39 @@ module.exports = {
       'risk: shared only',
     ),
     forbid('packages-no-apps', '^packages/', '^apps/', 'packages must not depend on apps'),
+    // I7 — the owner path (freeze / revoke / sweep) must work with SERV, the LLM and the worker
+    // all down, so it may never reach reasoning. Covers both the API routes and `sweepHome`.
     forbid(
-      'web-owner-routes-no-reasoning',
-      '^apps/web/app/api/(freeze|sweep)/',
+      'owner-path-no-reasoning',
+      '^(apps/web/app/api/(freeze|sweep)/|packages/wallet/src/sweepHome\\.ts$)',
       '^packages/reasoning/',
-      'owner-path routes never touch reasoning (I7)',
+      'owner-path modules never touch reasoning (I7)',
     ),
+    // I1 — only the wallet bootstrap (and the manual, STEWARD_LIVE-gated scripts) may hold a
+    // send-capable CDP/AgentKit client. Everything else, including `executor.ts`, receives the
+    // send capability through the injected `TxSender` port, so nothing else in the repo can
+    // broadcast even by accident.
+    {
+      name: 'cdp-only-in-wallet-bootstrap',
+      comment: 'AgentKit/CDP clients may only be constructed in the named bootstrap modules (I1)',
+      severity: 'error',
+      from: {
+        path: '^(packages|apps|scripts)/',
+        pathNot: '^(packages/wallet/src/agentkit\\.ts$|apps/web/lib/wallet\\.ts$|scripts/live/)',
+      },
+      to: { path: '@coinbase/(cdp-sdk|agentkit)' },
+    },
     { name: 'no-circular', severity: 'error', from: {}, to: { circular: true } },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: '(^|/)(node_modules|\.next|\.turbo|dist)/' },
+    // node_modules is excluded EXCEPT the two send-capable Coinbase packages: they have to stay
+    // visible for `cdp-only-in-wallet-bootstrap` to have anything to match on (they are still not
+    // followed, so nothing inside them is cruised).
+    exclude: {
+      // (`dist` is anchored to our own packages: @coinbase ships from a `dist/` folder too.)
+      path: '(^|/)(\.next|\.turbo)/|^(apps|packages|scripts)/.*/dist/|(^|/)node_modules/(?!.*@coinbase/(cdp-sdk|agentkit))',
+    },
     tsConfig: { fileName: require('node:path').join(__dirname, 'tsconfig.base.json') },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

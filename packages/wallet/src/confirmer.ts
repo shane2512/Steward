@@ -201,7 +201,13 @@ export async function confirmExecution(
   });
   if (!audited.ok) return err(`audit failed after confirmation: ${audited.error.message}`);
 
-  await notify(db, execution, 'execution', 'Action confirmed', `${execution.kind} confirmed on-chain`);
+  await notify(
+    db,
+    execution,
+    'execution',
+    'Action confirmed',
+    `${execution.kind} confirmed on-chain`,
+  );
   return ok({ status: 'confirmed', execution: confirmed ?? execution, deltas: observed });
 }
 
@@ -261,8 +267,7 @@ export function compareDeltas(
     const magnitude = want.delta < 0n ? -want.delta : want.delta;
     const allowed = (magnitude * toleranceBps) / 10_000n;
     const absDiff = diff < 0n ? -diff : diff;
-    if (absDiff > allowed)
-      return `${want.holder} expected ${want.delta}, measured ${got.delta}`;
+    if (absDiff > allowed) return `${want.holder} expected ${want.delta}, measured ${got.delta}`;
   }
   return null;
 }
@@ -318,7 +323,12 @@ async function markTimeout(
     event: 'EXECUTION_TIMEOUT',
     entityType: 'execution',
     entityId: execution.id,
-    payload: { reason, needsReconcile: true, userOpHash: execution.userOpHash, txHash: execution.txHash },
+    payload: {
+      reason,
+      needsReconcile: true,
+      userOpHash: execution.userOpHash,
+      txHash: execution.txHash,
+    },
     createdAt: now,
   });
   if (!audited.ok) return err(`audit failed on timeout: ${audited.error.message}`);

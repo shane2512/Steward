@@ -67,7 +67,10 @@ describe('detectRiskTriggers', () => {
   it('flags every vault when the asset depegs, in either direction', () => {
     const down = detectRiskTriggers({
       ...base,
-      vaults: [{ vaultId: 'v1', current: 1n }, { vaultId: 'v2', current: 1n }],
+      vaults: [
+        { vaultId: 'v1', current: 1n },
+        { vaultId: 'v2', current: 1n },
+      ],
       assetMicroUsd: 994_000n,
     });
     expect(down.map((t) => [t.vaultId, t.trigger])).toEqual([
@@ -75,10 +78,18 @@ describe('detectRiskTriggers', () => {
       ['v2', 'asset_depeg'],
     ]);
     expect(
-      detectRiskTriggers({ ...base, vaults: [{ vaultId: 'v1', current: 1n }], assetMicroUsd: 1_006_000n }),
+      detectRiskTriggers({
+        ...base,
+        vaults: [{ vaultId: 'v1', current: 1n }],
+        assetMicroUsd: 1_006_000n,
+      }),
     ).toHaveLength(1);
     expect(
-      detectRiskTriggers({ ...base, vaults: [{ vaultId: 'v1', current: 1n }], assetMicroUsd: 999_951n }),
+      detectRiskTriggers({
+        ...base,
+        vaults: [{ vaultId: 'v1', current: 1n }],
+        assetMicroUsd: 999_951n,
+      }),
     ).toEqual([]);
   });
 

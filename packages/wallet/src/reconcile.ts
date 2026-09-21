@@ -107,7 +107,11 @@ export async function reconcileExecution(
       event: 'EXECUTION_TIMEOUT',
       entityType: 'execution',
       entityId: execution.id,
-      payload: { reason: 'crash window', candidates: [...new Set(candidates)], needsReconcile: true },
+      payload: {
+        reason: 'crash window',
+        candidates: [...new Set(candidates)],
+        needsReconcile: true,
+      },
       createdAt: now,
     });
     if (!audited.ok) return err(audited.error.message);

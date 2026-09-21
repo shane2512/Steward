@@ -66,11 +66,19 @@ export function classifyError(error: unknown): ExecError {
   const message = error instanceof Error ? error.message : String(error);
   const m = message.toLowerCase();
 
-  if (/revert|execution failed|out of gas|insufficient (funds|balance|allowance)|nonce too low/.test(m))
+  if (
+    /revert|execution failed|out of gas|insufficient (funds|balance|allowance)|nonce too low/.test(
+      m,
+    )
+  )
     return execError('SEND_FAILED', message, 'fatal');
   if (/paymaster|sponsor|gas policy|rejected by policy/.test(m))
     return execError('SPONSORSHIP', message, 'retryable');
-  if (/timeout|timed out|socket|econn|enotfound|eai_again|network|fetch failed|502|503|504|429|rate limit/.test(m))
+  if (
+    /timeout|timed out|socket|econn|enotfound|eai_again|network|fetch failed|502|503|504|429|rate limit/.test(
+      m,
+    )
+  )
     return execError('NETWORK', message, 'retryable');
   // Unknown failures are retried once or twice rather than treated as final — but only when no
   // hash was produced (the executor enforces that), so this can never double-send.

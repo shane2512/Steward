@@ -199,8 +199,7 @@ export async function execute(
       payload: { proposalHash, reason: blocked, kind: proposal.kind },
       createdAt: now,
     });
-    if (!audited.ok)
-      return err(execError('AUDIT_FAILED', audited.error.message, 'fatal'));
+    if (!audited.ok) return err(execError('AUDIT_FAILED', audited.error.message, 'fatal'));
     return ok({ status: 'cancelled', execution: cancelled ?? execution, reason: blocked });
   }
 
@@ -213,7 +212,8 @@ export async function execute(
       execError('CALLS_MISMATCH', 'calls hash changed between claim and send'),
     );
   const targets = assertAllowedTargets(calls as Call[], policy, buildContext);
-  if (!targets.ok) return abort(db, execution, now, execError('BUILD_FAILED', targets.error.message));
+  if (!targets.ok)
+    return abort(db, execution, now, execError('BUILD_FAILED', targets.error.message));
 
   // I6: record the intent BEFORE broadcasting. If this write fails we do not send at all — and the
   // `pending` row left behind by a crash after this point is what `reconcile.ts` closes.

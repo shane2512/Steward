@@ -27,8 +27,7 @@ export type VaultSnapshotRow = typeof vaultSnapshots.$inferSelect;
 export const UNRESOLVED_STATUSES = ['pending', 'submitted'] as const;
 
 export type ClaimError =
-  | { code: 'NONCE_REPLAYED'; message: string }
-  | { code: 'WRITE_FAILED'; message: string };
+  { code: 'NONCE_REPLAYED'; message: string } | { code: 'WRITE_FAILED'; message: string };
 
 export type ClaimResult = {
   execution: ExecutionRow;
@@ -153,17 +152,10 @@ export async function updateExecution(
   db: Db,
   id: string,
   patch: Partial<
-    Pick<
-      ExecutionRow,
-      'status' | 'userOpHash' | 'txHash' | 'gasUsed' | 'error' | 'confirmedAt'
-    >
+    Pick<ExecutionRow, 'status' | 'userOpHash' | 'txHash' | 'gasUsed' | 'error' | 'confirmedAt'>
   >,
 ): Promise<ExecutionRow | undefined> {
-  const [row] = await db
-    .update(executions)
-    .set(patch)
-    .where(eq(executions.id, id))
-    .returning();
+  const [row] = await db.update(executions).set(patch).where(eq(executions.id, id)).returning();
   return row;
 }
 
@@ -171,10 +163,7 @@ export async function updateExecution(
  * Executions that are still `pending` or `submitted`. On boot these are the crash window: an intent
  * row may exist for a transaction that actually landed. Phase 6.6 hands each to the confirmer.
  */
-export async function listUnresolvedExecutions(
-  db: Db,
-  walletId?: string,
-): Promise<ExecutionRow[]> {
+export async function listUnresolvedExecutions(db: Db, walletId?: string): Promise<ExecutionRow[]> {
   const unresolved = inArray(executions.status, [...UNRESOLVED_STATUSES]);
   return db
     .select()
@@ -325,16 +314,16 @@ export async function setObligationStatus(
 /** The owner of a wallet, for notification rows. */
 export async function getUserIdForWallet(db: Db, walletId: string): Promise<string | undefined> {
   return (
-    await db.select({ userId: wallets.userId }).from(wallets).where(eq(wallets.id, walletId)).limit(1)
+    await db
+      .select({ userId: wallets.userId })
+      .from(wallets)
+      .where(eq(wallets.id, walletId))
+      .limit(1)
   )[0]?.userId;
 }
 
 /** R14's input: executions attempted by this wallet in the rolling window. */
-export async function countExecutionsSince(
-  db: Db,
-  walletId: string,
-  since: Date,
-): Promise<number> {
+export async function countExecutionsSince(db: Db, walletId: string, since: Date): Promise<number> {
   const rows = await db
     .select({ id: executions.id })
     .from(executions)
