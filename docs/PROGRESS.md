@@ -14,7 +14,7 @@ Last updated: 2026-09-21
 | 1 | Monorepo foundation, DB, auth | Sonnet (+Opus 1.9) | ✅ | 2026-09-20 | Gate green: typecheck 9/9, lint clean, check:arch 53 modules/63 deps 0 violations, test 7 files/43 tests |
 | 2 | Wallet layer: AgentKit, spend permissions, contracts | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 86 modules/152 deps 0 violations, test 16 files/164 tests, contracts:test 16/16. Mocks live on 84532; live spend + revoke done through product code |
 | 3 | Policy Engine & mandate validator | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 129 modules/278 deps 0 violations + both violation fixtures fire, test 24 files/508 tests, `packages/policy` **100% branches (411/411)** enforced in its own vitest config |
-| 4 | SERV reasoning & injection defenses | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 152 modules/369 deps 0 violations + all three violation fixtures fire, test 31 files/612 tests (policy still 100% branches), `pnpm test:adversarial` **60 cases, guarantee 48/48 (100%), benign FP 0/12 (0%)**, live SERV smoke recorded (request ids below). 4.11 skipped (V-09 not confirmed) |
+| 4 | SERV reasoning & injection defenses | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 153 modules/371 deps 0 violations + all three violation fixtures fire, test 32 files/621 tests (policy still 100% branches), `pnpm test:adversarial` **60 cases, guarantee 48/48 (100%), benign FP 0/12 (0%)**, live SERV smoke recorded (request ids below). 4.11 skipped (V-09 not confirmed) |
 | 5 | Risk gate, executor, confirmer | Opus | ☐ | | |
 | 6 | Decision loop, scheduler, obligations, risk exits | Opus | ☐ | | |
 | 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
@@ -59,8 +59,8 @@ Last updated: 2026-09-21
 |---|---|
 | `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` tsconfig |
 | `pnpm lint` | ✅ eslint 0 problems + prettier "All matched files use Prettier code style!" |
-| `pnpm check:arch` | ✅ 0 violations (**152 modules, 369 dependencies**); all three fixtures fire: `policy-only-shared`, the new **`reasoning-no-wallet-db`**, and the purity lint fixture (10 problems) |
-| `pnpm test` | ✅ **31 files / 612 tests passed**, 1 file / 4 skipped (opt-in fork suite); `packages/policy` still **100% branches (411/411)** |
+| `pnpm check:arch` | ✅ 0 violations (**153 modules, 371 dependencies**); all three fixtures fire: `policy-only-shared`, the new **`reasoning-no-wallet-db`**, and the purity lint fixture (10 problems) |
+| `pnpm test` | ✅ **32 files / 621 tests passed**, 1 file / 4 skipped (opt-in fork suite); `packages/policy` still **100% branches (411/411)** |
 | `pnpm test:adversarial` | ✅ **60 cases (48 malicious, 12 benign)** — guarantee **48/48 = 100%**, benign false positives **0/12 = 0.0%** (budget 10%), benign not denied 12/12, screen recall 35/40 = 87.5% of the cases that carry untrusted text |
 | `packages/reasoning` + `packages/context` coverage | ✅ Statements **96.6%**, Branches **85.8%**, Lines 98.2% (TESTING target for reasoning is ≥ 85%) |
 | live SERV smoke | ✅ recorded, request ids below |
@@ -123,7 +123,7 @@ the new `disable_control` rule and the broadened role-marker rule.
   `@steward/wallet` and `pnpm check:arch` reports
   `error reasoning-no-wallet-db: packages/reasoning/src/violation.ts → packages/wallet/src/index.ts`.
   `scripts/check-arch-fixture.mjs` now **fails the gate** unless both that rule and
-  `policy-only-shared` fire. Real code: 0 violations over 152 modules / 369 dependencies.
+  `policy-only-shared` fire. Real code: 0 violations over 153 modules / 371 dependencies.
 - *No tools*: `grep -rn "tools\|function_call\|tool_choice\|agentkit" packages/reasoning/src` → nothing.
   The only request shape `ServClient` can express is `{system, user, response_format:json_schema}`.
 - *Addresses*: `prompts.test.ts` builds all five prompts with an address pushed through every string
