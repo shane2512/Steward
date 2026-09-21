@@ -719,9 +719,18 @@ describe.skipIf(!FORK)('fork: the Phase 6 decision loop, end to end', () => {
     expect(blocked.status).toBe('skipped');
     expect(sent).toBe(0);
 
-    const boss = { send: async () => 'job-1' } as never;
+    // A pg-boss stand-in. `createQueue` must be here too: `resumeCrashWindow` creates the confirm
+    // queue before sending, because on a real boot it runs before `registerJobs` has made it.
+    const created: string[] = [];
+    const boss = {
+      send: async () => 'job-1',
+      createQueue: async (name: string) => {
+        created.push(name);
+      },
+    } as never;
     const recovered = await resumeCrashWindow({ boss, db, publicClient, now: NOW });
     expect(recovered.resumed + recovered.uncertain + recovered.neverSent).toBe(1);
+    expect(created).toContain('exec.confirm');
     expect(sent).toBe(0); // reconciliation NEVER broadcasts
     expect(await listUnresolvedExecutions(db, walletId)).toHaveLength(0);
 

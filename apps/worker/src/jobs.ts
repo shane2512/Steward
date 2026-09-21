@@ -348,6 +348,10 @@ export async function resumeCrashWindow(deps: {
   const now = deps.now ?? (() => new Date());
   const open = await listUnresolvedExecutions(deps.db);
   const counts = { resumed: 0, uncertain: 0, neverSent: 0 };
+  // This runs before `registerJobs` on boot (recovery first, then scheduling), so the confirm queue
+  // may not exist yet. `createQueue` is idempotent; without it the first resumed execution throws
+  // "Queue exec.confirm does not exist" and the whole boot fails.
+  if (open.length > 0) await deps.boss.createQueue(EXEC_CONFIRM_QUEUE);
 
   for (const execution of open) {
     const context = await executionContext(deps.db, execution.walletId);

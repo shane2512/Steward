@@ -15,7 +15,8 @@
 // in the DEMO.md narration.
 //
 // Owner wallet: a genuine Coinbase Smart Wallet built with viem's `toCoinbaseSmartAccount` whose
-// owner key is generated in memory for this run only — never written to disk, never logged.
+// owner key is derived in memory from a secret this machine already holds — never written to disk,
+// never logged, testnet only. See the comment on `ownerKey` for why it is derived and not random.
 import { randomBytes } from 'node:crypto';
 import { PgBoss } from 'pg-boss';
 import { eq } from 'drizzle-orm';
@@ -26,11 +27,13 @@ import {
   formatUnits,
   getAddress,
   http,
+  keccak256,
   parseAbi,
+  toBytes,
   type Address,
   type Hex,
 } from 'viem';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { toCoinbaseSmartAccount } from 'viem/account-abstraction';
 import { baseSepolia } from 'viem/chains';
 import { createDb, schema, verifyChain } from '@steward/db';
@@ -109,7 +112,19 @@ console.log(`agent wallet: ${agent}`);
 
 // ── 2. the owner treasury + spend permission ─────────────────────────────────────────────────────
 step('2', 'owner Coinbase Smart Wallet grants a Spend Permission');
-const ownerKey = privateKeyToAccount(generatePrivateKey()); // in memory only, never printed
+/**
+ * The owner's key. In memory only: never written to disk, never printed, never sent anywhere.
+ *
+ * It is DERIVED rather than random, for one practical reason found the hard way: with a fresh
+ * random key per run, every crashed run strands its testnet USDC at an address whose key is gone,
+ * and the CDP faucet is rate-limited per project. Deriving it from a secret this machine already
+ * holds gives the same treasury address on every run here, and no address anywhere else — the same
+ * in-memory-only property, minus the leak of test funds. Testnet only: the script refuses anything
+ * but chain 84532 with DEMO_MODE on, above.
+ */
+const ownerKey = privateKeyToAccount(
+  keccak256(toBytes(`steward:phase6:loop-e2e:owner:${env.SESSION_SECRET.reveal()}`)),
+);
 const ownerWallet = await toCoinbaseSmartAccount({
   client: pc,
   owners: [ownerKey],
@@ -118,24 +133,72 @@ const ownerWallet = await toCoinbaseSmartAccount({
 const treasury = getAddress(ownerWallet.address);
 console.log(`owner treasury: ${treasury}`);
 
+/**
+ * Fund the fresh treasury.
+ *
+ * The CDP faucet is rate-limited per project and per token, so it is tried first and its refusal is
+ * not fatal. The fallback moves the AGENT wallet's own leftover testnet USDC across: the agent is a
+ * named CDP smart account (D-3), so it is the one address in this setup that survives between runs
+ * and cannot be stranded by an ephemeral owner key. The loop then pulls that USDC back through the
+ * Spend Permission, which is exactly the flow under test.
+ */
 const TARGET_TREASURY = 2n * ONE;
-while ((await usdc(treasury)) < TARGET_TREASURY) {
-  const before = await usdc(treasury);
-  const f = await cdp.evm.requestFaucet({ address: treasury, network: NETWORK, token: 'usdc' });
-  console.log(`faucet USDC -> treasury: ${f.transactionHash}`);
-  if (!(await waitFor(async () => (await usdc(treasury)) > before))) break;
+async function faucet(address: Address, token: 'usdc' | 'eth'): Promise<boolean> {
+  try {
+    const f = await cdp.evm.requestFaucet({ address, network: NETWORK, token });
+    console.log(`faucet ${token} -> ${address}: ${f.transactionHash}`);
+    return true;
+  } catch (e) {
+    console.log(`faucet ${token} unavailable (${String(e).split('\n')[0]})`);
+    return false;
+  }
 }
-console.log(`treasury USDC: ${formatUnits(await usdc(treasury), 6)}`);
+
+if ((await usdc(treasury)) < TARGET_TREASURY) {
+  const before = await usdc(treasury);
+  if (await faucet(treasury, 'usdc')) await waitFor(async () => (await usdc(treasury)) > before);
+}
+if ((await usdc(treasury)) < TARGET_TREASURY) {
+  const held = await usdc(agent);
+  if (held > 0n) {
+    const account = await cdp.evm.getOrCreateSmartAccount({
+      name: `sta-${USER_ID.replace(/-/g, '')}`,
+      owner: await cdp.evm.getOrCreateAccount({ name: `sto-${USER_ID.replace(/-/g, '')}` }),
+    });
+    const op = await cdp.evm.sendUserOperation({
+      smartAccount: account,
+      network: NETWORK,
+      calls: [
+        {
+          to: USDC,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: 'transfer',
+            args: [treasury, held],
+          }),
+          value: 0n,
+        },
+      ],
+    });
+    const moved = (await cdp.evm.waitForUserOperation({
+      smartAccountAddress: agent,
+      userOpHash: op.userOpHash,
+    })) as { status: string; transactionHash?: string };
+    console.log(
+      `seeded the treasury with the agent's idle ${formatUnits(held, 6)} USDC (${moved.status} ${moved.transactionHash ?? ''})`,
+    );
+  }
+}
+const treasuryUsdc = await usdc(treasury);
+console.log(`treasury USDC: ${formatUnits(treasuryUsdc, 6)}`);
+if (treasuryUsdc === 0n) throw new Error('no testnet USDC available to run with');
 
 if ((await pc.getBalance({ address: ownerKey.address })) === 0n) {
-  const f = await cdp.evm.requestFaucet({
-    address: ownerKey.address,
-    network: NETWORK,
-    token: 'eth',
-  });
-  console.log(`faucet ETH -> owner EOA: ${f.transactionHash}`);
+  await faucet(ownerKey.address, 'eth');
   await waitFor(async () => (await pc.getBalance({ address: ownerKey.address })) > 0n);
 }
+if ((await pc.getBalance({ address: ownerKey.address })) === 0n)
+  throw new Error('the owner EOA has no ETH: it cannot deploy the smart wallet or add the manager');
 
 const wc = createWalletClient({
   account: ownerKey,
