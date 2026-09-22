@@ -9,6 +9,7 @@ export * from './actionRegistry';
 export * from './agentkit';
 export * from './calls';
 export * from './chain';
+export * from './companionTreasury';
 export * from './confirmer';
 export * from './demoOracle';
 export * from './errors';

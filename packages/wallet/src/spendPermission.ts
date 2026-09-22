@@ -304,6 +304,35 @@ const ERC6492_SUFFIX = '64926492649264926492649264926492649264926492649264926492
 
 export type OwnerAccountKind = 'deployed-contract' | 'counterfactual-6492';
 
+/** `OwnerAccountKind` plus the answer this file refuses but sign-in needs to know about. */
+export type SignerAccountKind = OwnerAccountKind | 'eoa';
+
+/**
+ * What kind of account signed, given an ALREADY-VERIFIED signature from it.
+ *
+ * Code present ⇒ a contract wallet. No code but an ERC-6492-wrapped signature ⇒ a counterfactual
+ * smart account (only a smart-account signer wraps). Otherwise a plain ECDSA signer: an EOA.
+ *
+ * Callers must have verified the signature first — this reads the shape, it does not authenticate.
+ * The classification of an EOA is the safe direction: at sign-in it means "derive a companion smart
+ * wallet", and a wrongly-derived treasury is just an address nobody has funded yet, whereas wrongly
+ * trusting an EOA as the treasury would strand the spend permission forever (D-5).
+ */
+export async function classifyOwnerAccount(
+  publicClient: PublicClient,
+  args: { address: Address; signature: Hex },
+): Promise<Result<SignerAccountKind>> {
+  let code: Hex | undefined;
+  try {
+    code = await publicClient.getCode({ address: args.address });
+  } catch {
+    return err('could not read account code'); // RPC error fails closed (I5)
+  }
+  if (code && code !== '0x') return ok('deployed-contract');
+  if (args.signature.toLowerCase().endsWith(ERC6492_SUFFIX)) return ok('counterfactual-6492');
+  return ok('eoa');
+}
+
 /**
  * D-5 — refuse plain EOAs as the granting account.
  *
@@ -347,17 +376,16 @@ export async function assertSmartWalletAccount(
   }
   if (!valid) return err('invalid signature for this permission');
 
-  let code: Hex | undefined;
-  try {
-    code = await publicClient.getCode({ address: account });
-  } catch {
-    return err('could not read account code');
-  }
-  if (code && code !== '0x') return ok('deployed-contract');
-  if (args.signature.toLowerCase().endsWith(ERC6492_SUFFIX)) return ok('counterfactual-6492');
-  return err(
-    'owner account is a plain EOA: Steward requires a Coinbase Smart Wallet to grant spend permissions (D-5)',
-  );
+  const kind = await classifyOwnerAccount(publicClient, {
+    address: account,
+    signature: args.signature,
+  });
+  if (!kind.ok) return kind;
+  if (kind.value === 'eoa')
+    return err(
+      'owner account is a plain EOA: Steward requires a Coinbase Smart Wallet to grant spend permissions (D-5)',
+    );
+  return ok(kind.value);
 }
 
 export async function readCurrentPeriod(
