@@ -3,9 +3,17 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 7 in progress**: tasks 7.1-7.6 built (7.1-7.5 Sonnet, 7.6 Opus, 2026-09-22); 7.7, 7.8 (Opus), 7.9, 7.10 remain
-Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8)
+Phase: **Phase 7 in progress**: tasks 7.1-7.8 built (7.1-7.5, 7.7 Sonnet; 7.6, 7.8 Opus, 2026-09-22); 7.9, 7.10 remain
+Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8 — both done)
 Last updated: 2026-09-22
+
+**7.8 note:** the Opus agent's post-close-out visual QA/screenshot pass was cut short on the human's
+instruction (time/cost) after it had already fixed real bugs it found; two test files it left mid-edit
+(`shell.test.tsx`, `settingsScreen.test.tsx` — the freeze/unfreeze tests needed a `wagmi` mock once the
+real components replaced the placeholders) were finished and verified by the orchestrator directly.
+Full gate re-run clean after that fix: typecheck 9/9, lint clean, check:arch 0 real violations
+(364 modules, all fixtures firing), test **1012 passed** + policy 344/344 at 100% branches, adversarial
+48/48 guarantee. No secrets in git history; `docs/design/Photos/` never committed.
 
 ## Phase status
 | Phase | Title | Model | Status | Gate passed | Notes |
