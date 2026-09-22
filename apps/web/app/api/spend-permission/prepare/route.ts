@@ -33,8 +33,12 @@ export async function POST(req: Request) {
 
   const env = getEnv();
   const now = Math.floor(Date.now() / 1000);
+  // The treasury, not the sign-in address: when the owner signed in with a plain browser wallet the
+  // treasury is the companion Coinbase Smart Wallet derived at sign-in (Phase 7 addendum). For an
+  // owner who signed in with a Smart Wallet the two are the same address, as before.
+  const treasuryAddress = getAddress(wallet.treasuryAddress);
   const permission = buildSpendPermission({
-    account: owner.address, // never client-supplied
+    account: treasuryAddress, // never client-supplied
     spender: agentWalletAddress, // never client-supplied
     token: getAddress(env.USDC_ADDRESS),
     allowance: parsed.data.allowance,
@@ -47,7 +51,7 @@ export async function POST(req: Request) {
   });
 
   const valid = validateSpendPermission(permission, {
-    ownerAddress: owner.address,
+    ownerAddress: treasuryAddress,
     agentWalletAddress,
     usdcAddress: getAddress(env.USDC_ADDRESS),
     now,

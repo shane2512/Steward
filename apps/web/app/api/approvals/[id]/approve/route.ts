@@ -16,6 +16,7 @@
 import { z } from 'zod';
 import { appendAudit, decideApproval, getActivePolicy, getApproval } from '@steward/db';
 import { approvalMessage, zHex, zPolicy } from '@steward/shared';
+import { getAddress } from 'viem';
 import { apiError, getPublicClient } from '@/lib/server';
 import { enqueueApprovalExecution } from '@/lib/queue';
 import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
@@ -65,9 +66,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       'the policy changed since this approval was created; a fresh approval is required',
     );
 
-  // The approver must be the wallet owner AND the policy treasury (I4, exact checksummed equality).
-  if (owner.address !== policy.data.treasuryAddress)
-    return apiError(403, 'owner_mismatch', 'the session owner is not the policy treasury');
+  // The approver must be the wallet's owner (the session, proved again by the signature below) and
+  // the policy must be bound to this wallet's treasury (I4, exact checksummed equality). Those are
+  // two different addresses when the treasury is a companion smart wallet the owner's EOA controls
+  // (Phase 7 addendum), and the same address when the owner signed in with a Smart Wallet.
+  if (getAddress(wallet.treasuryAddress) !== policy.data.treasuryAddress)
+    return apiError(403, 'owner_mismatch', 'the policy is not bound to this wallet treasury');
 
   let valid: boolean;
   try {

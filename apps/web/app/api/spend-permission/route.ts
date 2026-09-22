@@ -45,7 +45,9 @@ export async function POST(req: Request) {
 
   const env = getEnv();
   const valid = validateSpendPermission(permission.value, {
-    ownerAddress: owner.address,
+    // The treasury the wallet row names — the companion smart wallet when the owner signed in with
+    // a plain browser wallet, the sign-in address itself otherwise (Phase 7 addendum).
+    ownerAddress: getAddress(wallet.treasuryAddress),
     agentWalletAddress,
     usdcAddress: getAddress(env.USDC_ADDRESS),
     now: Math.floor(Date.now() / 1000),

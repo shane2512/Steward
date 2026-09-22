@@ -112,10 +112,12 @@ export async function executeApproval(
   if (!active) return fail('NO_ACTIVE_POLICY', 'wallet has no active policy');
   const policy = zPolicy.safeParse(active.body);
   if (!policy.success) return fail('POLICY_INVALID', 'stored policy does not parse');
-  // I4: the approver must be the wallet's owner, and that owner must be the treasury the policy was
-  // signed with. Exact checksummed equality, no similarity.
-  if (!addressEquals(owner, policy.data.treasuryAddress))
-    return fail('OWNER_MISMATCH', 'the wallet owner is not the policy treasury address');
+  // I4: the signature must come from the wallet's owner (checked below), and the policy must be
+  // bound to this wallet's treasury. Exact checksummed equality, no similarity. The owner and the
+  // treasury are different addresses when the treasury is a companion smart wallet that owner's EOA
+  // controls (Phase 7 addendum), and the same address for a Smart Wallet sign-in.
+  if (!addressEquals(wallet.treasuryAddress, policy.data.treasuryAddress))
+    return fail('OWNER_MISMATCH', 'the policy is not bound to this wallet treasury address');
 
   // The signed message pins the policy version. A new version must invalidate the signature even if
   // the `approvals.expire` / policy-change cancellation job has not run yet.
