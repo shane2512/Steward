@@ -4,26 +4,27 @@ import { IconBack } from '@/components/icons';
 import { StatusPill, Wordmark } from '@/components/ui/primitives';
 import { pillLabel, type PillState } from '@/lib/status';
 
-/** The global Freeze control (DESIGN §5): calm outlined pill; a filled chip once frozen. */
+/**
+ * The global Freeze control (DESIGN §5): calm outlined pill; a filled chip once frozen.
+ *
+ * 7.8: the frozen state is still a BUTTON. Freezing is step 1 of three (SECURITY §4), so an owner
+ * who froze and closed the modal has to be able to reopen it and finish revoking and sweeping — a
+ * dead status chip would strand them. The live region announces the state either way.
+ */
 export function FreezeButton({ frozen, onOpen }: { frozen: boolean; onOpen: () => void }) {
-  if (frozen)
-    return (
-      <span
-        role="status"
-        aria-live="assertive"
-        className="inline-flex h-11 items-center rounded-full bg-deny-fill px-4 text-small font-bold text-on-deny-fill"
-      >
-        Frozen
-      </span>
-    );
   return (
     <button
       type="button"
       onClick={onOpen}
       aria-haspopup="dialog"
-      className="inline-flex h-11 items-center rounded-full border border-deny/40 px-4 text-small font-bold text-deny transition-colors hover:border-deny hover:bg-deny-tint focus-visible:border-deny"
+      {...(frozen ? { 'aria-live': 'assertive' as const, role: 'status' } : {})}
+      className={
+        frozen
+          ? 'inline-flex h-11 items-center rounded-full bg-deny-fill px-4 text-small font-bold text-on-deny-fill'
+          : 'inline-flex h-11 items-center rounded-full border border-deny/40 px-4 text-small font-bold text-deny transition-colors hover:border-deny hover:bg-deny-tint focus-visible:border-deny'
+      }
     >
-      Freeze
+      {frozen ? 'Frozen' : 'Freeze'}
     </button>
   );
 }

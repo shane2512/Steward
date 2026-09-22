@@ -95,6 +95,47 @@ const CODES: Record<string, SignError> = {
     body: 'Steward caps the allowlist so it stays reviewable. Nothing was added. Remove a recipient you no longer pay, then try again.',
     retryable: false,
   },
+  // --- owner path: freeze / revoke / sweep (task 7.8) -------------------------------------------
+  already_frozen: {
+    title: 'Steward is already stopped',
+    body: 'Nothing further was needed, so no signature was taken. Carry on with revoking your spending permission.',
+    retryable: false,
+  },
+  not_frozen: {
+    title: 'Freeze Steward first',
+    body: 'A sweep only runs on a stopped wallet, so Steward refused. Nothing moved. Complete step one, then come back.',
+    retryable: false,
+  },
+  no_permission: {
+    title: 'There is no spending permission to revoke',
+    body: 'Steward has no on-chain allowance on this wallet. Nothing changed and nothing moved.',
+    retryable: false,
+  },
+  not_revoked_onchain: {
+    title: 'The chain still shows the permission as live',
+    body: 'Steward will not record a revoke it cannot see. Nothing moved. Wait for the transaction to confirm and try again.',
+    retryable: true,
+  },
+  revoke_unconfirmed: {
+    title: 'Steward did not see the revoke confirm',
+    body: 'Your transaction may still be pending. Nothing moved, and Steward is still stopped. Check your wallet, then reopen this and try again.',
+    retryable: true,
+  },
+  chain_unreadable: {
+    title: 'Steward could not read the chain',
+    body: 'It refused rather than guessing whether your permission is revoked. Nothing changed. Try again in a moment.',
+    retryable: true,
+  },
+  wallet_unavailable: {
+    title: "Steward's own wallet is unreachable",
+    body: 'The sweep could not start, so nothing moved. Steward is still stopped and your funds are where they were. Try again in a moment.',
+    retryable: true,
+  },
+  nothing_to_sweep: {
+    title: 'There is nothing to bring home',
+    body: 'Steward holds no USDC and no vault shares. Nothing moved because there was nothing to move.',
+    retryable: false,
+  },
   // --- approvals ------------------------------------------------------------------------------
   expired: {
     title: 'This approval expired',

@@ -362,3 +362,50 @@ export const zApprovalDecided = z.object({
   approval: z.object({ id: z.string(), status: z.string() }),
   enqueued: z.boolean().optional(),
 });
+
+// ── Owner control path (S9 freeze flow, S10 unfreeze; task 7.8) ─────────────────────────────────
+// Every step of S9 is described by the SERVER, so a reopened modal resumes from these three fields
+// rather than from anything the component remembered (I7: the owner path never depends on the
+// worker, the LLM or SERV being alive).
+
+/** The revoke step. `todo` carries the calldata the OWNER's own wallet sends; Steward never does. */
+export const zRevokeStep = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('none') }),
+  z.object({ state: z.literal('revoked'), at: iso.nullable() }),
+  z.object({
+    state: z.literal('todo'),
+    to: z.string(),
+    data: z.string().regex(/^0x[0-9a-fA-F]*$/),
+    permissionId: z.string(),
+  }),
+]);
+export type RevokeStep = z.infer<typeof zRevokeStep>;
+
+/** The sweep step: `none`, or the latest `sweep_home` execution's own status. */
+export const zSweepStep = z.object({
+  state: z.enum(['none', 'pending', 'submitted', 'confirmed', 'failed', 'timeout', 'cancelled']),
+  txHash: z.string().nullable().optional(),
+});
+export type SweepStep = z.infer<typeof zSweepStep>;
+
+export const zOwnerPath = z.object({
+  frozen: z.boolean(),
+  frozenAt: iso.nullable(),
+  frozenReason: z.string().nullable(),
+  revoke: zRevokeStep,
+  sweep: zSweepStep,
+});
+export type OwnerPath = z.infer<typeof zOwnerPath>;
+
+export const zFreezePrepare = z.object({ message: z.string(), expiresAt: iso });
+export const zFreezeResult = zOwnerPath.extend({
+  alreadyFrozen: z.boolean(),
+  cancelledApprovals: z.number(),
+});
+export const zUnfreezeResult = zOwnerPath.extend({ alreadyRunning: z.boolean() });
+export const zRevokeReported = z.object({ revoked: z.boolean(), alreadyRevoked: z.boolean() });
+export const zSweepResult = zSweepStep.extend({
+  verdict: z.enum(['ALLOW', 'ESCALATE', 'DENY']).optional(),
+  nothingToSweep: z.boolean().optional(),
+});
+export type SweepResult = z.infer<typeof zSweepResult>;

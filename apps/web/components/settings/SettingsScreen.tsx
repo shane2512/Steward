@@ -1,8 +1,8 @@
 'use client';
 // S10 Settings (UX_FLOWS S10, task 7.7): notifications, export audit, verify audit chain, unfreeze,
 // close account. Nothing here makes a security decision in the browser — export and verify are both
-// plain server reads, and Unfreeze is only a marked extension point for task 7.8 (SECURITY §5: it
-// needs an owner signature and a circuit-breaker reset that do not exist yet).
+// plain server reads, and Unfreeze (7.8) is an owner signature over a server-issued message that
+// `POST /api/unfreeze` verifies before it clears the frozen flag and the circuit breaker.
 import { useState } from 'react';
 import Link from 'next/link';
 import { UnfreezeSlot } from '@/components/freeze/UnfreezeSlot';
