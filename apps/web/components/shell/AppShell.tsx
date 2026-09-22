@@ -19,7 +19,9 @@ const TITLES: Record<string, string> = {
   '/app/policy': 'Policy',
   '/app/recipients': 'Recipients',
   '/app/settings': 'Settings',
-  '/app/close': 'Close account',
+  // 7.8 visual QA: this key was '/app/close', which is not a route — the closure screen rendered
+  // with no title in the header.
+  '/app/settings/close': 'Close account',
 };
 /** The three screens that get a wider two-column variant at >= 1024px (DESIGN §10). */
 const WIDE = new Set(['/app/activity', '/app/policy', '/app/approvals']);

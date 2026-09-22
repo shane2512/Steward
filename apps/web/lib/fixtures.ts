@@ -365,7 +365,7 @@ export function fixtureOnboarding(scenario: FixtureScenario): OnboardingState {
 // ------------------------------------------------------------------ task 7.7 screens
 
 /** S6 approvals queue: one pending, one already decided, so both list states render. */
-export function fixtureApprovals(scenario: FixtureScenario): ApprovalList {
+export function fixtureApprovals(scenario: FixtureScenario, status?: string): ApprovalList {
   if (scenario === 'quiet') return { approvals: [] };
   const pendingExpires = new Date(Date.now() + 3 * 3_600_000).toISOString();
   return {
@@ -392,7 +392,7 @@ export function fixtureApprovals(scenario: FixtureScenario): ApprovalList {
         proposal: null,
         rationale: 'Deposit 9,000 USDC to Aave USDC — above the vault share cap.',
       },
-    ],
+    ].filter((a) => status === undefined || a.status === status),
   };
 }
 

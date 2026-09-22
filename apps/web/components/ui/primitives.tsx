@@ -409,7 +409,7 @@ export function SegmentedControl<T extends string>({
   label: string;
 }) {
   return (
-    <div role="group" aria-label={label} className="flex rounded-full bg-surface-2 p-1">
+    <div role="group" aria-label={label} className="flex overflow-x-auto rounded-full bg-surface-2 p-1">
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -418,7 +418,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(o.value)}
-            className={`min-h-11 flex-1 rounded-full px-2 text-center text-small ${
+            className={`min-h-11 flex-1 shrink-0 rounded-full px-2 text-center text-small whitespace-nowrap ${
               on ? 'bg-surface-3 font-semibold text-ink' : 'text-muted hover:text-ink'
             }`}
           >

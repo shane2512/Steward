@@ -1412,6 +1412,159 @@ S8's `needsPolicySignature` prompt alike — the same object every time, per the
   narrow, reversible-in-intent action (clears a display name) rather than a fund-moving one, so
   this was judged acceptable; revisit if S11's ordering needs to become a hard server-side gate.
 
+## Phase 7 - build, part 4 (Opus, task 7.8, 2026-09-22)
+
+- [x] 7.8 **S9 freeze modal wired to the owner-path APIs (freeze -> revoke tx -> sweep), each step
+      idempotent and resumable**, plus unfreeze in Settings (S10) and the visual-QA pass that 7.7
+      deferred.
+
+### What was built
+
+| Piece | File | Notes |
+|---|---|---|
+| Freeze/unfreeze message | `packages/shared/src/signing.ts` (`freezeMessage`, `FREEZE_CONFIRMATION_TTL_MS`) | One builder, used by the route that ISSUES and the route that VERIFIES, so they cannot drift. Not exported from `@steward/shared/client`: the browser cannot compose one |
+| Owner-path helpers | `apps/web/lib/ownerPath.ts` | `issueFreezeMessage`, `verifyFreezeSignature` (spends the nonce, re-derives the message from the SESSION), `ownerPathStatus` (what makes S9 resumable) |
+| `POST /api/freeze/prepare` | new | `{ action: 'freeze' \| 'unfreeze' }` -> `{ message, expiresAt }`. Mints a single-use nonce into the iron-session **with the action beside it** |
+| `GET /api/freeze` | new | `{ frozen, frozenAt, frozenReason, revoke, sweep }` — the server's view of all three steps. Has a `?fixture=` branch |
+| `POST /api/freeze` | new | Verifies the owner's EIP-191 signature, audits `FROZEN`, sets `frozen=true`, cancels pending approvals (+ an `APPROVAL_CANCELLED` row each). Idempotent |
+| `POST /api/unfreeze` | new | Same discipline; `setWalletFrozen(..., false, ...)` also clears `breaker_open` and `breaker_failures`, which is SECURITY §5's "resets the circuit breaker" |
+| `POST /api/spend-permission/revoked` | new | Records the owner's revoke **only when the chain agrees** (`isRevoked`); the reported `txHash` is never taken as proof. Idempotent |
+| `GET`/`POST /api/sweep` | new | Calls `sweepHome` from `@steward/wallet` directly. Refuses on a running wallet (`not_frozen`) |
+| `latestExecutionOfKind` | `packages/db/src/executions.ts` | The newest `sweep_home` execution, for the progress/resume read |
+| `getAgentSender`, `receiptKey` | `apps/web/lib/wallet.ts` | The same `TxSender` the worker builds, for the sweep only. `cdp-only-in-wallet-bootstrap` already allows a CDP client in exactly this file |
+| `FreezeFlow` | `apps/web/components/freeze/FreezeFlow.tsx` | The real three-step S9 modal (was a placeholder). Exports `stepStates` so the step logic is unit-tested apart from the DOM |
+| `UnfreezeSlot` | `apps/web/components/freeze/UnfreezeSlot.tsx` | The real S10 unfreeze (was a placeholder); reuses `useSignFlow`/`useSigner`/`SignSurface` |
+
+### The exact message formats
+
+SECURITY §5 fixes only the approval message, so freeze/unfreeze follow the recipient message's shape
+(D-80): first line names the action, one labelled fact per line, server nonce, ISO expiry.
+
+```
+Steward freeze            Steward unfreeze
+Wallet: {walletId}        Wallet: {walletId}
+Nonce: {32 hex chars}     Nonce: {32 hex chars}
+Expires: {ISO-8601}       Expires: {ISO-8601}
+```
+
+Nothing owner-supplied enters either string, so no forged line can be injected. The action is part of
+line 1 **and** stored with the nonce, so a signature collected for an unfreeze can never be replayed
+as a freeze (tested).
+
+### Idempotency and resumability, step by step
+
+| Step | Idempotent because | Resumes from |
+|---|---|---|
+| 1 freeze | An already-frozen wallet returns `200 { alreadyFrozen: true }` — no second audit row, no second cancellation sweep | `wallets.frozen` |
+| 2 revoke | `SpendPermissionManager.revoke` is a no-op on an already-revoked permission, and the route reports `revoked: true` when the chain already says so | `spend_permissions` row + an `isRevoked` read |
+| 3 sweep | The executor keys on `proposal_hash` (I10), so a repeat POST for an unchanged position claims the same execution row instead of sending twice | the latest `sweep_home` execution row |
+
+The modal re-reads `GET /api/freeze` **before every action**, so a retry is never a blind repeat: it
+acts on the fresh server state, or does nothing.
+
+### Opus review gate — grep evidence (owner-signature gating + unreachable from reasoning)
+
+Every write on the owner path, and who may reach it:
+
+```
+$ rg 'setWalletFrozen|markSpendPermissionRevoked|sweepHome\(|encodeRevoke' --glob '!docs/**'
+packages/db/src/agent.ts:495               export async function setWalletFrozen(          <- writer, no policy
+packages/db/src/repos.ts:121               export async function markSpendPermissionRevoked( <- writer, no policy
+packages/wallet/src/spendPermission.ts:183 export function encodeRevoke(                   <- pure encoder
+packages/wallet/src/sweepHome.ts:78        export async function sweepHome(                <- owner path (5.8)
+
+apps/web/app/api/freeze/route.ts:83                   setWalletFrozen(..., true, 'owner freeze')
+apps/web/app/api/unfreeze/route.ts:59                 setWalletFrozen(..., false, null)
+apps/web/app/api/spend-permission/revoked/route.ts:71 markSpendPermissionRevoked(...)
+apps/web/app/api/sweep/route.ts:68                    sweepHome(...)
+apps/web/lib/ownerPath.ts:152                         encodeRevoke(...)     <- builds calldata only
+packages/wallet/test/fork/executor.fork.test.ts:413 / scripts/live/*.ts     <- tests + STEWARD_LIVE scripts
+```
+
+Each of the four production call sites, in order: `requireOwner()` (session) -> `requireWallet()` ->
+`verifyFreezeSignature()` (freeze, unfreeze), or a frozen-wallet precondition the owner can only have
+reached by signing (sweep), or an on-chain `isRevoked` read (revoke report). No call site accepts a
+caller-supplied address, wallet id or message.
+
+The one write with **no** owner signature is the circuit breaker:
+
+```
+$ rg 'openBreaker' --glob '!**/test/**' apps packages
+packages/db/src/executions.ts:213     export async function openBreaker(  -> { breakerOpen: true, frozen: true, ... }
+packages/wallet/src/confirmer.ts:388  await openBreaker(db, walletId, reason, now)
+```
+
+`openBreaker` only ever sets `frozen: true` — the safe direction. Nothing but `/api/unfreeze`, behind
+an owner signature, can set it back to `false`: `setWalletFrozen(..., false, ...)` has exactly one
+production caller, listed above.
+
+Unreachable from reasoning / agent-facing code, three ways:
+
+1. **Static.** `.dependency-cruiser.cjs` rule `owner-path-no-reasoning` now covers
+   `apps/web/app/api/(freeze|unfreeze|sweep)/`, `apps/web/app/api/spend-permission/revoked/`,
+   `apps/web/components/freeze/`, `apps/web/lib/ownerPath.ts` and `packages/wallet/src/sweepHome.ts`.
+2. **Proven to fail.** `scripts/fixtures/arch/apps/web/app/api/freeze/route.ts` is a new deliberate
+   violation; `scripts/check-arch-fixture.mjs` now cruises `apps` as well as `packages` and asserts
+   the rule fires on it (it does — see the gate output).
+3. **Runtime.** `apps/web/test/ownerPathApi.test.ts` mocks `@steward/reasoning` to **throw on
+   import**. All 14 route tests pass, so nothing in the graph reaches it at run time either (I7).
+
+No route on this path imports `@steward/reasoning`, `@steward/context`, the worker or the job queue.
+
+### Visual QA (the pass 7.7 deferred, plus 7.8's own screens)
+
+`node scripts/app-shots.mjs` now covers **20 screens x 390/1280 px x dark/light = 80 shots** in
+`docs/design/shots/app/`: it gained the five 7.7 screens, the closure checklist, and the three S9
+steps (a `click` selector opens the modal; which step is live is decided by the server's own
+owner-path status, so `?fixture=1|frozen|freeze-sweep` land on steps 1, 2 and 3).
+
+Real defects found and fixed (not just screenshots taken):
+
+| # | Found on | Defect | Fix |
+|---|---|---|---|
+| 1 | header, every screen | Once frozen, the global Freeze control became a `<span role="status">` — a dead chip. An owner who froze and closed the modal could never reopen it to finish revoking and sweeping | `FreezeButton` is a button in both states; the frozen state gets `aria-live` rather than `role="status"` (overriding the role would stop AT announcing it as a button at all) |
+| 2 | S9, 390 px | The modal was taller than a phone viewport: its own title clipped off the top and Cancel fell off the bottom, with no scroll | `FreezeModal`'s sheet caps at `calc(100dvh-2rem)` and scrolls |
+| 3 | S9, both themes | A **disabled** `Button` is `bg-surface-2`, the same colour as the step card it sat on — steps 2 and 3 rendered as unexplained bold text | A step you cannot start yet shows no control at all; the dimmed numbered heading already says it is waiting |
+| 4 | S9, sweep in flight | A sweep already `submitted` still offered "Bring funds home", inviting a second press (the executor would have deduped it, but the UI was dishonest) | No button while a sweep is in flight |
+| 5 | S9, first paint | The pre-load placeholder was built from the dashboard's `frozen` flag, so a frozen wallet briefly read **"There is no spending permission to revoke"** when it had one | Until the first `GET /api/freeze` lands, the modal says "Checking what has already happened…" |
+| 6 | S11 closure (7.7) | `AppShell`'s title map keyed `/app/close`, which is not a route — the real page is `/app/settings/close`, so the closure screen rendered with no header title | Key corrected |
+| 7 | S6 approvals (7.7), 390 px | The status filter overflowed the viewport ("Cancelled" clipped). Same control on S5 activity | `SegmentedControl` scrolls horizontally and its labels no longer wrap (`shrink-0`, `whitespace-nowrap`) — identical at 1280 px, contained at 390 px |
+| 8 | S6 approvals (7.7), fixtures | The fixture branch of `GET /api/approvals` ignored `?status=`, so an **approved** row appeared under "Pending" | The fixture filters by the same status the real branch uses |
+| 9 | typecheck | `GET(req?: Request)` in `/api/recipients` is rejected by Next's generated route types, so `pnpm typecheck` failed whenever the dev server had regenerated them | `req` is required; the two call sites in `signingApi.test.ts` pass a `Request` |
+
+Checked against `docs/DESIGN.md` and found correct, so deliberately **not** changed: the accent-green
+primary on "Revoke spending permission" / "Bring funds home" (§4.4 — the accent means "the primary
+thing to press", never "safe"); glass on the modal only (§5/§9); the literal signed message in `mono`
+on solid `surface-2` (§9); glyph + word on every verdict-coloured step state (§4).
+
+### Known issues / notes for 7.9-7.10
+
+- **`POST /api/sweep` blocks** until the executor has submitted the user operation (`sweepHome`
+  awaits `waitForUserOperation`). That is deliberate — enqueueing would make the sweep depend on the
+  worker, which I7 forbids — but the request can take tens of seconds. The modal polls
+  `GET /api/freeze` for the confirmation half, which the confirmer job owns.
+- If the worker is down, a submitted sweep stays `submitted` (the confirmer is what writes
+  `confirmed`). The modal says "Sent. Waiting for the network to confirm it." and offers no retry in
+  that state, which is correct, but the final tick does need the worker.
+- **The sweep's USDC quote is omitted**, so it falls back to the I11 demo parity ($1.00), which the
+  engine honours only on Base Sepolia. On mainnet a missing oracle is a DENY, not an assumption —
+  wiring a real price adapter into the web app is Phase 8 work.
+- **Phase 8.1 formally owns these routes** and is expected to harden them further: rate limiting,
+  SameSite=strict + short-TTL sessions, CSRF, and worker-side automatic detection of an on-chain
+  revoke. 7.8 built the functional core so S9 can be demonstrated now.
+- No real Coinbase Smart Wallet was available (same limitation as 7.2/7.6): the route tests verify
+  signatures from a viem local EOA, and `useSendTransaction` for the revoke is exercised with a mock.
+  What is untested end to end is a real smart wallet producing an ERC-6492 signature and broadcasting
+  the revoke.
+- For **7.9 (mobile/keyboard)**: the modal now scrolls, so the focus-trapped `Tab` cycle inside it
+  needs re-checking at 390 px. The S9 step list is an `<ol>` with `data-state` on each `<li>`, which
+  is what an axe/keyboard test should assert against. `FreezeButton` is reachable on every screen and
+  operable in both states.
+- For **7.10 (e2e)**: the whole flow is drivable with `?fixture=1|frozen|freeze-sweep` plus a
+  test-mode signer — `GET /api/freeze` is the single source of truth for which step is live, and
+  there are `data-testid`s for `freeze-now`, `revoke-now`, `sweep-now`, `freeze-step-{1,2,3}`,
+  `freeze-stopped`, `freeze-loading`, `sweep-progress` and `unfreeze`.
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
@@ -1507,6 +1660,14 @@ S8's `needsPolicySignature` prompt alike — the same object every time, per the
 | D-87 | 2026-09-22 | **`GET /api/audit/export` is cursor-paginated (row id + limit), not streamed**, and CSV pagination is signalled via an `x-next-cursor` response header rather than a body field | Matches `listAuditPage`'s own ponytail note and `verifyChain`'s existing "loads the whole chain, paginate later" precedent; a hackathon-scale wallet's audit log does not need a real stream yet, and CSV's body cannot carry a JSON sidecar field | true streaming response (rejected: overbuilt for current scale); omitting pagination entirely (rejected: task explicitly asks for it) |
 | D-88 | 2026-09-22 | **"Delete personal data" (S11) only clears `users.display_name`** via a new `scrubUserPersonalData` in `@steward/db`; the owner's address is kept (it is the sign-in identity, not incidental PII) and `audit_log` rows are never touched, matching I6 and UX_FLOWS' "audit rows retained anonymized" | The spec explicitly forbids deleting or mutating audit rows; `display_name` is the only PII field `users` owns beyond the address itself | scrubbing/pseudonymizing audit `entity_id`/`payload` fields too (rejected: would mutate append-only rows, violates I6) |
 | D-89 | 2026-09-22 | **No new dependency for 7.7.** CSV export is hand-rolled (`csvField` quoting: wrap in quotes and double any embedded quote when a field contains a comma, quote or newline) rather than a CSV library, for one export route with eight simple columns | A CSV writer is a few lines; a dependency for it would be disproportionate | a CSV library (rejected: unjustified for this shape) |
+| D-90 | 2026-09-22 | **The freeze/unfreeze message is `Steward {action}` + `Wallet:` + `Nonce:` + `Expires:`**, issued by one `/api/freeze/prepare` for both actions, with the ACTION stored in the session beside the nonce and the message re-derived from the session (never from the request body) | SECURITY §4 requires "session + fresh signature" but fixes no format; this follows the recipient message's shape (D-80). Storing the action with the nonce is what stops a signature collected for an unfreeze being spent on a freeze — a separate prepare route per action would not, since the browser chooses which route to call | one prepare route per action (rejected: two nonces, same replay hole), a fixed message with no nonce (rejected: replayable), a timestamp instead of a nonce (rejected: not single-use) |
+| D-91 | 2026-09-22 | **`POST /api/sweep` calls `sweepHome` inline rather than enqueueing a job**, even though API.md says "enqueues owner-sourced `sweep_home`" | I7 outranks API.md's wording: freeze, revoke and sweep must work with the worker down, and a queued sweep would not. It is not a bypass — `sweepHome` still builds an `source: 'owner'` proposal, simulates it, runs the real `evaluate()` and needs a signed AllowReceipt. Cost: the request blocks until the user operation is submitted | enqueueing via pg-boss (rejected: depends on the worker, breaks I7), a fire-and-forget promise in the route (rejected: unobservable, dies with the lambda) |
+| D-92 | 2026-09-22 | **The revoke is a transaction the OWNER's own wallet sends** (wagmi `useSendTransaction` over `encodeRevoke` calldata the server supplies), and `POST /api/spend-permission/revoked` records it **only when `isRevoked` agrees on-chain** — the reported `txHash` is never taken as proof | `SpendPermissionManager.revoke` must be called by the permission's `account`, which is the owner's smart wallet, not the agent. Trusting a reported hash would let a caller mark a live permission revoked in Steward's own records while it still worked on-chain | `revokeAsSpender` from the executor (rejected: the agent giving up its own authority is a different, weaker guarantee and needs the agent wallet alive), trusting the txHash (rejected: unverified claim) |
+| D-93 | 2026-09-22 | **Freezing cancels every pending approval**, writing an `APPROVAL_CANCELLED` audit row per approval, reusing `cancelPendingApprovals` from `@steward/db` | SECURITY §4 step 2 says so explicitly ("cancel all pending approvals and queued jobs for the wallet"). A pending approval is a standing permission to act; leaving it redeemable would contradict "act on nothing". `cancelApprovalsForPolicyChange` was not reused because its audit reason is the policy version, not the freeze | leaving approvals pending and relying on the executor's frozen re-check (rejected: the queue would still show live cards, and defence in depth is cheaper than one check) |
+| D-94 | 2026-09-22 | **`apps/web/lib/wallet.ts` may build the agent `TxSender`** (`getAgentSender`) for the sweep path only, mirroring the worker's `senderFactory` | The sweep is the one thing the web app must be able to execute without the worker (I7). `cdp-only-in-wallet-bootstrap` already names this exact file as the only place in `apps/web` that may construct a CDP client, and `packages/wallet/src/executor.ts` is still the only module that calls `send` | duplicating the sender in the route (rejected: would need a new arch-rule exception), importing the worker (rejected: forbidden boundary) |
+| D-95 | 2026-09-22 | **A step the owner cannot start yet renders no control at all**, and the modal renders no step list until `GET /api/freeze` has answered | Visual QA: a disabled `Button` is `bg-surface-2`, the step card's own colour, so it read as unexplained bold text; and a placeholder built from the dashboard's `frozen` flag told a frozen wallet "There is no spending permission to revoke" when it had one. A one-fetch "Checking what has already happened…" is honest; a guess is not | a distinct disabled style (rejected: invites pressing something that cannot work), keeping the optimistic placeholder (rejected: it stated something false about the owner's own money) |
+| D-96 | 2026-09-22 | **The global Freeze control stays a button once frozen** (`aria-live` for the state change, never `role="status"`) | Freezing is step 1 of three; an owner who froze and closed the modal must be able to reopen it to revoke and sweep. Overriding the role would also stop assistive technology announcing it as a button | a separate "resume" entry point elsewhere (rejected: a second door to the same flow), leaving the dead chip (rejected: strands the owner mid-flow) |
+| D-97 | 2026-09-22 | **Still no new dependency for 7.8.** Screenshots keep using the existing headless-Chrome/CDP script; the revoke and sweep steps poll with a plain `setTimeout` loop rather than a polling library | Consistent with D-84/D-89; react-query is already in the app but these are imperative one-shot flows inside a modal, not cache-backed reads | a polling/retry library (rejected: a `for` loop with a sleep is the whole requirement) |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks
@@ -1670,13 +1831,16 @@ S8's `needsPolicySignature` prompt alike — the same object every time, per the
   Run `/model sonnet` for the Sonnet tasks. Every screen follows `docs/DESIGN.md` 11's handover
   rules - tokens only, `<Money />` only, the approval message verbatim, and glass only where 6
   allows it.
-- **7.6 is done (2026-09-22, Opus).** Next is **7.7 (Sonnet)**: the Approvals, Policy, Recipients
-  and Settings screens, which EMBED the components listed under "For task 7.7" above rather than
-  rebuilding any signing. Then 7.8 (Opus, freeze), 7.9, 7.10.
-- Screenshots of the 7.6 surfaces: `docs/design/shots/app/sign-limit-*`, `sign-policy-*`,
-  `sign-sheets-*`, `sign-approval-sheet-*` (390 and 1280 px, dark and light). Regenerate with
+- **7.6, 7.7 and 7.8 are done (2026-09-22).** Next is **7.9 (Sonnet)**: mobile responsiveness and
+  keyboard access for the approval and freeze flows (NFR-7), then **7.10** (Playwright e2e). See
+  "Known issues / notes for 7.9-7.10" under Phase 7 part 4 for what each one inherits.
+  **Phase 7 is NOT complete**: 7.9 and 7.10 remain, and Phase 8.1 still formally owns hardening the
+  owner-path routes 7.8 built (rate limiting, session hardening, CSRF, worker-side revoke detection).
+- Screenshots: `docs/design/shots/app/` now holds all 20 app screens at 390 and 1280 px in dark and
+  light (80 files), including the 7.7 screens and the three S9 steps. Regenerate with
   `DEMO_MODE=true pnpm --filter @steward/web dev` then `node scripts/app-shots.mjs`.
-  New fixture scenarios: `?fixture=sign-limit`, `?fixture=sign-policy`.
+  Fixture scenarios: `1`, `frozen`, `safe`, `paused`, `quiet`, `onboarding`, `sign-limit`,
+  `sign-policy`, and (7.8) `freeze-revoke`, `freeze-sweep`.
 - Do not start the Phase 7 build before the human says so.
 - `.env.local` now carries everything the worker and the live runner need (verified by
   `pnpm live:env`, which prints variable NAMES only). `USDC_ADDRESS` and

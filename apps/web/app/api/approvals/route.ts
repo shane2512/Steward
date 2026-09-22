@@ -15,7 +15,12 @@ const query = z.enum(['pending', 'approved', 'rejected', 'expired', 'cancelled']
 
 export async function GET(req: Request) {
   const fx = fixtureFor(req);
-  if (fx) return Response.json(fixtureApprovals(fx));
+  // The fixture is filtered by the SAME `status` the real branch uses, or the queue would show a
+  // decided approval under "Pending" (7.8 visual QA).
+  if (fx)
+    return Response.json(
+      fixtureApprovals(fx, new URL(req.url).searchParams.get('status') ?? undefined),
+    );
 
   const owner = await requireOwner();
   if (isResponse(owner)) return owner;

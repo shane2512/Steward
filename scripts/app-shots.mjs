@@ -49,7 +49,7 @@ const screens = [
   { name: 'recipients', path: '/app/recipients?fixture=1' },
   { name: 'settings', path: '/app/settings?fixture=1' },
   { name: 'settings-frozen', path: '/app/settings?fixture=frozen' },
-  { name: 'close-account', path: '/app/close?fixture=1' },
+  { name: 'close-account', path: '/app/settings/close?fixture=1' },
   // 7.8 — the three steps of S9. `click` opens the modal; which step is live is decided by the
   // server's own owner-path status, so each fixture lands on a different step.
   { name: 'freeze-step1', path: '/app?fixture=1', click: '[aria-haspopup="dialog"]' },
@@ -146,7 +146,7 @@ try {
     const loaded = cdp.once('Page.loadEventFired');
     await cdp.send('Page.navigate', { url: `${base}${shot.path}` });
     await loaded;
-    await sleep(3500); // webfonts + first fetch
+    await sleep(5500); // webfonts + the screen's own first fetch (dev-mode route compiles are slow)
     if (shot.click) {
       await cdp.send('Runtime.evaluate', {
         expression: `document.querySelector(${JSON.stringify(shot.click)})?.click()`,
