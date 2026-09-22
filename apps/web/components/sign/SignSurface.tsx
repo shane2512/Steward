@@ -28,7 +28,7 @@ export function LiteralPayload({
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   return (
     <div className="pt-4">
-      <p className="pb-2 font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+      <p className="pb-2 font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
         {label}
       </p>
       <pre

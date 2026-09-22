@@ -150,7 +150,7 @@ export function SpendLimitSign({
       )}
 
       <div className="mt-6 rounded-md bg-surface-2 p-4">
-        <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+        <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
           Maximum at risk
         </p>
         <p className="pt-1 text-h2 font-bold text-ink">

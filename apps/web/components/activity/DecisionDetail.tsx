@@ -115,7 +115,7 @@ function panel(d: DecisionDetail, tab: DetailTab, explorerBase: string): React.R
             </dl>
           )}
           {d.decision.screen ? <p className="text-muted">{d.decision.screen.note}</p> : null}
-          <p className="font-mono text-label break-all text-faint">
+          <p className="font-mono text-label break-all text-muted">
             Context hash {d.decision.contextHash}
           </p>
         </Section>

@@ -46,7 +46,7 @@ export function PolicySign({
         </p>
       ) : (
         <>
-          <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+          <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
             Policy v{p.version}
           </p>
           <ol className="mt-2 space-y-2 rounded-md bg-surface-2 p-4" data-testid="policy-sentences">
@@ -60,7 +60,7 @@ export function PolicySign({
 
           {p.diff.previousVersion !== null ? (
             <div className="pt-4" data-testid="policy-diff">
-              <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+              <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
                 What changes from v{p.diff.previousVersion}
               </p>
               {p.diff.added.length === 0 && p.diff.removed.length === 0 ? (

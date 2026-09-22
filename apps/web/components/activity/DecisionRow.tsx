@@ -59,7 +59,7 @@ export function DecisionRow({
       ) : (
         <span className="text-muted">{denied ? 'blocked' : ''}</span>
       )}
-      <span className="block font-mono text-label text-faint">
+      <span className="block font-mono text-label text-muted">
         {when}
         {variant === 'compact' && item.flaggedRules.length > 0
           ? ` · ${item.flaggedRules.map(ruleLabel).join(' ')}`

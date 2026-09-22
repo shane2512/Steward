@@ -174,7 +174,7 @@ export function AddRecipientSign({
             )}
           </div>
           <div className="mt-4 rounded-md bg-surface-2 p-4">
-            <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+            <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
               Address, in full
             </p>
             {/* Both forms of the SERVER's checksummed address: the compact one people quote, and

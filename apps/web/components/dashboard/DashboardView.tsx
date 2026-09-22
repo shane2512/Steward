@@ -52,11 +52,11 @@ export function BalanceCard({
   return (
     <div className={`glass rounded-lg p-5 ${d.wallet.frozen ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between">
-        <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+        <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
           Treasury
         </p>
         {updatedAt !== undefined ? (
-          <span className="flex items-center gap-1 font-mono text-label text-faint">
+          <span className="flex items-center gap-1 font-mono text-label text-muted">
             <span data-testid="as-of">
               {stale ? 'as of ' : 'updated '}
               {clockTime(updatedAt)}
@@ -92,7 +92,7 @@ export function BalanceCard({
         {a.kind === 'active' ? (
           <AllowanceMeter usedPct={a.usedPct} capPct={a.capPct} tone={a.tone} caption={a.caption} />
         ) : (
-          <p className="font-mono text-label tracking-[0.06em] text-faint uppercase">{a.caption}</p>
+          <p className="font-mono text-label tracking-[0.06em] text-muted uppercase">{a.caption}</p>
         )}
       </div>
     </div>
@@ -230,7 +230,7 @@ export function FundSheet({
 function Stat({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
   return (
     <div className="rounded-md bg-surface-2 p-4">
-      <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+      <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
         {label}
       </p>
       <p className="pt-2 text-h2 font-bold text-ink">{children}</p>
@@ -272,7 +272,7 @@ export function StatGrid({ d }: { d: Dashboard }) {
       </Stat>
       <div className="col-span-2 rounded-md bg-surface-2 p-4" data-testid="runway">
         <div className="flex items-center justify-between">
-          <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+          <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
             Liquid runway
           </p>
           {r.covered === null ? null : r.covered ? (
@@ -298,7 +298,7 @@ export function StatGrid({ d }: { d: Dashboard }) {
         </p>
       </div>
       <div className="col-span-2 rounded-md bg-surface-2 p-4" data-testid="max-at-risk">
-        <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+        <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
           Maximum at risk
         </p>
         <p className="pt-2 text-h2 font-bold text-ink">
@@ -431,7 +431,7 @@ export function ParkedNotice({ d, now }: { d: Dashboard; now: Date }) {
         <Chip tone="warn">Parked</Chip>
       </div>
       <p className="max-w-[46ch] pt-2 text-small text-muted">{d.parked.reason}</p>
-      <p className="pt-2 font-mono text-label text-faint">since {formatAgo(d.parked.since, now)}</p>
+      <p className="pt-2 font-mono text-label text-muted">since {formatAgo(d.parked.since, now)}</p>
     </div>
   );
 }

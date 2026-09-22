@@ -3,7 +3,8 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 7 in progress**: tasks 7.1-7.8 built (7.1-7.5, 7.7 Sonnet; 7.6, 7.8 Opus, 2026-09-22); 7.9, 7.10 remain
+Phase: **Phase 7 complete** (7.10 skipped by human decision), awaiting human "continue". Phase 8
+requires Opus (Sonnet sub-tasks 8.5, 8.6 per PHASES.md).
 Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8 — both done)
 Last updated: 2026-09-22
 
@@ -25,7 +26,7 @@ Full gate re-run clean after that fix: typecheck 9/9, lint clean, check:arch 0 r
 | 4 | SERV reasoning & injection defenses | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9, lint clean, check:arch 153 modules/371 deps 0 violations + all three violation fixtures fire, test 32 files/621 tests (policy still 100% branches), `pnpm test:adversarial` **60 cases, guarantee 48/48 (100%), benign FP 0/12 (0%)**, live SERV smoke recorded (request ids below). 4.11 skipped (V-09 not confirmed) |
 | 5 | Risk gate, executor, confirmer | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch 170 modules/430 deps 0 violations + all **four** violation fixtures fire, test 35 files/673 tests (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, fork suite **2 files / 9 tests** (opt-in), and a LIVE Base Sepolia run: pull → deposit → payment → sweep, all through `executor.ts` (tx hashes below) |
 | 6 | Decision loop, scheduler, obligations, risk exits | Opus | ✅ | 2026-09-21 | Gate green: typecheck 9/9 + scripts/live, lint clean, check:arch **193 modules / 528 deps** 0 violations with **no rule changes** + all four fixtures fire, test **37 files / 735 tests** (policy still 100% branches), `pnpm test:adversarial` still 60 cases / 48-48 guarantee, Phase 6 fork suite **17/17** (opt-in), and a LIVE unattended Base Sepolia run through the real worker (below) |
-| 7 | Web app UX | Sonnet (+Opus sub-tasks) | ☐ | | |
+| 7 | Web app UX | Sonnet (+Opus sub-tasks) | ✅ | 2026-09-22 | 7.10 skipped by human decision (SHOULD, not MUST) |
 | 8 | Owner controls, notifications, hardening, security review | Opus (+Sonnet sub-tasks) | ☐ | | |
 | 9 | Demo, deployment, docs, submission | Sonnet (+Opus gate) | ☐ | | |
 
@@ -1573,6 +1574,63 @@ on solid `surface-2` (§9); glyph + word on every verdict-coloured step state (�
   there are `data-testid`s for `freeze-now`, `revoke-now`, `sweep-now`, `freeze-step-{1,2,3}`,
   `freeze-stopped`, `freeze-loading`, `sweep-progress` and `unfreeze`.
 
+## Phase 7 - build, part 5 (Sonnet, task 7.9, 2026-09-22; 7.10 skipped)
+
+**7.9 mobile responsiveness + keyboard access (NFR-7) — done.** Audited S1-S11 at 390px (dashboard,
+approvals list/sheet, onboarding 5 steps, policy sentences/JSON, recipients list/add-sheet, settings,
+closure checklist, freeze modal 3 steps) by combining a code audit of the shared primitives every
+screen is built from (`components/ui/primitives.tsx`'s `Button`/`TextButton`/`Row`/`Eyebrow` all
+carry `min-h-11`; `lib/useFocusTrap.ts` is the one focus-trap/Escape/return-focus implementation
+shared by `Sheet`, `FreezeModal` and `DecisionDetail`) with live browser checks at 390px and 1280px
+(dashboard, approvals, onboarding step 1, policy JSON view, freeze modal — all stack correctly, no
+horizontal overflow, 44px targets held; the approval/add-recipient sheets already render bottom-
+anchored and full-width on mobile via the shared `Sheet`, satisfying UX_FLOWS' "not a small centered
+modal").
+
+Real issues found and fixed:
+1. **Freeze step completions had no live region.** `FreezeFlow`'s per-step text ("Steward is
+   stopped…", "Revoked on-chain…", "Everything is back in your treasury…") changed on screen with
+   nothing to announce it. Added `role="status"` (assertive on step 1's completion, matching DESIGN
+   §12's "assertive … on freeze confirmation") to all three.
+2. **Systemic light-theme contrast bug.** `text-faint` (`#6E7684` on `#F4F6FA` = 4.23:1) was used on
+   regular 8.3pt/11px uppercase section-header labels ("Treasury", "Security", "Policy v3", …) in 9
+   files / 17 call sites, including the shared `Eyebrow` primitive. DESIGN.md's own light contrast
+   table (§12) marks this exact ratio **"AA large / UI"**, i.e. it never satisfied WCAG 1.4.3's 4.5:1
+   for regular small text — only for large text or non-text UI. Swapped all 17 label-context uses to
+   `text-muted` (5.66-9.65:1 across both themes); left `text-faint` on placeholders, mono step-number
+   badges and captions (legitimate large-text/UI uses) untouched. Caught by an `@axe-core/playwright`
+   run against the freeze modal while task 7.10 was still in progress (see below) — kept even though
+   7.10 itself was dropped, because it is a real, verified accessibility bug in code this task audits.
+3. **Invalid ARIA on `Balance`.** The dollar hero rendered `aria-label` on a plain, role-less `<span>`
+   (`aria-prohibited-attr`, WCAG 4.1.2) — not a permitted attribute there. Replaced with a
+   visually-hidden (`sr-only`) text node carrying the same accessible name (`"12,480.00 dollars"`),
+   and updated `apps/web/test/dashboard.test.tsx` to assert against the new structure.
+
+Regenerated `docs/design/shots/app/` (390px/1280px x light/dark) via the existing
+`scripts/app-shots.mjs` after each fix.
+
+**7.10 Playwright e2e — SKIPPED per explicit human decision mid-session** ("manual testing preferred
+over Playwright"; PHASES.md lists 7.10 as a SHOULD, not a MUST). Work was started — a test-mode
+signer (Playwright `page.addInitScript` installing a fake `window.ethereum` backed by a real local
+viem test account, bridged to Node via `page.exposeFunction` so `personal_sign`/`eth_signTypedData_v4`
+produce REAL signatures a real server-side `verifyMessage`/`verifyTypedData` would accept; wired into
+`wagmi.ts`'s connector list only behind a new `NEXT_PUBLIC_E2E_TEST_MODE && NODE_ENV !== 'production'`
+gate in `apps/web/lib/e2e.ts`), a `playwright.config.ts` running its own dev server on :3100, and four
+spec files (onboarding→activation→freeze-step-1 live flow, approvals sheet + DESIGN §12 keyboard
+paths against `?fixture=1`, and axe checks) — but per the instruction, since it was not yet fully
+green when the scope changed (2 of 3 remaining failures were test-harness bugs, not product bugs: a
+wrong hex chain id in the injected provider, and ambiguous `getByRole` locators matching more than one
+element), it was **discarded rather than committed**: `apps/web/lib/e2e.ts`, `playwright.config.ts`
+and `e2e/` were deleted, and `apps/web/lib/wagmi.ts`, `apps/web/lib/useSigner.ts`,
+`apps/web/package.json`, root `package.json`, `pnpm-lock.yaml` and `.gitignore` were restored to their
+pre-7.10 state (`git restore`/`git checkout`, verified zero remaining diff). The one product fix that
+surfaced while that work was in progress (the contrast bug above) was kept, since it is independently
+true and in-scope for 7.9 regardless of how it was found. `pnpm test:e2e` remains the Phase-1 stub
+(`node scripts/not-yet.mjs test:e2e 7`) — untouched.
+
+**Phase 7 is now complete** (7.9 done, 7.10 skipped by human decision) — awaiting the human's
+"continue". Phase 8 requires Opus (Sonnet sub-tasks 8.5, 8.6 per PHASES.md).
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
@@ -1676,6 +1734,8 @@ on solid `surface-2` (§9); glyph + word on every verdict-coloured step state (�
 | D-95 | 2026-09-22 | **A step the owner cannot start yet renders no control at all**, and the modal renders no step list until `GET /api/freeze` has answered | Visual QA: a disabled `Button` is `bg-surface-2`, the step card's own colour, so it read as unexplained bold text; and a placeholder built from the dashboard's `frozen` flag told a frozen wallet "There is no spending permission to revoke" when it had one. A one-fetch "Checking what has already happened…" is honest; a guess is not | a distinct disabled style (rejected: invites pressing something that cannot work), keeping the optimistic placeholder (rejected: it stated something false about the owner's own money) |
 | D-96 | 2026-09-22 | **The global Freeze control stays a button once frozen** (`aria-live` for the state change, never `role="status"`) | Freezing is step 1 of three; an owner who froze and closed the modal must be able to reopen it to revoke and sweep. Overriding the role would also stop assistive technology announcing it as a button | a separate "resume" entry point elsewhere (rejected: a second door to the same flow), leaving the dead chip (rejected: strands the owner mid-flow) |
 | D-97 | 2026-09-22 | **Still no new dependency for 7.8.** Screenshots keep using the existing headless-Chrome/CDP script; the revoke and sweep steps poll with a plain `setTimeout` loop rather than a polling library | Consistent with D-84/D-89; react-query is already in the app but these are imperative one-shot flows inside a modal, not cache-backed reads | a polling/retry library (rejected: a `for` loop with a sleep is the whole requirement) |
+| D-98 | 2026-09-22 | **7.9: 17 uses of `text-faint` on regular small uppercase labels (incl. the shared `Eyebrow` primitive) swapped to `text-muted`**, and `Balance`'s `aria-label` moved off its role-less `<span>` onto a `sr-only` text node | axe (`@axe-core/playwright`, run against the freeze modal while 7.10 was in progress) caught both as real WCAG failures: DESIGN.md's own contrast table marks `faint`-on-`ground` "AA large / UI" only (4.23:1, below the 4.5:1 regular-text floor), and `aria-label` is not a permitted attribute on a role-less span (4.1.2). Kept on 7.9's ledger even though 7.10 itself was dropped, because the bugs are real and in 7.9's own audit scope (DESIGN §12) | leaving `text-faint` and citing DESIGN's table as sufficient (rejected: the table's own "AA large/UI" caveat says it is not sufficient for this usage); adding a new contrast-checking dependency (rejected: axe already caught it, no need for a second tool) |
+| D-99 | 2026-09-22 | **Task 7.10 (Playwright e2e) skipped by explicit human decision mid-session**, its in-progress work (test-mode signer, `playwright.config.ts`, four specs, `apps/web/lib/e2e.ts`, and the `wagmi.ts`/`useSigner.ts`/`package.json`/lockfile changes it needed) fully reverted rather than committed half-working | Human: "manual testing preferred over Playwright"; PHASES.md lists 7.10 as a SHOULD. The work was not yet green (2 of 3 remaining failures were test-harness bugs — a wrong chain-id hex constant, ambiguous `getByRole` locators — not product bugs), so per "never mark a phase complete with failing or skipped tests" the honest move was to discard it rather than land a partially-working suite | leaving the broken suite committed but excluded from the gate (rejected: dead, untested code in the tree); finishing it anyway (rejected: explicit human instruction to stop) |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks

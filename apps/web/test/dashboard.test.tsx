@@ -107,11 +107,11 @@ describe('allowanceView (bigint maths behind the meter)', () => {
 describe('Balance and Money', () => {
   it('dims the minor units and reads out as one number', () => {
     const { container } = render(<Balance base={12_480_000_000n} />);
-    expect(container.textContent).toBe('$12,480.00');
+    expect(container.querySelector('[aria-hidden="true"]')?.textContent).toBe('$12,480.00');
     expect(container.querySelector('.text-minor')?.textContent).toBe('.00');
-    expect(container.querySelector('[aria-label]')?.getAttribute('aria-label')).toBe(
-      '12,480.00 dollars',
-    );
+    // `aria-label` is not a permitted attribute on a role-less `span` (axe: aria-prohibited-attr),
+    // so the accessible name is a visually-hidden text node instead (task 7.9/7.10 a11y audit).
+    expect(container.querySelector('.sr-only')?.textContent).toBe('12,480.00 dollars');
   });
   it('Money follows the rule and never loses precision', () => {
     const { container } = render(<Money base={9_007_199_254_740_993_000_000n} usd />);

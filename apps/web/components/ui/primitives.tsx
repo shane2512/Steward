@@ -35,8 +35,10 @@ export function Balance({ base, className = '' }: { base: bigint; className?: st
   return (
     <span
       className={`tabular text-balance font-bold tracking-[-0.02em] text-ink lg:text-balance-lg ${className}`}
-      aria-label={`${whole}${minor} dollars`}
     >
+      {/* `aria-label` is not a permitted attribute on a plain `span` (axe: aria-prohibited-attr,
+          WCAG 4.1.2): the accessible name comes from this visually-hidden text instead. */}
+      <span className="sr-only">{`${whole}${minor} dollars`}</span>
       <span aria-hidden="true">
         ${whole}
         <span className="text-minor">{minor}</span>
@@ -50,7 +52,7 @@ export function Balance({ base, className = '' }: { base: bigint; className?: st
 export function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <p
-      className={`px-4 pt-6 pb-2 font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase ${className}`}
+      className={`px-4 pt-6 pb-2 font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase ${className}`}
     >
       {children}
     </p>
@@ -306,7 +308,7 @@ export function AllowanceMeter({
         />
         <div className="limit-line" data-testid="limit-line" style={{ left: `${cap}%` }} />
       </div>
-      <p className="pt-2 font-mono text-label tracking-[0.06em] text-faint uppercase">{caption}</p>
+      <p className="pt-2 font-mono text-label tracking-[0.06em] text-muted uppercase">{caption}</p>
     </div>
   );
 }

@@ -93,7 +93,7 @@ export function PolicyScreen() {
           />
         ) : view === 'sentences' ? (
           <div data-testid="policy-sentences-view">
-            <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
+            <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
               Policy v{policy.data.version}
             </p>
             <ol className="mt-2 space-y-2 rounded-md bg-surface-2 p-4">
