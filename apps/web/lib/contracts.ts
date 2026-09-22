@@ -226,6 +226,21 @@ export type CompileResponse = z.infer<typeof zCompile>;
 
 export const zApiError = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 
+/** GET /api/audit/verify (task 7.7): OK with a row count, or the exact failing row. Never silent. */
+export const zAuditVerify = z.union([
+  z.object({ ok: z.literal(true), rows: z.number(), head: z.string() }),
+  z.object({
+    ok: z.literal(false),
+    break: z.object({
+      rowId: z.number(),
+      reason: z.string(),
+      expected: z.string(),
+      actual: z.string(),
+    }),
+  }),
+]);
+export type AuditVerify = z.infer<typeof zAuditVerify>;
+
 /* ------------------------------------------------------------------ signing (task 7.6)
  * Every payload the owner signs is produced by a SERVER route and parsed here as opaque data. The
  * client renders it verbatim and hands it to the wallet; it never composes or edits one. That is why

@@ -158,6 +158,28 @@ export async function listAuditForEntity(
     .orderBy(asc(auditLog.id));
 }
 
+/**
+ * One page of a chain, oldest-first, for the S10 export (task 7.7). Cursor-paginated by row id
+ * rather than streamed: a hackathon-scale wallet's chain is small enough that "the next 1000 rows"
+ * is a fine unit of work.
+ * ponytail: offset-free keyset pagination is already O(1) per page; no further work needed unless a
+ * single export needs to span millions of rows, at which point this should become a real stream.
+ */
+export async function listAuditPage(
+  db: Db,
+  walletId: string | null,
+  opts: { limit: number; afterId?: number },
+): Promise<AuditRow[]> {
+  const conds = [chainFilter(walletId)];
+  if (opts.afterId !== undefined) conds.push(sql`${auditLog.id} > ${opts.afterId}`);
+  return db
+    .select()
+    .from(auditLog)
+    .where(and(...conds))
+    .orderBy(asc(auditLog.id))
+    .limit(opts.limit);
+}
+
 export interface ChainBreak {
   rowId: number;
   reason: 'prev_hash_mismatch' | 'row_hash_mismatch';

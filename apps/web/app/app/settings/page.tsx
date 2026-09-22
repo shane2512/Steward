@@ -1,5 +1,7 @@
-import { Placeholder } from '@/components/shell/Placeholder';
+import { SettingsScreen } from '@/components/settings/SettingsScreen';
 
-export default function Page() {
-  return <Placeholder title="Settings" task="7.7" screen="S10" />;
+export const metadata = { title: 'Settings - Steward' };
+
+export default function SettingsPage() {
+  return <SettingsScreen />;
 }

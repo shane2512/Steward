@@ -45,6 +45,15 @@ export async function getUserById(db: Db, id: string): Promise<User | undefined>
   return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
 }
 
+/**
+ * S11 "Delete personal data": clears the PII fields this table owns. The owner's address stays —
+ * it is the sign-in identity, not incidental personal data — and audit_log rows are never touched
+ * (I6, append-only; they are retained, anonymized only in that they no longer join to a display name).
+ */
+export async function scrubUserPersonalData(db: Db, userId: string): Promise<void> {
+  await db.update(users).set({ displayName: null }).where(eq(users.id, userId));
+}
+
 export async function getWalletByUserId(db: Db, userId: string): Promise<Wallet | undefined> {
   return (await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1))[0];
 }
