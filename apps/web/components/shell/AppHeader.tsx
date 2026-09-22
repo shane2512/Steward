@@ -9,7 +9,8 @@ import { pillLabel, type PillState } from '@/lib/status';
  *
  * 7.8: the frozen state is still a BUTTON. Freezing is step 1 of three (SECURITY §4), so an owner
  * who froze and closed the modal has to be able to reopen it and finish revoking and sweeping — a
- * dead status chip would strand them. The live region announces the state either way.
+ * dead status chip would strand them. The frozen state gets `aria-live` rather than `role="status"`:
+ * overriding the role would stop assistive technology announcing it as a button at all.
  */
 export function FreezeButton({ frozen, onOpen }: { frozen: boolean; onOpen: () => void }) {
   return (
@@ -17,7 +18,7 @@ export function FreezeButton({ frozen, onOpen }: { frozen: boolean; onOpen: () =
       type="button"
       onClick={onOpen}
       aria-haspopup="dialog"
-      {...(frozen ? { 'aria-live': 'assertive' as const, role: 'status' } : {})}
+      {...(frozen ? { 'aria-live': 'assertive' as const } : {})}
       className={
         frozen
           ? 'inline-flex h-11 items-center rounded-full bg-deny-fill px-4 text-small font-bold text-on-deny-fill'
