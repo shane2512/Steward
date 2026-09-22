@@ -2,6 +2,7 @@
 // write. Thin and typed, like `executions.ts` — every decision about *whether* something may happen
 // lives in the Policy Engine or the loop, never here.
 import { and, asc, desc, eq, gte, lt, lte } from 'drizzle-orm';
+import { appendAudit } from './audit';
 import type { Db } from './client';
 import {
   agentDecisions,
@@ -338,6 +339,115 @@ export async function cancelPendingApprovals(
     .set({ status: 'cancelled', decidedAt: now })
     .where(and(eq(approvals.walletId, walletId), eq(approvals.status, 'pending')))
     .returning();
+}
+
+/**
+ * A new policy version invalidates every pending approval (6.4).
+ *
+ * Owner approvals are bound to `Policy: v{n}` (SECURITY §5), so one signed under the old version can
+ * never be redeemed anyway — `executeApproval` refuses a stale message outright. Cancelling is what
+ * makes that visible to the owner instead of leaving dead cards in the queue.
+ *
+ * Lives here rather than in the worker so that BOTH callers — the worker and the web's
+ * `/api/policy/activate` — use one implementation (the web app may not import the worker).
+ */
+export async function cancelApprovalsForPolicyChange(
+  db: Db,
+  walletId: string,
+  newVersion: number,
+  now: Date,
+): Promise<ApprovalRow[]> {
+  const cancelled = await cancelPendingApprovals(db, walletId, now);
+  for (const row of cancelled) {
+    await appendAudit(db, {
+      walletId,
+      actor: 'system',
+      event: 'APPROVAL_CANCELLED',
+      entityType: 'approval',
+      entityId: row.id,
+      payload: { reason: 'policy version changed', newVersion, proposalHash: row.proposalHash },
+      createdAt: now,
+    });
+  }
+  return cancelled;
+}
+
+// ── policies (owner-signed; task 7.6) ────────────────────────────────────────────────────────────
+
+/** Highest version this wallet has ever had, active or superseded. 0 when it has none. */
+export async function latestPolicyVersion(db: Db, walletId: string): Promise<number> {
+  const row = (
+    await db
+      .select({ version: policies.version })
+      .from(policies)
+      .where(eq(policies.walletId, walletId))
+      .orderBy(desc(policies.version))
+      .limit(1)
+  )[0];
+  return row?.version ?? 0;
+}
+
+/**
+ * Make an owner-signed policy version the active one, atomically.
+ *
+ * The old active row is superseded and the new one inserted in a single transaction, so the partial
+ * unique index (`one active per wallet`) can never see two. A concurrent activation of the same
+ * version loses on the primary key, which is the replay guard: the same signature cannot activate
+ * twice.
+ */
+export async function activatePolicyVersion(
+  db: Db,
+  input: {
+    walletId: string;
+    version: number;
+    mandateId: string | null;
+    body: unknown;
+    bodyHash: string;
+    signature: string;
+    now: Date;
+  },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(policies)
+      .set({ status: 'superseded' })
+      .where(and(eq(policies.walletId, input.walletId), eq(policies.status, 'active')));
+    await tx.insert(policies).values({
+      walletId: input.walletId,
+      version: input.version,
+      mandateId: input.mandateId,
+      body: input.body,
+      bodyHash: input.bodyHash,
+      signature: input.signature,
+      status: 'active',
+      activatedAt: input.now,
+    });
+    await tx
+      .update(wallets)
+      .set({ activePolicyVersion: input.version })
+      .where(eq(wallets.id, input.walletId));
+  });
+}
+
+// ── recipients (owner-signed additions only; T3) ─────────────────────────────────────────────────
+
+/**
+ * Add an allowlist entry. The unique index on `(wallet_id, address)` is the duplicate guard, so a
+ * replayed request inserts nothing rather than creating a second row for the same address.
+ */
+export async function insertRecipient(
+  db: Db,
+  row: {
+    walletId: string;
+    label: string;
+    address: string;
+    maxPerTx: bigint;
+    schedule: unknown;
+    addedSignature: string;
+  },
+): Promise<RecipientRow | undefined> {
+  const [inserted] = await db.insert(recipients).values(row).onConflictDoNothing().returning();
+  return inserted;
 }
 
 // ── notifications ────────────────────────────────────────────────────────────────────────────────

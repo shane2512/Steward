@@ -16,15 +16,13 @@ import {
 import { compileMandate, LiveServClient } from '@steward/reasoning';
 import { canonicalJson, getEnv, type PolicyDraft } from '@steward/shared';
 import { getAddress } from 'viem';
-import { z } from 'zod';
 import type { CompileResponse } from '@/lib/contracts';
 import { compilerUnavailable, issuesForUi, zCompileBody } from '@/lib/mandateApi';
+import { recipientBindings } from '@/lib/policyDraft';
 import { apiError } from '@/lib/server';
 import { isResponse, requireOwner, requireProvisioned, requireWallet } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
-
-const zSchedule = z.object({ dayOfMonth: z.number().int(), amountMicroUsd: z.string() });
 
 export async function POST(req: Request) {
   const owner = await requireOwner();
@@ -59,18 +57,9 @@ export async function POST(req: Request) {
       address: getAddress(v.address),
       maxAllocationBps: v.maxAllocationBps,
     })),
-    recipients: recipientRows
-      .filter((r) => r.status === 'active')
-      .map((r) => {
-        const sched = zSchedule.safeParse(r.schedule);
-        return {
-          id: r.id,
-          label: r.label,
-          address: getAddress(r.address),
-          maxPerTxMicroUsd: r.maxPerTx.toString(),
-          ...(sched.success ? { schedule: sched.data } : {}),
-        };
-      }),
+    // Same mapping the policy body uses (lib/policyDraft.ts), so a recipient is described
+    // identically whether it reaches the compiler or the signed policy.
+    recipients: recipientBindings(recipientRows),
   };
 
   let draft: PolicyDraft | undefined;

@@ -10,7 +10,7 @@ import { zOnboarding } from '@/lib/contracts';
 import { clampView, initialView, type WizardStep } from '@/lib/onboarding';
 import { useApi } from '@/lib/useApi';
 import { SignStepSlot } from './SignStepSlot';
-import { MandateStep, MeetStep, StepHeading, WalletStep, CompileResult } from './steps';
+import { MandateStep, MeetStep, StepHeading, WalletStep } from './steps';
 
 export function StepProgress({ current }: { current: number }) {
   return (
@@ -127,19 +127,8 @@ export function OnboardingFlow() {
             <StepHeading sub="Read the rules once more. Signing makes them the only rules Steward can act under.">
               Sign your policy
             </StepHeading>
-            {data.mandate?.sentences.length ? (
-              <CompileResult
-                result={{
-                  compiled: true,
-                  sentences: data.mandate.sentences,
-                  issues: [],
-                  assumptions: [],
-                  questions: [],
-                  source: 'serv',
-                  mandateId: data.mandate.id,
-                }}
-              />
-            ) : null}
+            {/* The sentences come from `SignStepSlot`, rendered from the body that will be stored
+                (7.6) rather than from the compile response, so they cannot disagree with it. */}
             <div className="pt-6">
               <SignStepSlot
                 step="policy"

@@ -29,11 +29,9 @@ import { freshTestDb } from '../../../packages/db/test/helpers';
 import { runIteration, type DecisionLoopDeps } from '../src/loop';
 import { tryWalletLock, withWalletLock, LOOP_LOCK_NAMESPACE } from '../src/lock';
 import { addOneMonth, zLoopTickJob } from '../src/jobs';
-import {
-  cancelApprovalsForPolicyChange,
-  executeApproval,
-  verifyApprovalSignature,
-} from '../src/approvals';
+// `cancelApprovalsForPolicyChange` moved to @steward/db in 7.6 so `/api/policy/activate` can call it.
+import { cancelApprovalsForPolicyChange } from '@steward/db';
+import { executeApproval, verifyApprovalSignature } from '../src/approvals';
 import { replay } from '../src/replay';
 
 const ONE = 1_000_000n;

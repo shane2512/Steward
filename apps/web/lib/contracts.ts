@@ -225,3 +225,113 @@ export const zCompile = z.object({
 export type CompileResponse = z.infer<typeof zCompile>;
 
 export const zApiError = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+
+/* ------------------------------------------------------------------ signing (task 7.6)
+ * Every payload the owner signs is produced by a SERVER route and parsed here as opaque data. The
+ * client renders it verbatim and hands it to the wallet; it never composes or edits one. That is why
+ * these schemas describe shapes, not semantics — there is nothing for the UI to recompute.
+ */
+
+/** EIP-712 payload from POST /api/spend-permission/prepare, exactly as `eth_signTypedData_v4` wants it. */
+export const zSpendPermissionPrepare = z.object({
+  typedData: z.object({
+    domain: z.object({
+      name: z.string(),
+      version: z.string(),
+      chainId: z.number(),
+      verifyingContract: z.string(),
+    }),
+    types: z.record(z.string(), z.array(z.object({ name: z.string(), type: z.string() }))),
+    primaryType: z.string(),
+    /** Decimal strings and numbers only (I12): posted back byte-identically. */
+    message: z.object({
+      account: z.string(),
+      spender: z.string(),
+      token: z.string(),
+      allowance: amount,
+      period: z.number(),
+      start: z.number(),
+      end: z.number(),
+      salt: z.string(),
+      extraData: z.string(),
+    }),
+  }),
+  permissionHash: z.string(),
+});
+export type SpendPermissionPrepare = z.infer<typeof zSpendPermissionPrepare>;
+
+export const zSpendPermissionStored = z.object({
+  id: z.string(),
+  permissionHash: z.string(),
+  status: z.string(),
+  accountKind: z.string(),
+});
+
+/** POST /api/policy/prepare — the literal activation message plus what it commits to. */
+export const zPolicyPrepare = z.object({
+  version: z.number(),
+  bodyHash: z.string(),
+  /** EIP-191 text, verbatim. */
+  message: z.string(),
+  sentences: z.array(z.string()),
+  /** Empty on a first activation; otherwise the change from the active version (S7). */
+  diff: z.object({
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    previousVersion: z.number().nullable(),
+  }),
+});
+export type PolicyPrepare = z.infer<typeof zPolicyPrepare>;
+
+export const zPolicyActivated = z.object({
+  version: z.number(),
+  cancelledApprovals: z.number(),
+});
+
+export const zRecipient = z.object({
+  id: z.string(),
+  label: z.string(),
+  address: z.string(),
+  maxPerTx: amount,
+  scheduleDayOfMonth: z.number().nullable(),
+  status: z.string(),
+});
+export type Recipient = z.infer<typeof zRecipient>;
+
+export const zRecipientList = z.object({ recipients: z.array(zRecipient) });
+
+/** POST /api/recipients/prepare — the literal confirmation message (nonce-bound, 5 min TTL). */
+export const zRecipientPrepare = z.object({
+  message: z.string(),
+  /** Checksummed by the SERVER (I4). The confirmation screen shows this, not the typed input. */
+  address: z.string(),
+  expiresAt: iso,
+});
+export type RecipientPrepare = z.infer<typeof zRecipientPrepare>;
+
+export const zRecipientAdded = z.object({
+  recipient: zRecipient,
+  /** True while the active policy does not yet list this recipient (it needs a new policy version). */
+  needsPolicySignature: z.boolean(),
+});
+
+export const zApproval = z.object({
+  id: z.string(),
+  decisionId: z.string(),
+  proposalHash: z.string(),
+  status: z.string(),
+  /** The literal EIP-191 text to sign (SECURITY §5). Never rebuilt by the client. */
+  message: z.string(),
+  expiresAt: iso,
+  decidedAt: iso.nullable(),
+  proposal: z.unknown().nullable(),
+  rationale: z.string().nullable(),
+});
+export type Approval = z.infer<typeof zApproval>;
+
+export const zApprovalList = z.object({ approvals: z.array(zApproval) });
+
+export const zApprovalDecided = z.object({
+  approval: z.object({ id: z.string(), status: z.string() }),
+  enqueued: z.boolean().optional(),
+});

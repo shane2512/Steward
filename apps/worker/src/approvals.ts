@@ -13,7 +13,6 @@
 import { getAddress, type PublicClient } from 'viem';
 import {
   appendAudit,
-  cancelPendingApprovals,
   decideApproval,
   getActivePolicy,
   getAgentDecision,
@@ -209,28 +208,6 @@ export async function executeApproval(
     ownerApproval: { signer: owner, proposalHash, expiresAt: approval.expiresAt },
   });
   return ok(outcome);
-}
-
-/** A new policy version invalidates every pending approval (6.4). */
-export async function cancelApprovalsForPolicyChange(
-  db: Db,
-  walletId: string,
-  newVersion: number,
-  now: Date,
-): Promise<ApprovalRow[]> {
-  const cancelled = await cancelPendingApprovals(db, walletId, now);
-  for (const row of cancelled) {
-    await appendAudit(db, {
-      walletId,
-      actor: 'system',
-      event: 'APPROVAL_CANCELLED',
-      entityType: 'approval',
-      entityId: row.id,
-      payload: { reason: 'policy version changed', newVersion, proposalHash: row.proposalHash },
-      createdAt: now,
-    });
-  }
-  return cancelled;
 }
 
 /** Record an owner's rejection. Same single-transition guard as approve. */

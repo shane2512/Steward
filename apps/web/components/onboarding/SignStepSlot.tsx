@@ -1,50 +1,28 @@
 'use client';
-// ============================================================================================
-// EXTENSION POINT for task 7.6 (Opus): the two signing steps of the onboarding wizard.
+// The two signing steps of the onboarding wizard (task 7.6).
 //
-//   step 'spend-limit'  (wizard step 4): spend permission typed-data signing. Allowance/day control,
-//                        end date, live "Maximum at risk", prepare -> sign in wallet -> store, via
-//                        POST /api/spend-permission/prepare and POST /api/spend-permission.
-//   step 'policy'       (wizard step 5): the final review + policy activation signature
-//                        (`Steward policy v{n} {hash}`), via POST /api/policy/prepare and
-//                        POST /api/policy/activate (sensitive: fresh signature in the body).
+//   step 'spend-limit' (wizard step 4): the Spend Permission — EIP-712, SECURITY §3 Layer 2.
+//   step 'policy'      (wizard step 5): policy activation — EIP-191 `Steward policy v{n} {hash}`.
 //
-// 7.3 builds only the surrounding layout. This component renders a clearly marked placeholder and
-// contains NO signing, typed-data building, signature verification, activation or spend-permission
-// store code. The Opus agent replaces the placeholder body and keeps the props:
-//
-//   step                  which of the two signing steps to render
-//   mandate               the compiled mandate from GET /api/onboarding (sentences the owner reviews)
-//   agentWalletAddress    the spender the permission must name (server re-checks it)
-//   spendPermissionStatus server-side status of the stored permission (null until one is stored)
-//   onSigned              call once the SERVER has accepted the signature; the wizard refetches
-//                         GET /api/onboarding and moves on (state comes from the server, not the browser)
-// ============================================================================================
-import type { OnboardingState } from '@/lib/contracts';
+// Both delegate to the components in `components/sign`, which are the SAME ones the settings screens
+// (task 7.7) embed: a policy signed from onboarding and a policy re-signed from settings go through
+// one code path, so they can never diverge in what they show or what they sign.
+import { PolicySign } from '@/components/sign/PolicySign';
+import { SpendLimitSign } from '@/components/sign/SpendLimitSign';
+import { zWalletState, type OnboardingState } from '@/lib/contracts';
+import { useApi } from '@/lib/useApi';
 
 export type SignStepSlotProps = {
   step: 'spend-limit' | 'policy';
   mandate: OnboardingState['mandate'];
   agentWalletAddress: string | null;
   spendPermissionStatus: string | null;
+  /** Called once the SERVER accepted the signature; the wizard refetches and moves on. */
   onSigned: () => void;
 };
 
-export function SignStepSlot({ step }: SignStepSlotProps) {
-  return (
-    <div
-      data-slot={`sign-step-${step}`}
-      role="note"
-      className="rounded-md border border-dashed border-line-strong p-4"
-    >
-      <p className="font-mono text-label font-semibold tracking-[0.12em] text-faint uppercase">
-        Task 7.6
-      </p>
-      <p className="pt-2 text-small text-muted" data-testid="sign-step-placeholder">
-        {step === 'spend-limit'
-          ? 'Spend permission signing arrives in task 7.6.'
-          : 'Policy signing and activation arrive in task 7.6.'}
-      </p>
-    </div>
-  );
+export function SignStepSlot({ step, onSigned }: SignStepSlotProps) {
+  const wallet = useApi('/api/wallet', zWalletState, { enabled: step === 'spend-limit' });
+  if (step === 'policy') return <PolicySign onActivated={onSigned} />;
+  return <SpendLimitSign wallet={wallet.data} onSigned={onSigned} />;
 }
