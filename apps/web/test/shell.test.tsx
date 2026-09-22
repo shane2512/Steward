@@ -1,6 +1,22 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// 7.8: the modal now contains the real flow, which reads GET /api/freeze and talks to a wallet.
+// The flow's own behaviour is tested in freezeFlow.test.tsx; here it only has to mount.
+vi.mock('../lib/api', async (orig) => ({
+  ...(await orig<typeof import('../lib/api')>()),
+  apiGet: vi.fn(() => new Promise(() => undefined)),
+  apiPost: vi.fn(),
+}));
+vi.mock('wagmi', () => ({
+  useAccount: () => ({ isConnected: false }),
+  useBytecode: () => ({ data: undefined, isSuccess: false }),
+  useSwitchChain: () => ({ switchChain: vi.fn(), isPending: false }),
+  useSignMessage: () => ({ signMessageAsync: vi.fn() }),
+  useSendTransaction: () => ({ sendTransactionAsync: vi.fn() }),
+}));
+
 import { FreezeModal } from '../components/freeze/FreezeModal';
 import { FreezeButton } from '../components/shell/AppHeader';
 import { Banner, StatusPill } from '../components/ui/primitives';
@@ -14,30 +30,30 @@ describe('Freeze button (global, DESIGN §5)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Freeze' }));
     expect(open).toHaveBeenCalledOnce();
   });
-  it('becomes a filled, assertive "Frozen" chip once frozen', () => {
-    render(<FreezeButton frozen onOpen={() => {}} />);
-    const chip = screen.getByText('Frozen');
+  // 7.8: the frozen state stays a BUTTON. Freezing is step 1 of three, so an owner who froze and
+  // closed the modal must be able to reopen it and finish revoking and sweeping (D-96).
+  it('becomes a filled, assertive "Frozen" control that still opens the flow', () => {
+    const open = vi.fn();
+    render(<FreezeButton frozen onOpen={open} />);
+    const chip = screen.getByRole('button', { name: 'Frozen' });
     expect(chip.getAttribute('aria-live')).toBe('assertive');
-    expect(screen.queryByRole('button')).toBeNull();
+    fireEvent.click(chip);
+    expect(open).toHaveBeenCalledOnce();
   });
 });
 
-describe('Freeze modal shell (flow arrives in 7.8)', () => {
+describe('Freeze modal shell', () => {
   it('renders nothing when closed', () => {
     render(<FreezeModal open={false} frozen={false} onClose={() => {}} onDone={() => {}} />);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
-  it('shows the extension-point placeholder and can always be cancelled', () => {
+  it('can always be cancelled, even before the flow knows anything', () => {
     const close = vi.fn();
     render(<FreezeModal open frozen={false} onClose={close} onDone={() => {}} />);
     expect(screen.getByRole('dialog', { name: 'Freeze Steward' })).toBeTruthy();
-    expect(screen.getByTestId('freeze-flow-placeholder').textContent).toBe(
-      'Freeze flow arrives in task 7.8',
-    );
-    // the destructive control is inert in the shell: it cannot freeze anything
-    expect((screen.getByRole('button', { name: 'Freeze now' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    // The status read is still in flight here, so the flow shows what it is doing rather than
+    // guessing which step is live (D-95). Cancel is never blocked by that fetch.
+    expect(screen.getByTestId('freeze-loading').textContent).toContain('Checking');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(close).toHaveBeenCalledOnce();
   });

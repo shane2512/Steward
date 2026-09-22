@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // S10 Settings screen (task 7.7): notifications is disabled ("Coming soon"), verify shows OK or the
-// exact failing row, and Unfreeze is the marked extension point for task 7.8.
+// exact failing row, and Unfreeze (7.8) is offered only while the wallet is frozen.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -11,6 +11,15 @@ vi.mock('../lib/api', async (orig) => ({
   ...(await orig<typeof import('../lib/api')>()),
   apiGet: mocks.apiGet,
   fixtureParam: () => null,
+}));
+
+// 7.8: UnfreezeSlot signs a server-issued message, so the screen now pulls in wagmi. Its own
+// behaviour is covered by the signing tests; here it only has to mount.
+vi.mock('wagmi', () => ({
+  useAccount: () => ({ isConnected: false }),
+  useBytecode: () => ({ data: undefined, isSuccess: false }),
+  useSwitchChain: () => ({ switchChain: vi.fn(), isPending: false }),
+  useSignMessage: () => ({ signMessageAsync: vi.fn() }),
 }));
 
 import { SettingsScreen } from '../components/settings/SettingsScreen';
@@ -86,16 +95,16 @@ describe('S10 settings screen', () => {
   it('unfreeze is not offered while the wallet is not frozen', async () => {
     wrap(<SettingsScreen />);
     await screen.findByText('Close account');
-    expect(screen.queryByTestId('unfreeze-placeholder')).toBeNull();
+    expect(screen.queryByTestId('unfreeze')).toBeNull();
   });
 
-  it('shows the unfreeze extension-point slot when frozen', async () => {
+  it('offers unfreeze only when frozen', async () => {
     mocks.apiGet.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/dashboard'))
         return { ...dashboard, wallet: { ...dashboard.wallet, frozen: true } };
       return { ok: true, rows: 0, head: '0x' };
     });
     wrap(<SettingsScreen />);
-    await screen.findByTestId('unfreeze-placeholder');
+    await screen.findByTestId('unfreeze');
   });
 });
