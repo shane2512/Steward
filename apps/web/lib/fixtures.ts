@@ -2,6 +2,7 @@
 // hashes, no real user data. Server-only: imported by read routes, never by client code.
 import { formatUnits } from '@steward/shared';
 import type {
+  ApprovalList,
   ConfigResponse,
   Dashboard,
   DecisionDetail,
@@ -9,6 +10,8 @@ import type {
   DecisionList,
   MeResponse,
   OnboardingState,
+  PolicyView,
+  RecipientList,
   RuleCheck,
 } from './contracts';
 import type { FixtureScenario } from './fixtureGate';
@@ -354,5 +357,63 @@ export function fixtureOnboarding(scenario: FixtureScenario): OnboardingState {
     mandate: null,
     spendPermissionStatus: null,
     activePolicyVersion: null,
+  };
+}
+
+// ------------------------------------------------------------------ task 7.7 screens
+
+/** S6 approvals queue: one pending, one already decided, so both list states render. */
+export function fixtureApprovals(scenario: FixtureScenario): ApprovalList {
+  if (scenario === 'quiet') return { approvals: [] };
+  const pendingExpires = new Date(Date.now() + 3 * 3_600_000).toISOString();
+  return {
+    approvals: [
+      {
+        id: 'fx-appr-1',
+        decisionId: 'fx-1',
+        proposalHash: TX,
+        status: 'pending',
+        message: 'Steward approval\nProposal: pay_recipient\nAmount: 15000000000\nHash: ' + TX,
+        expiresAt: pendingExpires,
+        decidedAt: null,
+        proposal: null,
+        rationale: 'Pay Mara Okonjo 15,000 USDC — above your 10,000 USDC auto-approve limit.',
+      },
+      {
+        id: 'fx-appr-2',
+        decisionId: 'fx-2',
+        proposalHash: TX,
+        status: 'approved',
+        message: 'Steward approval\nProposal: vault_deposit\nAmount: 9000000000\nHash: ' + TX,
+        expiresAt: ago(-60),
+        decidedAt: ago(10),
+        proposal: null,
+        rationale: 'Deposit 9,000 USDC to Aave USDC — above the vault share cap.',
+      },
+    ],
+  };
+}
+
+/** S8 recipients allowlist. */
+export function fixtureRecipients(scenario: FixtureScenario): RecipientList {
+  if (scenario === 'quiet') return { recipients: [] };
+  return {
+    recipients: [
+      { id: 'fx-r1', label: 'Mara Okonjo', address: OWNER, maxPerTx: U(1200), scheduleDayOfMonth: 1, status: 'active' },
+      { id: 'fx-r2', label: 'Tomas Berg', address: AGENT, maxPerTx: U(900), scheduleDayOfMonth: null, status: 'active' },
+    ],
+  };
+}
+
+/** S7 policy: sentences + raw body, for the read-only default and JSON toggle views. */
+export function fixturePolicyView(scenario: FixtureScenario): PolicyView {
+  const sentences = FIXTURE_MANDATE.sentences;
+  return {
+    version: scenario === 'quiet' ? null : 3,
+    sentences: scenario === 'quiet' ? [] : sentences,
+    body:
+      scenario === 'quiet'
+        ? null
+        : { version: 3, runwayBufferMicroUsd: U(120_000), limits: { perTxMicroUsd: U(50_000), dailyMicroUsd: U(60_000) } },
   };
 }

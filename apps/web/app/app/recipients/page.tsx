@@ -1,5 +1,7 @@
-import { Placeholder } from '@/components/shell/Placeholder';
+import { RecipientsScreen } from '@/components/recipients/RecipientsScreen';
 
-export default function Page() {
-  return <Placeholder title="Recipients" task="7.7" screen="S8" />;
+export const metadata = { title: 'Recipients - Steward' };
+
+export default function RecipientsPage() {
+  return <RecipientsScreen />;
 }

@@ -4,6 +4,8 @@
 // It is returned verbatim so the UI can never compose a different one.
 import { z } from 'zod';
 import { getAgentDecision, listApprovals } from '@steward/db';
+import { fixtureFor } from '@/lib/fixture';
+import { fixtureApprovals } from '@/lib/fixtures';
 import { apiError } from '@/lib/server';
 import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 
@@ -12,6 +14,9 @@ export const dynamic = 'force-dynamic';
 const query = z.enum(['pending', 'approved', 'rejected', 'expired', 'cancelled']).optional();
 
 export async function GET(req: Request) {
+  const fx = fixtureFor(req);
+  if (fx) return Response.json(fixtureApprovals(fx));
+
   const owner = await requireOwner();
   if (isResponse(owner)) return owner;
   const wallet = await requireWallet(owner);

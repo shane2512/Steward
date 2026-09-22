@@ -21,6 +21,8 @@ import {
   zPolicy,
 } from '@steward/shared';
 import { getAddress } from 'viem';
+import { fixtureFor } from '@/lib/fixture';
+import { fixtureRecipients } from '@/lib/fixtures';
 import { zRecipientAddBody } from '@/lib/recipientSchemas';
 import { apiError, getPublicClient } from '@/lib/server';
 import { getSession } from '@/lib/session';
@@ -28,7 +30,10 @@ import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req?: Request) {
+  const fx = req ? fixtureFor(req) : null;
+  if (fx) return Response.json(fixtureRecipients(fx));
+
   const owner = await requireOwner();
   if (isResponse(owner)) return owner;
   const wallet = await requireWallet(owner);

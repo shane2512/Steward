@@ -1,5 +1,7 @@
-import { Placeholder } from '@/components/shell/Placeholder';
+import { PolicyScreen } from '@/components/policy/PolicyScreen';
 
-export default function Page() {
-  return <Placeholder title="Policy" task="7.7" screen="S7" />;
+export const metadata = { title: 'Policy - Steward' };
+
+export default function PolicyPage() {
+  return <PolicyScreen />;
 }

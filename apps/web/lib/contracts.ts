@@ -299,6 +299,7 @@ export const zRecipient = z.object({
 export type Recipient = z.infer<typeof zRecipient>;
 
 export const zRecipientList = z.object({ recipients: z.array(zRecipient) });
+export type RecipientList = z.infer<typeof zRecipientList>;
 
 /** POST /api/recipients/prepare — the literal confirmation message (nonce-bound, 5 min TTL). */
 export const zRecipientPrepare = z.object({
@@ -330,6 +331,17 @@ export const zApproval = z.object({
 export type Approval = z.infer<typeof zApproval>;
 
 export const zApprovalList = z.object({ approvals: z.array(zApproval) });
+export type ApprovalList = z.infer<typeof zApprovalList>;
+
+/** GET /api/policy — the ACTIVE policy, for S7's read-only sentences + JSON views. `body` is the
+ * stored policy row rendered as plain JSON (no signature: I9) for the opt-in, clearly-secondary
+ * JSON toggle; `sentences` is what renders by default. Null fields mean no policy is active yet. */
+export const zPolicyView = z.object({
+  version: z.number().nullable(),
+  sentences: z.array(z.string()),
+  body: z.record(z.string(), z.unknown()).nullable(),
+});
+export type PolicyView = z.infer<typeof zPolicyView>;
 
 export const zApprovalDecided = z.object({
   approval: z.object({ id: z.string(), status: z.string() }),
