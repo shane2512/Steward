@@ -13,6 +13,9 @@ export const FIXTURE_SCENARIOS = [
   // 7.6: the two signing steps of the wizard, so they can be viewed and screenshotted.
   'sign-limit',
   'sign-policy',
+  // 7.8: the two later steps of S9, which only exist after a real freeze and a real revoke.
+  'freeze-revoke',
+  'freeze-sweep',
 ] as const;
 export type FixtureScenario = (typeof FIXTURE_SCENARIOS)[number];
 

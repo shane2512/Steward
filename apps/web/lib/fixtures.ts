@@ -10,6 +10,7 @@ import type {
   DecisionList,
   MeResponse,
   OnboardingState,
+  OwnerPath,
   PolicyView,
   RecipientList,
   RuleCheck,
@@ -433,5 +434,30 @@ export function fixturePolicyView(scenario: FixtureScenario): PolicyView {
             runwayBufferMicroUsd: U(120_000),
             limits: { perTxMicroUsd: U(50_000), dailyMicroUsd: U(60_000) },
           },
+  };
+}
+
+/**
+ * The owner-path status behind S9 (task 7.8). `frozen` and `freeze-sweep` exist so the two later
+ * steps — which in reality only appear after a real freeze and a real revoke transaction — can be
+ * seen and screenshotted without moving any money.
+ */
+export function fixtureOwnerPath(scenario: FixtureScenario): OwnerPath {
+  const frozen =
+    scenario === 'frozen' || scenario === 'freeze-revoke' || scenario === 'freeze-sweep';
+  const revoked = scenario === 'freeze-sweep';
+  return {
+    frozen,
+    frozenAt: frozen ? ago(3) : null,
+    frozenReason: frozen ? 'owner freeze' : null,
+    revoke: revoked
+      ? { state: 'revoked', at: ago(2) }
+      : {
+          state: 'todo',
+          to: '0xf85210B21cC50302F477BA56686d2019dC9b67Ad',
+          data: `0x1a5d1d40${'0'.repeat(128)}`,
+          permissionId: 'fx-permission',
+        },
+    sweep: scenario === 'freeze-sweep' ? { state: 'submitted', txHash: TX } : { state: 'none' },
   };
 }

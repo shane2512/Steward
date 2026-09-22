@@ -20,6 +20,8 @@
 import { z } from 'zod';
 import { appendAudit, cancelPendingApprovals, setWalletFrozen } from '@steward/db';
 import { zHex } from '@steward/shared';
+import { fixtureFor } from '@/lib/fixture';
+import { fixtureOwnerPath } from '@/lib/fixtures';
 import { ownerPathStatus, verifyFreezeSignature } from '@/lib/ownerPath';
 import { apiError } from '@/lib/server';
 import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
@@ -28,7 +30,10 @@ export const dynamic = 'force-dynamic';
 
 const body = z.object({ signature: zHex }).strict();
 
-export async function GET() {
+export async function GET(req?: Request) {
+  const fx = req ? fixtureFor(req) : null;
+  if (fx) return Response.json(fixtureOwnerPath(fx));
+
   const owner = await requireOwner();
   if (isResponse(owner)) return owner;
   const wallet = await requireWallet(owner);
