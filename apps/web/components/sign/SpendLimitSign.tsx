@@ -10,7 +10,6 @@
 // the browser must not own a second copy of the struct or the domain, or the two could drift and the
 // owner would be reading one permission while signing another.
 import { useState } from 'react';
-import { useSignTypedData } from 'wagmi';
 import { SYSTEM_CEILINGS } from '@steward/shared/client';
 import { Button, Money, TextButton } from '@/components/ui/primitives';
 import { apiPost } from '@/lib/api';
@@ -23,7 +22,15 @@ import {
 import { formatToken, toBig } from '@/lib/format';
 import { useSignFlow } from '@/lib/useSignFlow';
 import { useSigner } from '@/lib/useSigner';
-import { BlockerPanel, FactRow, LiteralPayload, SignErrorPanel, SignStatus } from './SignSurface';
+import { useTypedDataSigner } from '@/lib/useTypedDataSigner';
+import {
+  BlockerPanel,
+  CompanionTreasuryNotice,
+  FactRow,
+  LiteralPayload,
+  SignErrorPanel,
+  SignStatus,
+} from './SignSurface';
 
 const USDC = 1_000_000n;
 /** Daily caps offered on the slider, in base units. The top of the range is the system ceiling. */
@@ -64,8 +71,12 @@ export function SpendLimitSign({
 }) {
   const [step, setStep] = useState(DEFAULT_STEP);
   const [end, setEnd] = useState(() => addDays(30));
-  const { blocker, switchNetwork, switching } = useSigner();
-  const { signTypedDataAsync } = useSignTypedData();
+  // The treasury the server stored. When it is not the connected account it is the companion smart
+  // wallet derived at sign-in, and the signature has to be produced AS that wallet.
+  const { blocker, companion, switchNetwork, switching } = useSigner(
+    wallet?.wallet.treasuryAddress,
+  );
+  const signTypedData = useTypedDataSigner(wallet?.wallet.treasuryAddress);
 
   const flow = useSignFlow<SpendPermissionPrepare>({
     prepare: () =>
@@ -76,7 +87,7 @@ export function SpendLimitSign({
         end: Math.floor(new Date(`${end}T23:59:59Z`).getTime() / 1000),
       }),
     // Signed exactly as the server built it. `message` carries decimal strings; viem widens them.
-    sign: (p) => signTypedDataAsync(p.typedData as never),
+    sign: (p) => signTypedData(p.typedData),
     submit: (p, signature) =>
       apiPost('/api/spend-permission', zSpendPermissionStored, {
         permission: p.typedData.message,
@@ -102,6 +113,11 @@ export function SpendLimitSign({
 
   return (
     <div data-testid="spend-limit-sign">
+      {companion ? (
+        <div className="pb-6">
+          <CompanionTreasuryNotice companion={companion} />
+        </div>
+      ) : null}
       {!reviewing ? (
         <>
           <label htmlFor="allowance" className="block text-small font-semibold text-ink">

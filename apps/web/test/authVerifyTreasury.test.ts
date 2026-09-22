@@ -4,14 +4,7 @@
 // Smart Wallet, it is NOT the EOA, and it is the SAME address on every subsequent sign-in. A second
 // answer would strand whatever the owner had already sent to the first.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createPublicClient,
-  custom,
-  getAddress,
-  keccak256,
-  verifyMessage,
-  type Hex,
-} from 'viem';
+import { createPublicClient, custom, getAddress, keccak256, verifyMessage, type Hex } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { createSiweMessage } from 'viem/siwe';
@@ -153,9 +146,7 @@ describe('POST /api/auth/verify — treasury assignment', () => {
     chain.code = '0x60806040'; // deployed contract wallet
     const res = await signIn(smartWalletOwner);
     expect(res.status).toBe(200);
-    expect(await treasuryOf(smartWalletOwner.address)).toBe(
-      getAddress(smartWalletOwner.address),
-    );
+    expect(await treasuryOf(smartWalletOwner.address)).toBe(getAddress(smartWalletOwner.address));
   });
 
   it('the sign-in identity stays the EOA — only the treasury differs', async () => {

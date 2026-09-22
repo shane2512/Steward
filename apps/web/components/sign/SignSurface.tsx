@@ -10,7 +10,8 @@ import { VerdictGlyph } from '@/components/icons';
 import { Button, ErrorPanel } from '@/components/ui/primitives';
 import type { SignError } from '@/lib/signCopy';
 import { PHASE_STATUS, type SignPhase } from '@/lib/useSignFlow';
-import { BLOCKER_COPY, type SignerBlocker } from '@/lib/useSigner';
+import { BLOCKER_COPY, type CompanionTreasury, type SignerBlocker } from '@/lib/useSigner';
+import { CopyAddress } from '@/components/ui/CopyAddress';
 
 /**
  * The bytes the wallet will be given. A string is printed as-is; an object is printed as the JSON
@@ -94,6 +95,44 @@ export function BlockerPanel({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Phase 7 addendum — the owner connected a regular browser wallet, so their treasury is a Coinbase
+ * Smart Wallet Steward derived from it. They have to know that BEFORE they fund anything, because
+ * money sent to their everyday balance is not money Steward can work with.
+ *
+ * DESIGN §9: the address is on solid `surface-2` (via CopyAddress), never on glass — it is meant to
+ * be read and copied, character by character.
+ */
+export function CompanionTreasuryNotice({ companion }: { companion: CompanionTreasury }) {
+  return (
+    <section
+      data-testid="companion-treasury"
+      aria-labelledby="companion-treasury-title"
+      className="rounded-md bg-surface-2 p-4"
+    >
+      <h3 id="companion-treasury-title" className="text-h3 font-semibold text-ink">
+        Your treasury is a Smart Wallet Steward set up for you
+      </h3>
+      <p className="max-w-[46ch] pt-2 text-small text-muted">
+        The wallet you connected is a standard browser wallet, and one of those cannot grant a
+        capped spending permission. So your treasury is a Coinbase Smart Wallet owned by the wallet
+        you connected — you still control it, and you still sign for it.
+      </p>
+      <p className="max-w-[46ch] pt-2 text-small font-semibold text-ink">
+        Fund this address, not your everyday wallet balance.
+      </p>
+      <div className="pt-3">
+        <CopyAddress address={companion.address} />
+      </div>
+      <p role="status" aria-live="polite" className="pt-3 text-small text-muted">
+        {companion.deployed
+          ? 'This wallet is live on Base Sepolia.'
+          : 'Not created on-chain yet. It is still safe to send USDC here: the address is fixed, and the wallet is created the first time it is used.'}
+      </p>
+    </section>
   );
 }
 

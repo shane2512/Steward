@@ -30,7 +30,9 @@ import {
   deriveCompanionTreasury,
 } from '../src/companionTreasury';
 
-const factoryAbi = parseAbi(['function getAddress(bytes[] owners, uint256 nonce) view returns (address)']);
+const factoryAbi = parseAbi([
+  'function getAddress(bytes[] owners, uint256 nonce) view returns (address)',
+]);
 
 /** Every `eth_call` is answered with keccak(calldata), so identical input ⇒ identical address. */
 function stubClient(onCall?: (call: { to: Hex; data: Hex }) => void): PublicClient {
@@ -75,21 +77,24 @@ describe('deriveCompanionTreasury', () => {
 
   it('is deterministic and injective over owners (property)', async () => {
     await fc.assert(
-      fc.asyncProperty(fc.uniqueArray(fc.string({ minLength: 1 }), { minLength: 2, maxLength: 6 }), async (seeds) => {
-        const owners = seeds.map(addr);
-        const seen = new Map<Address, Address>();
-        for (const owner of owners) {
-          const first = await deriveCompanionTreasury(stubClient(), owner);
-          const again = await deriveCompanionTreasury(stubClient(), owner);
-          expect(first.ok && again.ok).toBe(true);
-          if (!first.ok || !again.ok) return;
-          // same owner in ⇒ same address out, every time
-          expect(again.value).toBe(first.value);
-          // different owners ⇒ different addresses
-          expect(seen.has(first.value)).toBe(false);
-          seen.set(first.value, owner);
-        }
-      }),
+      fc.asyncProperty(
+        fc.uniqueArray(fc.string({ minLength: 1 }), { minLength: 2, maxLength: 6 }),
+        async (seeds) => {
+          const owners = seeds.map(addr);
+          const seen = new Map<Address, Address>();
+          for (const owner of owners) {
+            const first = await deriveCompanionTreasury(stubClient(), owner);
+            const again = await deriveCompanionTreasury(stubClient(), owner);
+            expect(first.ok && again.ok).toBe(true);
+            if (!first.ok || !again.ok) return;
+            // same owner in ⇒ same address out, every time
+            expect(again.value).toBe(first.value);
+            // different owners ⇒ different addresses
+            expect(seen.has(first.value)).toBe(false);
+            seen.set(first.value, owner);
+          }
+        },
+      ),
       { numRuns: 20 },
     );
   });
