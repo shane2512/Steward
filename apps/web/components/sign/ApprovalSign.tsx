@@ -11,7 +11,7 @@
 // here: the worker re-gathers, re-simulates and re-evaluates before a single call is built.
 import { useSignMessage } from 'wagmi';
 import { Sheet } from '@/components/ui/Sheet';
-import { Button, TextButton, VerdictBadge, toneOf } from '@/components/ui/primitives';
+import { Button, VerdictBadge, toneOf } from '@/components/ui/primitives';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import { zApprovalDecided, zApprovalList, zDecisionDetail, type Approval } from '@/lib/contracts';
 import { formatMoney, toBig } from '@/lib/format';
@@ -29,7 +29,11 @@ export function timeLeft(expiresAt: string, now: number): string | null {
   if (!Number.isFinite(ms) || ms <= 0) return null;
   const mins = Math.floor(ms / 60_000);
   if (mins < 60) return `${Math.max(1, mins)} min left`;
-  return `${Math.floor(mins / 60)}h ${mins % 60}m left`;
+  const hours = Math.floor(mins / 60);
+  // Approvals live 24 h (APPROVAL_TTL_MS), so days should never appear — but a clock that is wrong
+  // must read as an obvious number of days, not as five digits of hours.
+  if (hours >= 48) return `${Math.floor(hours / 24)}d left`;
+  return `${hours}h ${mins % 60}m left`;
 }
 
 export function ApprovalSign({
@@ -84,9 +88,11 @@ export function ApprovalSign({
 
   return (
     <div data-testid="approval-sign">
-      <p className="text-h3 font-semibold text-ink">
-        {detail.data?.decision.title ?? 'Steward needs your decision'}
-      </p>
+      {/* The sheet's own title already says what this is; only add a line when the decision detail
+          gives it a real name ("Pay Devon Achebe"). */}
+      {detail.data ? (
+        <p className="text-h3 font-semibold text-ink">{detail.data.decision.title}</p>
+      ) : null}
       {approval.rationale ? (
         <p className="max-w-[52ch] pt-2 text-small text-muted">{approval.rationale}</p>
       ) : null}
@@ -146,10 +152,11 @@ export function ApprovalSign({
         >
           {flow.prepared === null ? 'Approve' : 'Sign in wallet'}
         </Button>
-        <div className="pt-2 text-center">
-          <TextButton disabled={!pending || rejecting} onClick={reject}>
+        {/* DESIGN §9: Approve is accent, Reject is ghost — same size, so neither is the easy one. */}
+        <div className="pt-3">
+          <Button variant="ghost" disabled={!pending} loading={rejecting} onClick={reject}>
             Reject
-          </TextButton>
+          </Button>
         </div>
       </div>
     </div>

@@ -3,7 +3,17 @@
 // of reading the database. It never grants a session, never touches a write route, and never runs
 // unless ALL of: not production, DEMO_MODE, Base Sepolia (I11). Routes still call `requireOwner`
 // first for anything that is not a fixture response, so real data stays behind the real session.
-export const FIXTURE_SCENARIOS = ['1', 'frozen', 'safe', 'paused', 'quiet', 'onboarding'] as const;
+export const FIXTURE_SCENARIOS = [
+  '1',
+  'frozen',
+  'safe',
+  'paused',
+  'quiet',
+  'onboarding',
+  // 7.6: the two signing steps of the wizard, so they can be viewed and screenshotted.
+  'sign-limit',
+  'sign-policy',
+] as const;
 export type FixtureScenario = (typeof FIXTURE_SCENARIOS)[number];
 
 export type FixtureEnv = { nodeEnv: string | undefined; demoMode: boolean; chainId: number };

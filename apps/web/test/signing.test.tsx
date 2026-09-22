@@ -487,5 +487,8 @@ describe('(d) approval signing', () => {
     expect(timeLeft(new Date(now + 5 * 3_600_000).toISOString(), now)).toBe('5h 0m left');
     expect(timeLeft(new Date(now + 12 * 60_000).toISOString(), now)).toBe('12 min left');
     expect(timeLeft(new Date(now - 1).toISOString(), now)).toBeNull();
+    // a badly wrong clock reads as days, never as five digits of hours
+    expect(timeLeft(new Date(now + 90 * 86_400_000).toISOString(), now)).toBe('90d left');
+    expect(timeLeft('not a date', now)).toBeNull();
   });
 });

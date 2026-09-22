@@ -38,6 +38,11 @@ const screens = [
   { name: 'dashboard-frozen', path: '/app?fixture=frozen' },
   { name: 'dashboard-safe', path: '/app?fixture=safe' },
   { name: 'activity', path: '/app/activity?fixture=1&open=fx-3' },
+  // 7.6 signing surfaces
+  { name: 'sign-limit', path: '/onboarding?fixture=sign-limit' },
+  { name: 'sign-policy', path: '/onboarding?fixture=sign-policy' },
+  { name: 'sign-sheets', path: '/preview/sign' },
+  { name: 'sign-approval-sheet', path: '/preview/sign?sheet=1' },
 ];
 const shots = [];
 for (const s of screens)

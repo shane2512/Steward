@@ -3,9 +3,9 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 7 in progress**: tasks 7.1-7.5 built (Sonnet, 2026-09-22); 7.6 and 7.8 (Opus), 7.7, 7.9, 7.10 remain
+Phase: **Phase 7 in progress**: tasks 7.1-7.6 built (7.1-7.5 Sonnet, 7.6 Opus, 2026-09-22); 7.7, 7.8 (Opus), 7.9, 7.10 remain
 Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8)
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 ## Phase status
 | Phase | Title | Model | Status | Gate passed | Notes |
@@ -1202,7 +1202,7 @@ Screenshots: `docs/design/shots/` (390px and 1280px, light and dark).
 - [x] 7.3 S3 wizard, resumable from `GET /api/onboarding`. Steps 1-3 built (`POST /api/mandate/compile`). Steps 4-5 render `SignStepSlot` placeholders.
 - [x] 7.4 S4 dashboard from `GET /api/dashboard` (polled every 8 s), limit-line meter, parked notice (RR-14), fund sheet, stale indicator, skeletons, plain-language errors.
 - [x] 7.5 S5 timeline from `GET /api/decisions` (cursor) and `GET /api/decisions/:id`, six tabs, "Why was this blocked?", Basescan link.
-- [ ] 7.6-7.10 NOT started (7.6 and 7.8 are Opus). Phase 7 is not complete.
+- [ ] 7.7-7.10 NOT started (7.8 is Opus). Phase 7 is not complete.
 
 Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean, `pnpm check:arch` 0 violations (all fixtures fire), `pnpm test` 49 files passed / 889 tests (26 skipped; 3 skipped files are the fork/live suites) plus policy 344 tests at 100% branches, `pnpm test:adversarial` guarantee holds (benign FP 0/12).
 
@@ -1237,6 +1237,113 @@ Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean, `pnpm check:arch` 0 
 - Onboarding "Continue" after a compile relies on the refetch that follows the compile response; if it has not landed, the click is a no-op.
 - Approvals, Recipients, Settings and Policy tabs are placeholders (task 7.7). The landing page has no live "attacks blocked" counter (needs an unauthenticated stat).
 - In `next dev`, the first hit of a route that imports `@steward/wallet` takes 30-60 s to compile.
+
+## Phase 7 - build, part 2 (Opus, task 7.6 all signing UX, 2026-09-22)
+
+- [x] 7.6 **All signing UX.** Four flows, one state machine, one rule: the payload comes from a
+      server route and the browser never composes, reformats or rebuilds it.
+
+Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean, `pnpm check:arch` **0 violations
+(332 modules, 834 dependencies)** with all fixtures still firing, `pnpm test` 53 files / **956
+passed** + 26 skipped, policy 344 at 100% branches, `pnpm test:adversarial` guarantee holds.
+**No dependency-cruiser rule was changed or weakened, and no new dependency was added.**
+
+### What each flow does
+
+| | Flow | Prepare route | Message / typed data | Verified by |
+|---|---|---|---|---|
+| a | Spend permission (S3 step 4) | `POST /api/spend-permission/prepare` (already existed) | EIP-712 `SpendPermission` from `packages/wallet`'s encoders, server-chosen `account`/`spender`/`token`/`salt` | `assertSmartWalletAccount` on `POST /api/spend-permission` (D-5) |
+| b | Policy activation (S3 step 5 + S7 re-sign) | `POST /api/policy/prepare` (**new**) | EIP-191 `Steward policy v{n} {hash}` (API.md, verbatim) | `POST /api/policy/activate` (**new**), viem `verifyMessage` |
+| c | Recipient add (S8) | `POST /api/recipients/prepare` (**new**) | EIP-191 `Steward recipient` + one labelled line per fact + `Nonce:` + `Expires:` | `POST /api/recipients` (**new**), viem `verifyMessage` |
+| d | Approval (S6) | `GET /api/approvals` (already existed) | EIP-191 SECURITY §5, verbatim | `POST /api/approvals/:id/approve` (already existed) |
+
+Only (b) and (c) needed new routes; (a) and (d) were complete server-side from Phases 2 and 6.
+**Reject needs no signature** — checked against API.md and the existing route; rejecting only ever
+prevents an action.
+
+### New / changed routes
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/policy/prepare` | no request body at all: the body is built from server rows only (`lib/policyDraft.ts` -> stored mandate draft + **current** recipient rows + wallet chain/treasury). Returns `{ version, bodyHash, message, sentences, diff{added,removed,previousVersion} }`. Deterministic: `createdAt` comes from the mandate row, not the clock, so preparing twice yields one hash |
+| POST | `/api/policy/activate` | **sensitive** `{ signature }`. Re-derives the body and message, verifies EIP-191 against the session owner, audits `POLICY_ACTIVATED`, activates in one transaction, then calls `cancelApprovalsForPolicyChange`. Codes: 409 `no_draft`, 401 `bad_signature`, 502 `verify_failed`, 409 `already_activated`, 503 `audit_failed` |
+| POST | `/api/recipients/prepare` | checksums the address **server-side** and returns it, issues a single-use session nonce (5 min). Codes: 400 `bad_address`/`invalid_terms`, 409 `duplicate_recipient`/`too_many_recipients` |
+| POST | `/api/recipients` | **sensitive**; the ONLY way a recipient is ever added. Spends the nonce on first use, re-derives the message, verifies, audits `RECIPIENT_ADDED`, inserts. Returns `needsPolicySignature`. Codes: 409 `nonce_expired`/`duplicate_recipient`, 401 `bad_signature`, 502 `verify_failed` |
+| GET | `/api/recipients` | the allowlist; never returns `addedSignature` (I9) |
+
+New in `@steward/shared`: `policyActivationMessage`, `recipientAddMessage`,
+`RECIPIENT_CONFIRMATION_TTL_MS` (in `src/signing.ts`). **Deliberately not exported from
+`@steward/shared/client`** — the browser must not be able to compose a signable message.
+New in `@steward/db`: `latestPolicyVersion`, `activatePolicyVersion`, `insertRecipient`, and
+`cancelApprovalsForPolicyChange` **moved here from `apps/worker/src/approvals.ts`** so the web route
+and the worker share one implementation (the web app may not import the worker). The worker's
+`rejectApproval`/`executeApproval` are unchanged; only the import in `apps/worker/test/loop.test.ts`
+moved.
+
+### Client pieces (all under `apps/web`)
+
+```
+lib/useSignFlow.ts    the one state machine: idle -> preparing -> review -> awaiting-signature
+                      -> submitting -> done | error. `confirm()` DROPS the prepared payload on any
+                      failure, so a retry always re-prepares: the browser can never hold a signature
+                      and present it against a different message. `done` only after the SERVER says so
+lib/useSigner.ts      blockers checked BEFORE any signature is requested: disconnected, wrong network
+                      (offers the switch), plain EOA (D-5). EOA = no deployed bytecode AND not the
+                      Smart Wallet connector, so a counterfactual smart wallet is never blocked
+lib/signCopy.ts       per-error-code copy. An unknown code keeps the SERVER's own message rather than
+                      inventing a reason; a wallet rejection is a choice, not a fault
+components/sign/      SignSurface (LiteralPayload / SignStatus / SignErrorPanel / BlockerPanel /
+                      FactRow), SpendLimitSign, PolicySign, AddRecipientSign, ApprovalSign+ApprovalSheet
+lib/policyDraft.ts    server-side: nextPolicyBody() + diffSentences() + recipientBindings()
+                      (the last is now shared with /api/mandate/compile, which had its own copy)
+lib/recipientForm.ts  pure: looksLikeExisting() (WARNING ONLY), parseUsdc(), sixAndSix()
+```
+
+`LiteralPayload` renders the string or object exactly as received, in `mono` on **solid**
+`surface-2` (DESIGN §8: if you have to read it, it is opaque). It takes no formatting parameters on
+purpose.
+
+### For task 7.7 (embed, do not rebuild)
+
+- `<ApprovalSheet approval={a} onClose onDecided />` (or `<ApprovalSign>` without the sheet chrome)
+  is the whole S6 interaction. Feed it a row from `GET /api/approvals`. It fetches the decision
+  detail itself for the title, amount and failing rule checks.
+- `<AddRecipientSign existing={recipients} onAdded={(r, needsPolicySignature) => …} />` is the whole
+  S8 add. Wrap it in `<Sheet>`. `GET /api/recipients` gives the list for both the screen and the
+  look-alike warning. When `needsPolicySignature` is true, tell the owner plainly that Steward
+  cannot pay the new recipient until a new policy version is signed, and link to the policy screen.
+- `<PolicySign onActivated cta="Sign the new version" />` is the S7 re-sign, diff included.
+- `/preview/sign` (dev-only design reference) shows all of these with mock props.
+
+### For task 7.8 (freeze) — reuse, do not duplicate
+
+- `cancelApprovalsForPolicyChange(db, walletId, newVersion, now)` is now in `@steward/db`; the
+  freeze path wants `cancelPendingApprovals(db, walletId, now)` + its own audit reason instead.
+- `lib/useSignFlow.ts`, `lib/useSigner.ts`, `lib/signCopy.ts` and `components/sign/SignSurface.tsx`
+  are flow-agnostic: the freeze signature and the unfreeze signature should use them rather than a
+  fifth state machine. Add freeze's error codes to the `CODES` table in `signCopy.ts`.
+- The on-chain revoke is **not** a signature: `encodeRevoke` / `encodeRevokeAsSpender` in
+  `@steward/wallet` build the transaction the owner's wallet sends. Nothing in 7.6 broadcasts
+  anything, and `ensureApprovedOnchain` stays exactly where Phase 2 put it.
+
+### Known issues (7.6)
+
+- **No real passkey Smart Wallet was available**, so like 7.2 the wallet half is exercised with
+  mocks. The EOA/bytecode detection and every server-side verification are tested; what is untested
+  is a real Coinbase Smart Wallet actually producing an ERC-6492 signature that `verifyMessage`
+  accepts. The route tests use a viem local EOA.
+- `/preview/sign` shows the **idle** state of each surface plus static confirm blocks; the
+  review/confirm states of the spend-limit and recipient flows need a prepare response, so they are
+  covered by the component tests rather than by a screenshot.
+- Adding a recipient does **not** make it payable on its own: the Policy Engine reads the allowlist
+  from the signed policy body (R05), so the owner must also sign a new policy version.
+  `/api/policy/prepare` picks the new row up automatically and shows it in the diff; the add
+  response says so via `needsPolicySignature`. API.md's "triggers new policy version draft" is
+  implemented as "the next prepare includes it", not as a stored draft row.
+- The recipient nonce lives in the iron-session cookie, so one browser can have one recipient
+  confirmation in flight at a time. That is the intended shape of a 5-minute single-use
+  confirmation, not a limitation to remove.
+- `/api/policy` (GET) from API.md is still unbuilt — it belongs to 7.7's policy screen.
 
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
@@ -1321,6 +1428,13 @@ Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean, `pnpm check:arch` 0 
 | D-75 | 2026-09-22 | **`serverExternalPackages` + webpack externals for `@coinbase/cdp-sdk`, `@x402`, `@solana`** in `next.config.ts` | Bundling the SDK fails on a mismatched `@solana/kit`; any route importing `@steward/wallet` returned 500 in `next dev` (no earlier phase ran a wallet route in Next). It only runs server-side | Pinning the solana packages |
 | D-76 | 2026-09-22 | **A wallet row is created at first sign-in**, treasury = the owner's smart wallet | Nothing created it, so provision returned NO_WALLET for every real user | Create it in the provision route |
 | D-77 | 2026-09-22 | **A frozen dashboard disables Approvals and Add funds but keeps Recipients and Activity reachable**; "attacks blocked" counts all DENY verdicts | Read-only screens must stay open while frozen; a DENY is the engine's own "blocked" | Disable the whole action row |
+| D-78 | 2026-09-22 | **`/api/policy/prepare` takes no request body.** The policy to be signed is rebuilt from server rows (stored mandate draft + current recipient rows + the wallet's chain and treasury) on BOTH prepare and activate, rather than the client posting a draft back as API.md's `{ draft }` suggests | A client-supplied draft is a policy the owner could edit between reading and signing. Re-deriving means a signature is only ever accepted for a body this server would have asked for, and if anything moved in between the hash moves, the message moves, and the old signature simply stops verifying (I5) | accepting `{ draft }` and validating it (rejected: validation cannot tell an edited draft from the intended one) |
+| D-79 | 2026-09-22 | **The policy body hash covers the body WITHOUT `signature`, and `policy.createdAt` is the mandate row's `createdAt`, not the clock** | `zPolicy` carries its own `signature`, so hashing the signed body would be circular. A clock reading would make two prepares of the same policy produce two hashes and two messages, and the owner's signature would go stale between reading and clicking | storing a draft policy row at prepare time (rejected: a lifecycle to maintain for no extra safety) |
+| D-80 | 2026-09-22 | **The recipient confirmation message is `Steward recipient` + one labelled line per fact + `Nonce:` + `Expires:`**, with every control character and line separator in the owner-supplied label collapsed to a space in the message builder AND refused by the request schema | SECURITY §5 fixes only the approval format; this one follows the same shape so a wallet shows plain sentences. Without the stripping, a label containing a newline could forge an `Address:` line and the owner would read one address while signing another (T3) | reusing the SIWE nonce (rejected: issuing one would interfere with signing in), no nonce at all (rejected: API.md requires one for sensitive routes) |
+| D-81 | 2026-09-22 | **`cancelApprovalsForPolicyChange` moved from `apps/worker/src/approvals.ts` to `@steward/db`** | Phase 6 left it uncalled and noted "Phase 8 must call it from `/api/policy/activate`". The web app may not import the worker, and copying ten lines into the route would leave two definitions of a security-relevant cleanup. It only ever used `cancelPendingApprovals` + `appendAudit`, both already in `@steward/db` | a copy in the route (rejected: drift), a `@steward/worker` dependency from the web app (rejected: would need a new arch rule) |
+| D-82 | 2026-09-22 | **The plain-EOA warning fires only when the account has no deployed bytecode AND the connector is not the Coinbase Smart Wallet connector** | A Smart Wallet that has never sent a transaction is counterfactual and has no code yet, so missing bytecode alone would block legitimate owners. False negatives are harmless: `assertSmartWalletAccount` still refuses server-side (D-5). This only decides whether the owner reads an explanation first | bytecode alone (rejected: blocks counterfactual wallets), connector id alone (rejected: breaks if a second connector is ever configured) |
+| D-83 | 2026-09-22 | **Adding a recipient inserts the row and leaves the policy version to the policy flow**, which reads the allowlist fresh on every `/api/policy/prepare`; the add response returns `needsPolicySignature` | API.md says a recipient add "triggers new policy version draft". Making the next prepare include it gives the same result with no draft-row lifecycle, and the owner sees the addition in the S7 diff before signing it. The recipient is inert until then, which is the safe direction | storing a draft policy row (rejected: lifecycle), making the add itself activate a policy (rejected: two signatures fused into one click) |
+| D-84 | 2026-09-22 | **Still no new dependency for 7.6.** The allowance control is `<input type="range">` over a fixed bigint ladder and the end date is `<input type="date">` | Native controls are keyboard-accessible and localised for free; a slider or date-picker library would be a production dependency for two inputs | a slider/date-picker package (rejected) |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks
@@ -1484,6 +1598,13 @@ Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean, `pnpm check:arch` 0 
   Run `/model sonnet` for the Sonnet tasks. Every screen follows `docs/DESIGN.md` 11's handover
   rules - tokens only, `<Money />` only, the approval message verbatim, and glass only where 6
   allows it.
+- **7.6 is done (2026-09-22, Opus).** Next is **7.7 (Sonnet)**: the Approvals, Policy, Recipients
+  and Settings screens, which EMBED the components listed under "For task 7.7" above rather than
+  rebuilding any signing. Then 7.8 (Opus, freeze), 7.9, 7.10.
+- Screenshots of the 7.6 surfaces: `docs/design/shots/app/sign-limit-*`, `sign-policy-*`,
+  `sign-sheets-*`, `sign-approval-sheet-*` (390 and 1280 px, dark and light). Regenerate with
+  `DEMO_MODE=true pnpm --filter @steward/web dev` then `node scripts/app-shots.mjs`.
+  New fixture scenarios: `?fixture=sign-limit`, `?fixture=sign-policy`.
 - Do not start the Phase 7 build before the human says so.
 - `.env.local` now carries everything the worker and the live runner need (verified by
   `pnpm live:env`, which prints variable NAMES only). `USDC_ADDRESS` and

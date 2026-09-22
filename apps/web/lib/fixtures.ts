@@ -306,7 +306,40 @@ export function fixtureDashboard(scenario: FixtureScenario): Dashboard {
   };
 }
 
+/** The compiled mandate a wizard on step 4 or 5 would be carrying. */
+const FIXTURE_MANDATE: NonNullable<OnboardingState['mandate']> = {
+  id: 'fx-mandate',
+  text: 'Keep 120,000 USDC liquid. Put the rest to work. Pay the team on the 1st.',
+  template: 'startup',
+  sentences: [
+    'Keep at least 120,000 USDC liquid at all times.',
+    'Move no more than 50,000 USDC in any one action and 60,000 USDC in any 24 hours.',
+    'Ask you to approve anything worth 15,000 USDC or more.',
+    'Exit a vault automatically if USDC moves more than 0.5% away from $1.00.',
+  ],
+  assumptions: ['Steward assumed the 1st of the month is payday.'],
+  questions: [],
+  compiled: true,
+};
+
 export function fixtureOnboarding(scenario: FixtureScenario): OnboardingState {
+  // 7.6 — the two signing steps.
+  if (scenario === 'sign-limit')
+    return {
+      step: 4,
+      agentWalletAddress: AGENT,
+      mandate: FIXTURE_MANDATE,
+      spendPermissionStatus: null,
+      activePolicyVersion: null,
+    };
+  if (scenario === 'sign-policy')
+    return {
+      step: 5,
+      agentWalletAddress: AGENT,
+      mandate: FIXTURE_MANDATE,
+      spendPermissionStatus: 'signed',
+      activePolicyVersion: null,
+    };
   if (scenario !== 'onboarding')
     return {
       step: 'done',
