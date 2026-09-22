@@ -111,12 +111,14 @@ describe('resuming', () => {
   });
 
   it('keeps revoke and sweep out of reach until the wallet is actually stopped', async () => {
+    // A step you cannot start yet offers no control at all: a disabled button on this card reads as
+    // unexplained bold text (visual QA), and the dimmed numbered heading already says it is waiting.
     flow({ revoke: todoRevoke });
     await waitFor(() =>
       expect((screen.getByTestId('freeze-now') as HTMLButtonElement).disabled).toBe(false),
     );
-    expect((screen.getByTestId('revoke-now') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('sweep-now') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId('revoke-now')).toBeNull();
+    expect(screen.queryByTestId('sweep-now')).toBeNull();
   });
 });
 

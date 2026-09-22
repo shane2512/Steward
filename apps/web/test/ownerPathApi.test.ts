@@ -81,6 +81,7 @@ let routes: {
   revoked: typeof import('../app/api/spend-permission/revoked/route');
 };
 
+const get = (path: string) => new Request(`http://localhost:3000${path}`);
 const post = (path: string, body?: unknown) =>
   new Request(`http://localhost:3000${path}`, {
     method: 'POST',
@@ -146,7 +147,7 @@ describe('the owner path refuses anonymous callers', () => {
     expect(
       (await routes.prepare.POST(post('/api/freeze/prepare', { action: 'freeze' }))).status,
     ).toBe(401);
-    expect((await routes.freeze.GET()).status).toBe(401);
+    expect((await routes.freeze.GET(get('/api/freeze'))).status).toBe(401);
     expect((await routes.freeze.POST(post('/api/freeze', { signature: '0x00' }))).status).toBe(401);
     expect((await routes.unfreeze.POST(post('/api/unfreeze', { signature: '0x00' }))).status).toBe(
       401,
@@ -290,7 +291,7 @@ describe('the sweep is the only action allowed while frozen', () => {
 describe('GET /api/freeze (resume state)', () => {
   it('describes all three steps from server rows', async () => {
     signedIn();
-    const body = await json(await routes.freeze.GET());
+    const body = await json(await routes.freeze.GET(get('/api/freeze')));
     expect(body['frozen']).toBe(false);
     // No permission was ever granted in this fixture, so there is nothing to revoke.
     expect(body['revoke']).toMatchObject({ state: 'none' });

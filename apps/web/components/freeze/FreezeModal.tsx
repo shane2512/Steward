@@ -24,7 +24,9 @@ export function FreezeModal({
         aria-modal="true"
         aria-labelledby="freeze-title"
         tabIndex={-1}
-        className="glass-sheet relative w-full max-w-[440px] rounded-lg p-5"
+        // 7.8 visual QA: with three real steps inside, the sheet is taller than a phone. Cap it and
+        // let it scroll, or the title clips off the top and Cancel falls off the bottom.
+        className="glass-sheet relative max-h-[calc(100dvh-2rem)] w-full max-w-[440px] overflow-y-auto rounded-lg p-5"
       >
         <h2 id="freeze-title" className="text-h2 font-bold text-ink">
           Freeze Steward

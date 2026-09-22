@@ -18,6 +18,7 @@ import type {
 import type { FixtureScenario } from './fixtureGate';
 
 const U = (n: number) => (BigInt(n) * 1_000_000n).toString();
+const FROZEN_SCENARIOS = new Set<FixtureScenario>(['frozen', 'freeze-revoke', 'freeze-sweep']);
 const ago = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
 
 const OWNER = '0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C';
@@ -34,7 +35,7 @@ export const fixtureMe = (scenario: FixtureScenario): MeResponse => ({
           id: 'fx-wallet',
           chainId: 84532,
           agentWalletAddress: AGENT,
-          frozen: scenario === 'frozen',
+          frozen: FROZEN_SCENARIOS.has(scenario),
         },
 });
 
@@ -261,7 +262,7 @@ export function fixtureDashboard(scenario: FixtureScenario): Dashboard {
       chainId: 84532,
       treasuryAddress: TREASURY,
       agentWalletAddress: AGENT,
-      frozen: scenario === 'frozen',
+      frozen: FROZEN_SCENARIOS.has(scenario),
       breakerOpen: false,
     },
     degraded: scenario === 'safe',

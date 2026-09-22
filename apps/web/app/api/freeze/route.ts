@@ -30,8 +30,8 @@ export const dynamic = 'force-dynamic';
 
 const body = z.object({ signature: zHex }).strict();
 
-export async function GET(req?: Request) {
-  const fx = req ? fixtureFor(req) : null;
+export async function GET(req: Request) {
+  const fx = fixtureFor(req);
   if (fx) return Response.json(fixtureOwnerPath(fx));
 
   const owner = await requireOwner();

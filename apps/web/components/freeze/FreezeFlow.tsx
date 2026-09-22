@@ -261,16 +261,20 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
                 the chain; it cannot send this one for you.
               </p>
               {stepError.revoke ? <SignErrorPanel error={stepError.revoke} /> : null}
-              <div className="pt-4">
-                <Button
-                  data-testid="revoke-now"
-                  disabled={s1 !== 'done'}
-                  loading={busy === 'revoke'}
-                  onClick={() => void revoke()}
-                >
-                  {stepError.revoke ? 'Try again' : 'Revoke spending permission'}
-                </Button>
-              </div>
+              {/* Visual QA: a DISABLED button is `bg-surface-2`, which is the step card's own
+                  background — it read as unexplained bold text. A step you cannot start yet shows
+                  no control at all; the numbered, dimmed heading already says it is waiting. */}
+              {s2 === 'active' || busy === 'revoke' ? (
+                <div className="pt-4">
+                  <Button
+                    data-testid="revoke-now"
+                    loading={busy === 'revoke'}
+                    onClick={() => void revoke()}
+                  >
+                    {stepError.revoke ? 'Try again' : 'Revoke spending permission'}
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
         </Step>
@@ -299,16 +303,19 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
                 </p>
               ) : null}
               {stepError.sweep ? <SignErrorPanel error={stepError.sweep} /> : null}
-              <div className="pt-4">
-                <Button
-                  data-testid="sweep-now"
-                  disabled={s1 !== 'done'}
-                  loading={busy === 'sweep'}
-                  onClick={() => void sweep()}
-                >
-                  {s3 === 'failed' || stepError.sweep ? 'Try again' : 'Bring funds home'}
-                </Button>
-              </div>
+              {/* No button while a sweep is already in flight: the executor would dedupe a second
+                  press by proposal hash, but inviting it would be dishonest about what is happening. */}
+              {s3 === 'active' || s3 === 'failed' || busy === 'sweep' ? (
+                <div className="pt-4">
+                  <Button
+                    data-testid="sweep-now"
+                    loading={busy === 'sweep'}
+                    onClick={() => void sweep()}
+                  >
+                    {s3 === 'failed' || stepError.sweep ? 'Try again' : 'Bring funds home'}
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
         </Step>
