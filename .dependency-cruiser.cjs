@@ -70,7 +70,9 @@ module.exports = {
     // all down, so it may never reach reasoning. Covers both the API routes and `sweepHome`.
     forbid(
       'owner-path-no-reasoning',
-      '^(apps/web/app/api/(freeze|sweep)/|packages/wallet/src/sweepHome\\.ts$)',
+      // 7.8 widened this: unfreeze and the owner's revoke report are the same owner path, and the
+      // freeze flow's own client module drives all three.
+      '^(apps/web/app/api/(freeze|unfreeze|sweep)/|apps/web/app/api/spend-permission/revoked/|apps/web/components/freeze/|apps/web/lib/ownerPath\\.ts$|packages/wallet/src/sweepHome\\.ts$)',
       '^packages/reasoning/',
       'owner-path modules never touch reasoning (I7)',
     ),

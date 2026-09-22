@@ -7,7 +7,9 @@ const config = fileURLToPath(new URL('../.dependency-cruiser.cjs', import.meta.u
 const bin = fileURLToPath(
   new URL('../node_modules/dependency-cruiser/bin/dependency-cruiser.mjs', import.meta.url),
 );
-const r = spawnSync(process.execPath, [bin, 'packages', '--config', config, '--no-cache'], {
+// `apps` is cruised too since 7.8: the owner-path rule covers API routes, and the fixture under
+// apps/web/app/api/freeze proves a route importing reasoning is caught, not just `sweepHome`.
+const r = spawnSync(process.execPath, [bin, 'packages', 'apps', '--config', config, '--no-cache'], {
   cwd,
   encoding: 'utf8',
 });

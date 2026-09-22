@@ -172,6 +172,25 @@ export async function listUnresolvedExecutions(db: Db, walletId?: string): Promi
     .orderBy(asc(executions.createdAt));
 }
 
+/**
+ * The newest execution of one proposal kind. The freeze flow reads `sweep_home` with it, so a
+ * reopened modal resumes from what the SERVER recorded rather than from component state (7.8).
+ */
+export async function latestExecutionOfKind(
+  db: Db,
+  walletId: string,
+  kind: string,
+): Promise<ExecutionRow | undefined> {
+  return (
+    await db
+      .select()
+      .from(executions)
+      .where(and(eq(executions.walletId, walletId), eq(executions.kind, kind)))
+      .orderBy(desc(executions.createdAt))
+      .limit(1)
+  )[0];
+}
+
 export async function getWalletById(db: Db, id: string) {
   return (await db.select().from(wallets).where(eq(wallets.id, id)).limit(1))[0];
 }

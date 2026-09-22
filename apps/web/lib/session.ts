@@ -14,6 +14,14 @@ export type SessionData = {
    */
   recipientNonce?: string;
   recipientNonceAt?: number;
+  /**
+   * Single-use nonce for a freeze/unfreeze confirmation (task 7.8). The ACTION is stored with it so
+   * a nonce issued for an unfreeze can never be spent on a freeze: the POST re-derives the message
+   * from the stored action, not from the request body.
+   */
+  freezeNonce?: string;
+  freezeNonceAt?: number;
+  freezeAction?: 'freeze' | 'unfreeze';
 };
 
 export function sessionOptions(): SessionOptions {
