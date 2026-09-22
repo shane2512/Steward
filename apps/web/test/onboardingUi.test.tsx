@@ -14,9 +14,23 @@ vi.mock('../lib/api', async (orig) => ({
   apiPost: mocks.apiPost,
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace }) }));
+// Steps 4 and 5 are the 7.6 signing components; they reach for the wallet.
+vi.mock('wagmi', () => ({
+  useAccount: () => ({
+    address: '0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C',
+    chainId: 84532,
+    connector: { id: 'coinbaseWalletSDK' },
+    isConnected: true,
+  }),
+  useBytecode: () => ({ data: '0x6000', isSuccess: true }),
+  useSwitchChain: () => ({ switchChain: vi.fn(), isPending: false }),
+  useSignMessage: () => ({ signMessageAsync: vi.fn() }),
+  useSignTypedData: () => ({ signTypedDataAsync: vi.fn() }),
+}));
 vi.mock('../lib/useApi', () => ({
-  useApi: () => ({
-    data: mocks.onboarding,
+  // Only /api/onboarding has canned data here; the signing steps' own reads resolve to undefined.
+  useApi: (path: string) => ({
+    data: path === '/api/onboarding' ? mocks.onboarding : undefined,
     error: null,
     isLoading: false,
     isFetching: false,
@@ -76,16 +90,17 @@ describe('OnboardingFlow resumes from server state', () => {
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
   });
 
-  it('step 4 renders the layout and the 7.6 signing slot, and no signing controls', () => {
+  it('step 4 renders the spend-permission step, and asks for no signature until reviewed', () => {
     mocks.onboarding = state({ step: 4, mandate: mandate(['s']) });
     render(<OnboardingFlow />);
     expect(screen.getByText('Step 4 of 5')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Set the spending limit' })).toBeTruthy();
-    expect(screen.getByTestId('sign-step-placeholder').textContent).toMatch(/task 7\.6/);
-    expect(screen.queryByRole('button', { name: /sign/i })).toBeNull();
+    expect(screen.getByTestId('spend-limit-sign')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Review the limit' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Sign in wallet' })).toBeNull();
   });
 
-  it('step 5 shows the compiled sentences and the policy signing slot', () => {
+  it('step 5 renders the policy signing step (its sentences come from the server body)', () => {
     mocks.onboarding = state({
       step: 5,
       spendPermissionStatus: 'pending',
@@ -93,8 +108,8 @@ describe('OnboardingFlow resumes from server state', () => {
     });
     render(<OnboardingFlow />);
     expect(screen.getByText('Step 5 of 5')).toBeTruthy();
-    expect(screen.getByText('Keep at least 120,000 USDC liquid.')).toBeTruthy();
-    expect(screen.getByTestId('sign-step-placeholder').textContent).toMatch(/Policy signing/);
+    expect(screen.getByTestId('policy-sign')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Review your policy' })).toBeTruthy();
   });
 
   it('a finished owner is sent to the dashboard', async () => {
