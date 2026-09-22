@@ -64,14 +64,31 @@ describe('S8 recipients screen', () => {
   it('a needsPolicySignature response routes straight into PolicySign', async () => {
     mocks.apiPost.mockImplementation(async (path: string) => {
       if (path === '/api/recipients/prepare')
-        return { message: 'Steward recipient\nAddress: 0xabc\nNonce: n1', address: '0xabc', expiresAt: new Date(Date.now() + 300_000).toISOString() };
+        return {
+          message: 'Steward recipient\nAddress: 0xabc\nNonce: n1',
+          address: '0xabc',
+          expiresAt: new Date(Date.now() + 300_000).toISOString(),
+        };
       if (path === '/api/recipients')
         return {
-          recipient: { id: 'r-new', label: 'New Payee', address: '0xabc', maxPerTx: '1000000', scheduleDayOfMonth: null, status: 'active' },
+          recipient: {
+            id: 'r-new',
+            label: 'New Payee',
+            address: '0xabc',
+            maxPerTx: '1000000',
+            scheduleDayOfMonth: null,
+            status: 'active',
+          },
           needsPolicySignature: true,
         };
       if (path === '/api/policy/prepare')
-        return { version: 4, bodyHash: '0xdead', message: 'Steward policy v4 0xdead', sentences: ['A rule'], diff: { added: ['A rule'], removed: [], previousVersion: 3 } };
+        return {
+          version: 4,
+          bodyHash: '0xdead',
+          message: 'Steward policy v4 0xdead',
+          sentences: ['A rule'],
+          diff: { added: ['A rule'], removed: [], previousVersion: 3 },
+        };
       throw new Error(`unexpected post ${path}`);
     });
 

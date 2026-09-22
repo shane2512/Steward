@@ -91,8 +91,8 @@ export function ClosureChecklist() {
     <div className="pb-10">
       <Eyebrow>Close your account</Eyebrow>
       <p className="max-w-[52ch] px-4 text-small text-muted">
-        Work through these in order. Each step is safe to retry, and your audit log is never
-        deleted — closing your account anonymizes it, it does not erase it.
+        Work through these in order. Each step is safe to retry, and your audit log is never deleted
+        — closing your account anonymizes it, it does not erase it.
       </p>
 
       <ol className="px-4 pt-2">
@@ -101,15 +101,20 @@ export function ClosureChecklist() {
         </StepRow>
 
         <StepRow n={2} title="Export your audit log" state={exported ? 'done' : 'todo'}>
-          <Button variant="ghost" className="w-auto" loading={exporting} onClick={() => void runExport()}>
+          <Button
+            variant="ghost"
+            className="w-auto"
+            loading={exporting}
+            onClick={() => void runExport()}
+          >
             Export JSON
           </Button>
         </StepRow>
 
         <StepRow n={3} title="Delete your personal data" state={deleted ? 'done' : 'todo'}>
           <p className="max-w-[46ch] pb-3 text-small text-muted">
-            This clears your display name from Steward. Your audit history stays, without your
-            name attached to it — the ledger is append-only and never deleted (I6).
+            This clears your display name from Steward. Your audit history stays, without your name
+            attached to it — the ledger is append-only and never deleted (I6).
           </p>
           {error ? (
             <p role="alert" className="pb-2 text-small text-deny">

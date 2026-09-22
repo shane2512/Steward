@@ -7,7 +7,15 @@
 import { useState } from 'react';
 import { AddRecipientSign } from '@/components/sign/AddRecipientSign';
 import { PolicySign } from '@/components/sign/PolicySign';
-import { Banner, Button, EmptyState, ErrorPanel, Row, RowSkeleton, TextButton } from '@/components/ui/primitives';
+import {
+  Banner,
+  Button,
+  EmptyState,
+  ErrorPanel,
+  Row,
+  RowSkeleton,
+  TextButton,
+} from '@/components/ui/primitives';
 import { zRecipientList, type Recipient } from '@/lib/contracts';
 import { formatMoney, groupAddress, toBig } from '@/lib/format';
 import { useApi } from '@/lib/useApi';

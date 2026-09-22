@@ -1345,6 +1345,73 @@ purpose.
   confirmation, not a limitation to remove.
 - `/api/policy` (GET) from API.md is still unbuilt — it belongs to 7.7's policy screen.
 
+## Phase 7 - build, part 3 (Sonnet, task 7.7, 2026-09-22)
+
+- [x] 7.7 **S6 approvals, S7 policy, S8 recipients, S10 settings, S11 closure checklist.** Every
+      screen embeds the existing 7.6 signing components rather than rebuilding validation,
+      message-fetching or signing.
+
+Gate (2026-09-22): `pnpm typecheck` 9/9, `pnpm lint` clean (eslint + prettier), `pnpm check:arch`
+**0 real violations (355 modules, 897 dependencies)** with all fixtures still firing, `pnpm test`
+**980 passed** + 26 skipped (58 files), policy 344 at 100% branches, `pnpm test:adversarial`
+guarantee holds (48/48). **No dependency-cruiser rule changed, no new dependency added.**
+
+### What was built
+
+| Screen | Route | What it embeds from 7.6 | New server routes |
+|---|---|---|---|
+| S6 Approvals | `/app/approvals` | `ApprovalSheet`/`ApprovalSign` (unchanged) | none — `GET /api/approvals` gained a fixture branch |
+| S7 Policy | `/app/policy` | `MandateStep` (7.3, for "Edit mandate") then `PolicySign` (7.6, diff + activate) | `GET /api/policy` (new): the ACTIVE policy's sentences + raw body, for the read-only default view and the explicit, secondary JSON toggle |
+| S8 Recipients | `/app/recipients` | `AddRecipientSign` (7.6), then `PolicySign` when the add response says `needsPolicySignature` | none — `GET /api/recipients` gained a fixture branch |
+| S10 Settings | `/app/settings` | `UnfreezeSlot` (new, marked extension point) | `GET /api/audit/export?format=csv\|json` (new), `GET /api/audit/verify` (new) |
+| S11 Closure | `/app/settings/close` | `FreezeFlow` (7.8's domain, embedded as-is) for freeze/revoke/sweep | `POST /api/account/delete-personal-data` (new) |
+
+S7's "recompile -> diff view -> sign" is **not** a new diff implementation: `MandateStep`
+compiles, and `PolicySign`'s existing call to `/api/policy/prepare` already computes the diff
+(`diffSentences` in `lib/policyDraft.ts`, task 7.6) between the stored mandate's next body and the
+active one. One compile flow, one diff+sign surface, used by onboarding, S7's "Edit mandate", and
+S8's `needsPolicySignature` prompt alike — the same object every time, per the 7.6 hand-off note.
+
+### New routes
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/policy` | Read-only. `{ version, sentences, body }`; `body` is the stored row minus `signature` (I9). `version: null` when no policy is active yet |
+| GET | `/api/audit/export` | zod query `{ format: 'csv'\|'json', limit (1-1000, default 200), cursor? }`. Cursor-paginated by row id (`listAuditPage`, new in `@steward/db`), one extra row fetched to compute `nextCursor` without a second round trip. CSV carries `nextCursor` as an `x-next-cursor` response header (its body is not JSON) |
+| GET | `/api/audit/verify` | No params. Recomputes the wallet's chain with `verifyChain` (unchanged) and returns `{ ok: true, rows, head }` or `{ ok: false, break: {rowId, reason, expected, actual} }` — it never says OK without checking |
+| POST | `/api/account/delete-personal-data` | Clears `users.display_name` only (`scrubUserPersonalData`, new in `@steward/db`). Never touches `audit_log` (I6) |
+
+### Extension points left for task 7.8 (Opus)
+
+- `components/freeze/UnfreezeSlot.tsx` (**new**): a marked placeholder in Settings' Security
+  section, shown only when `frozen`. SECURITY §5 says unfreeze needs an owner signature and a
+  circuit-breaker reset; there is no `/api/unfreeze` route yet, so this ships disabled with an
+  explanation rather than a fake flow. Contract: `{ frozen: boolean; onUnfrozen: () => void }`.
+- S11's closure checklist embeds `FreezeFlow` **as-is** (still 7.8's placeholder) for the
+  freeze/revoke/sweep step; nothing in 7.7 assumes what its final UI looks like beyond the
+  `{frozen, onDone, onClose}` props it already exposes.
+- Once 7.8 ships real freeze/unfreeze, `SettingsScreen`'s `dash.data?.wallet.frozen` gate and
+  `ClosureChecklist`'s `frozen ? 'done' : 'todo'` step state need no changes — they already read
+  the dashboard's own `frozen` flag.
+
+### Known issues / notes for 7.9-7.10
+
+- `/api/audit/export` is cursor-paginated, not streamed (`listAuditPage` ponytail note, same style
+  as `verifyChain`'s own admitted debt) — fine at hackathon scale, revisit if a wallet's chain ever
+  reaches ~1e5+ rows.
+- The Telegram notifications field in Settings is disabled with "Coming soon": FR-22/Phase 8.5
+  territory, and there is no backend to wire it to yet. Building a route that accepted a chat ID
+  and did nothing with it would be worse than a disabled field that says so.
+- No screenshot/visual QA pass (`?fixture=1` + browser tool screenshots at 390/1280px, light/dark)
+  was done for the five new screens in this session — fixture payloads were added
+  (`fixtureApprovals`/`fixtureRecipients`/`fixturePolicyView`) so a later pass can use them, but the
+  actual screenshot-and-compare-to-DESIGN.md step is still open. Flag for 7.9/7.10 or a follow-up
+  pass before the demo.
+- `ClosureChecklist`'s delete-personal-data button is gated on `frozen` in the UI (encourages the
+  documented order) but the route itself does not enforce that ordering server-side — it is a
+  narrow, reversible-in-intent action (clears a display name) rather than a fund-moving one, so
+  this was judged acceptable; revisit if S11's ordering needs to become a hard server-side gate.
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
@@ -1435,6 +1502,11 @@ purpose.
 | D-82 | 2026-09-22 | **The plain-EOA warning fires only when the account has no deployed bytecode AND the connector is not the Coinbase Smart Wallet connector** | A Smart Wallet that has never sent a transaction is counterfactual and has no code yet, so missing bytecode alone would block legitimate owners. False negatives are harmless: `assertSmartWalletAccount` still refuses server-side (D-5). This only decides whether the owner reads an explanation first | bytecode alone (rejected: blocks counterfactual wallets), connector id alone (rejected: breaks if a second connector is ever configured) |
 | D-83 | 2026-09-22 | **Adding a recipient inserts the row and leaves the policy version to the policy flow**, which reads the allowlist fresh on every `/api/policy/prepare`; the add response returns `needsPolicySignature` | API.md says a recipient add "triggers new policy version draft". Making the next prepare include it gives the same result with no draft-row lifecycle, and the owner sees the addition in the S7 diff before signing it. The recipient is inert until then, which is the safe direction | storing a draft policy row (rejected: lifecycle), making the add itself activate a policy (rejected: two signatures fused into one click) |
 | D-84 | 2026-09-22 | **Still no new dependency for 7.6.** The allowance control is `<input type="range">` over a fixed bigint ladder and the end date is `<input type="date">` | Native controls are keyboard-accessible and localised for free; a slider or date-picker library would be a production dependency for two inputs | a slider/date-picker package (rejected) |
+| D-85 | 2026-09-22 | **S7's "recompile -> diff -> sign" reuses `MandateStep` + `PolicySign` unchanged**, rather than building a second compile UI or a second diff computation for the policy screen | 7.6's hand-off says embed, do not rebuild; `PolicySign`'s call to `/api/policy/prepare` already diffs the next body against the active one (`diffSentences`), so a second implementation would just be two ways to compute the same thing | a standalone diff view fed by a new endpoint (rejected: two diff implementations to keep in sync) |
+| D-86 | 2026-09-22 | **`components/freeze/UnfreezeSlot.tsx` added as a marked extension point** instead of building any unfreeze logic in 7.7 | SECURITY §5 requires an owner signature and a circuit-breaker reset for unfreeze; that belongs to task 7.8 (Opus) alongside `FreezeFlow`, and there is no `/api/unfreeze` route to call yet. A disabled slot that explains itself is safer than a fake flow | implementing a real unfreeze signature flow now (rejected: no route exists, and freeze/unfreeze belong to the same owner-only code path as one review) |
+| D-87 | 2026-09-22 | **`GET /api/audit/export` is cursor-paginated (row id + limit), not streamed**, and CSV pagination is signalled via an `x-next-cursor` response header rather than a body field | Matches `listAuditPage`'s own ponytail note and `verifyChain`'s existing "loads the whole chain, paginate later" precedent; a hackathon-scale wallet's audit log does not need a real stream yet, and CSV's body cannot carry a JSON sidecar field | true streaming response (rejected: overbuilt for current scale); omitting pagination entirely (rejected: task explicitly asks for it) |
+| D-88 | 2026-09-22 | **"Delete personal data" (S11) only clears `users.display_name`** via a new `scrubUserPersonalData` in `@steward/db`; the owner's address is kept (it is the sign-in identity, not incidental PII) and `audit_log` rows are never touched, matching I6 and UX_FLOWS' "audit rows retained anonymized" | The spec explicitly forbids deleting or mutating audit rows; `display_name` is the only PII field `users` owns beyond the address itself | scrubbing/pseudonymizing audit `entity_id`/`payload` fields too (rejected: would mutate append-only rows, violates I6) |
+| D-89 | 2026-09-22 | **No new dependency for 7.7.** CSV export is hand-rolled (`csvField` quoting: wrap in quotes and double any embedded quote when a field contains a comma, quote or newline) rather than a CSV library, for one export route with eight simple columns | A CSV writer is a few lines; a dependency for it would be disproportionate | a CSV library (rejected: unjustified for this shape) |
 | D-60 | 2026-09-21 | **A DEMO-only `MockUSDC` (6 decimals, owner-mintable) plus a `MockVault` over it**, deployed by the demo admin via CREATE2 and selected with shell `USDC_ADDRESS` / `MOCK_VAULT_ADDRESS` overrides | DEMO.md prescribes exactly this when the faucet is too small, and Circle's testnet USDC is rate-limited per CDP project — it blocked the live gate twice. It also unblocks Phase 9's rehearsals. Product code is unchanged: these are env values, and I11 already fences DEMO_MODE to chain 84532 where the UI must show the DEMO DATA banner | keep waiting on the faucet (rejected: not repeatable) |
 
 ## Known issues / risks

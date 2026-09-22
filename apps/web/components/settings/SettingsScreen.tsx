@@ -112,7 +112,8 @@ export function SettingsScreen() {
             ) : (
               <Banner tone="bad" title="Chain broken" live="assertive">
                 Row {verifyResult.break.rowId}: {verifyResult.break.reason}. Expected{' '}
-                {verifyResult.break.expected || '(none)'}, found {verifyResult.break.actual || '(none)'}.
+                {verifyResult.break.expected || '(none)'}, found{' '}
+                {verifyResult.break.actual || '(none)'}.
               </Banner>
             )
           ) : null}
@@ -121,7 +122,10 @@ export function SettingsScreen() {
 
       <Eyebrow>Security</Eyebrow>
       <div className="px-4">
-        <UnfreezeSlot frozen={dash.data?.wallet.frozen ?? false} onUnfrozen={() => dash.refetch()} />
+        <UnfreezeSlot
+          frozen={dash.data?.wallet.frozen ?? false}
+          onUnfrozen={() => dash.refetch()}
+        />
       </div>
 
       <Eyebrow>Account</Eyebrow>

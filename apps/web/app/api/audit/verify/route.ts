@@ -13,6 +13,7 @@ export async function GET() {
   if (isResponse(wallet)) return wallet;
 
   const result = await verifyChain(owner.db, wallet.id);
-  if (result.ok) return Response.json({ ok: true, rows: result.value.rows, head: result.value.head });
+  if (result.ok)
+    return Response.json({ ok: true, rows: result.value.rows, head: result.value.head });
   return Response.json({ ok: false, break: result.error });
 }

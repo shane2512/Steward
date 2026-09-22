@@ -399,8 +399,22 @@ export function fixtureRecipients(scenario: FixtureScenario): RecipientList {
   if (scenario === 'quiet') return { recipients: [] };
   return {
     recipients: [
-      { id: 'fx-r1', label: 'Mara Okonjo', address: OWNER, maxPerTx: U(1200), scheduleDayOfMonth: 1, status: 'active' },
-      { id: 'fx-r2', label: 'Tomas Berg', address: AGENT, maxPerTx: U(900), scheduleDayOfMonth: null, status: 'active' },
+      {
+        id: 'fx-r1',
+        label: 'Mara Okonjo',
+        address: OWNER,
+        maxPerTx: U(1200),
+        scheduleDayOfMonth: 1,
+        status: 'active',
+      },
+      {
+        id: 'fx-r2',
+        label: 'Tomas Berg',
+        address: AGENT,
+        maxPerTx: U(900),
+        scheduleDayOfMonth: null,
+        status: 'active',
+      },
     ],
   };
 }
@@ -414,6 +428,10 @@ export function fixturePolicyView(scenario: FixtureScenario): PolicyView {
     body:
       scenario === 'quiet'
         ? null
-        : { version: 3, runwayBufferMicroUsd: U(120_000), limits: { perTxMicroUsd: U(50_000), dailyMicroUsd: U(60_000) } },
+        : {
+            version: 3,
+            runwayBufferMicroUsd: U(120_000),
+            limits: { perTxMicroUsd: U(50_000), dailyMicroUsd: U(60_000) },
+          },
   };
 }

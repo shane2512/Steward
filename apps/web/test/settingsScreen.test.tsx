@@ -73,7 +73,10 @@ describe('S10 settings screen', () => {
   it('verify audit chain names the exact failing row on a broken chain', async () => {
     mocks.apiGet.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/dashboard')) return dashboard;
-      return { ok: false, break: { rowId: 7, reason: 'row_hash_mismatch', expected: 'a', actual: 'b' } };
+      return {
+        ok: false,
+        break: { rowId: 7, reason: 'row_hash_mismatch', expected: 'a', actual: 'b' },
+      };
     });
     wrap(<SettingsScreen />);
     fireEvent.click(screen.getByRole('button', { name: 'Verify audit chain' }));

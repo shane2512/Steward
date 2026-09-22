@@ -16,7 +16,10 @@ import { appendAudit, ensureWalletForUser, upsertUserByAddress, type Db } from '
 const OWNER = getAddress('0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C');
 
 let db: Db;
-let pool: { end: () => Promise<void>; query: (s: string, p?: unknown[]) => Promise<{ rows: unknown[] }> };
+let pool: {
+  end: () => Promise<void>;
+  query: (s: string, p?: unknown[]) => Promise<{ rows: unknown[] }>;
+};
 let walletId: string;
 let routes: {
   export: typeof import('../app/api/audit/export/route');
@@ -66,7 +69,10 @@ beforeEach(() => {
 });
 
 const signedIn = async () => {
-  session.current = { userId: (await upsertUserByAddress(db, OWNER, new Date())).id, address: OWNER };
+  session.current = {
+    userId: (await upsertUserByAddress(db, OWNER, new Date())).id,
+    address: OWNER,
+  };
 };
 
 describe('GET /api/audit/export', () => {
