@@ -226,7 +226,12 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
       <ol className="space-y-3">
         <Step n={1} state={s1} title="Freeze now" testId="freeze-step-1">
           {s1 === 'done' ? (
-            <p className="text-small text-muted" data-testid="freeze-stopped">
+            <p
+              role="status"
+              aria-live="assertive"
+              className="text-small text-muted"
+              data-testid="freeze-stopped"
+            >
               Steward is stopped. No further actions will be taken.
             </p>
           ) : (
@@ -260,7 +265,7 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
 
         <Step n={2} state={s2} title="Revoke spending permission" testId="freeze-step-2">
           {s2 === 'done' ? (
-            <p className="text-small text-muted">
+            <p role="status" className="text-small text-muted">
               {view.revoke.state === 'revoked'
                 ? 'Revoked on-chain. Steward can no longer pull from your treasury.'
                 : 'There is no spending permission to revoke.'}
@@ -292,7 +297,7 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
 
         <Step n={3} state={s3} title="Bring funds home" testId="freeze-step-3">
           {s3 === 'done' ? (
-            <p className="text-small text-muted">
+            <p role="status" className="text-small text-muted">
               Everything is back in your treasury.
               {view.sweep.txHash ? ' The transaction is in your activity timeline.' : ''}
             </p>
