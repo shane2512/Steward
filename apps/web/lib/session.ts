@@ -7,6 +7,13 @@ export type SessionData = {
   nonceIssuedAt?: number;
   userId?: string;
   address?: string;
+  /**
+   * Single-use nonce for a recipient confirmation (API.md: sensitive routes sign a server-issued
+   * message with a nonce, TTL 5 min). Kept apart from the SIWE nonce so issuing one can never
+   * interfere with signing in, and cleared the moment it is spent.
+   */
+  recipientNonce?: string;
+  recipientNonceAt?: number;
 };
 
 export function sessionOptions(): SessionOptions {
