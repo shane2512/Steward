@@ -170,7 +170,9 @@ describe('every signing route requires a session', () => {
       401,
     );
     expect((await routes.recipients.POST(post('/api/recipients', {}))).status).toBe(401);
-    expect((await routes.recipients.GET()).status).toBe(401);
+    expect(
+      (await routes.recipients.GET(new Request('http://localhost:3000/api/recipients'))).status,
+    ).toBe(401);
   });
 });
 
@@ -383,7 +385,7 @@ describe('POST /api/recipients/prepare + POST /api/recipients', () => {
 
   it('GET returns the allowlist and never a signature', async () => {
     await signedIn();
-    const res = await routes.recipients.GET();
+    const res = await routes.recipients.GET(new Request('http://localhost:3000/api/recipients'));
     const list = (await body(res)) as unknown as { recipients: { address: string }[] };
     expect(list.recipients.some((r) => r.address === addressOf(2))).toBe(true);
     expect(JSON.stringify(list)).not.toMatch(/addedSignature|0x[0-9a-f]{100,}/i);

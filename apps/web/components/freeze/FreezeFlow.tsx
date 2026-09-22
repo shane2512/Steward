@@ -191,21 +191,32 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
       </div>
     );
 
-  // Before the first read lands, show step 1 from the dashboard's own flag rather than an empty box.
-  const view: OwnerPath = status ?? {
-    frozen,
-    frozenAt: null,
-    frozenReason: null,
-    revoke: { state: 'none' },
-    sweep: { state: 'none' },
-  };
+  // Until the first read lands there is nothing honest to say about steps 2 and 3. Visual QA caught
+  // the alternative: a placeholder built from the dashboard's `frozen` flag briefly announced
+  // "There is no spending permission to revoke" on a wallet that had one. Say what is happening
+  // instead of guessing — this window is one fetch long.
+  if (status === null)
+    return (
+      <div data-slot="freeze-flow" data-loading="true">
+        <p role="status" className="text-small text-muted" data-testid="freeze-loading">
+          Checking what has already happened…
+        </p>
+        <div className="pt-6">
+          <Button variant="ghost" onClick={onClose}>
+            {frozen ? 'Close' : 'Cancel'}
+          </Button>
+        </div>
+      </div>
+    );
+
+  const view: OwnerPath = status;
   const [s1, s2raw, s3raw] = stepStates(view);
   const s2 = busy === 'revoke' ? 'busy' : s2raw;
   const s3 = busy === 'sweep' ? 'busy' : s3raw;
   const allDone = s1 === 'done' && s2 === 'done' && s3 === 'done';
 
   return (
-    <div data-slot="freeze-flow" data-loading={status === null || undefined}>
+    <div data-slot="freeze-flow">
       {blocker !== null && blocker.kind !== 'disconnected' ? (
         <div className="pb-4">
           <BlockerPanel blocker={blocker} onSwitch={switchNetwork} switching={switching} />

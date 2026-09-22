@@ -30,8 +30,10 @@ import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req?: Request) {
-  const fx = req ? fixtureFor(req) : null;
+// `req` is required, not optional: Next's generated route types reject `Request | undefined`, and
+// an optional parameter made `pnpm typecheck` fail whenever the dev server had regenerated them.
+export async function GET(req: Request) {
+  const fx = fixtureFor(req);
   if (fx) return Response.json(fixtureRecipients(fx));
 
   const owner = await requireOwner();

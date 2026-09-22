@@ -43,12 +43,31 @@ const screens = [
   { name: 'sign-policy', path: '/onboarding?fixture=sign-policy' },
   { name: 'sign-sheets', path: '/preview/sign' },
   { name: 'sign-approval-sheet', path: '/preview/sign?sheet=1' },
+  // 7.7 screens (their visual QA was deferred; done in 7.8)
+  { name: 'approvals', path: '/app/approvals?fixture=1' },
+  { name: 'policy', path: '/app/policy?fixture=1' },
+  { name: 'recipients', path: '/app/recipients?fixture=1' },
+  { name: 'settings', path: '/app/settings?fixture=1' },
+  { name: 'settings-frozen', path: '/app/settings?fixture=frozen' },
+  { name: 'close-account', path: '/app/close?fixture=1' },
+  // 7.8 — the three steps of S9. `click` opens the modal; which step is live is decided by the
+  // server's own owner-path status, so each fixture lands on a different step.
+  { name: 'freeze-step1', path: '/app?fixture=1', click: '[aria-haspopup="dialog"]' },
+  { name: 'freeze-step2', path: '/app?fixture=frozen', click: '[aria-haspopup="dialog"]' },
+  { name: 'freeze-step3', path: '/app?fixture=freeze-sweep', click: '[aria-haspopup="dialog"]' },
 ];
 const shots = [];
 for (const s of screens)
   for (const { w, mobile } of widths)
     for (const theme of ['dark', 'light'])
-      shots.push({ name: `${s.name}-${w}-${theme}`, path: s.path, width: w, mobile, theme });
+      shots.push({
+        name: `${s.name}-${w}-${theme}`,
+        path: s.path,
+        width: w,
+        mobile,
+        theme,
+        ...(s.click ? { click: s.click } : {}),
+      });
 const port = 9334;
 const profile = join(tmpdir(), `steward-shots-${process.pid}`);
 const chrome = spawn(
@@ -112,6 +131,7 @@ try {
   const cdp = connect(t.webSocketDebuggerUrl);
   await cdp.ready;
   await cdp.send('Page.enable');
+  await cdp.send('Runtime.enable');
 
   for (const shot of shots) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -127,6 +147,12 @@ try {
     await cdp.send('Page.navigate', { url: `${base}${shot.path}` });
     await loaded;
     await sleep(3500); // webfonts + first fetch
+    if (shot.click) {
+      await cdp.send('Runtime.evaluate', {
+        expression: `document.querySelector(${JSON.stringify(shot.click)})?.click()`,
+      });
+      await sleep(4000); // the modal fetches its own owner-path status before it can render
+    }
 
     const { data } = await cdp.send('Page.captureScreenshot', {
       format: 'png',
