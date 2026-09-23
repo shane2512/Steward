@@ -26,7 +26,7 @@ import { TARGET_CHAIN_ID } from './connectMachine';
  * Pinned to match `COINBASE_SMART_WALLET_VERSION` / `COINBASE_SMART_WALLET_NONCE` in
  * `packages/wallet/src/companionTreasury.ts`, which is what the SERVER derived and stored. They are
  * repeated rather than imported because that package reaches CDP credentials and must never enter
- * the browser bundle; `apps/web/test/companionConstants.test.ts` fails if the two ever drift.
+ * the browser bundle; `apps/web/test/companionTreasuryUi.test.tsx` fails if the two ever drift.
  */
 export const COMPANION_WALLET_VERSION = '1.1' as const;
 export const COMPANION_WALLET_NONCE = 0n;
