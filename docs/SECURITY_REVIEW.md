@@ -377,3 +377,109 @@ not merely the fact that the loop is serialised.
 sequentially, per the Phase 5 limitation), the live Base Sepolia path, and SERV (every wallet runs
 `degraded`, i.e. the deterministic path — which is the only path that produces executions, so it is
 the only one that can produce a duplicate).
+
+---
+
+## 8. Open risks
+
+Things that are **not** closed. Each is live at the moment this gate is signed.
+
+1. **No 24 h cooldown on recipient / policy changes** (F-1, MEDIUM). The largest gap in this
+   document. A compromised *owner wallet* can add a recipient and have it paid within the hour,
+   bounded only by the per-tx and daily caps and the remaining allowance.
+2. **Audit tail truncation is undetectable** (F-9, LOW, accepted with a production plan in §6.1).
+3. **No real browser Smart Wallet has ever been click-tested in this environment.** Standing since
+   Phase 0 (V-10), widened in Phase 7's addendum to cover the derived-companion path. Everything is
+   proven with local viem accounts, a real Postgres, real SIWE signatures and three live Base
+   Sepolia runs — but nobody has completed onboarding with an actual browser extension or a passkey
+   Coinbase Smart Wallet here, because Coinbase's own hosted popup is currently broken
+   (`postMessage` origin mismatch, an external bug confirmed not to be ours). **A human must
+   confirm, against a real wallet, before any deployment that holds value:** connect works; the
+   companion address `GET /api/wallet` returns matches the notice; a live spend-permission signature
+   completes; and `SameSite=strict` survives the wallet popup round trip (reasoned, not observed —
+   Phase 8 part 1 item 6).
+4. **Telegram has never been tested against a real bot.** `TELEGRAM_BOT_TOKEN` is unset here; the
+   send path is covered only by a unit test with mocked `fetch`.
+5. **SERV fixture drift** (F-7) and **narrow `untrusted` coverage** (F-8), both LOW, both unchanged
+   from Phase 4/6.
+6. **The rate limiter is per-instance** (D-107) and **the SERV breaker is per-process**. Both match
+   ARCHITECTURE §7's single-instance stance; both need a shared store before horizontal scaling.
+   F-2's pool fix removes the worker's hard ceiling on wallet concurrency, but scale-out is still
+   not a tested configuration.
+7. **`permission.scan` only sees wallets with an active policy.** A wallet whose policy was never
+   activated will not have an out-of-band revoke detected. Harmless — such a wallet cannot act — but
+   it is a gap in the "no user action at all" claim.
+8. **x402 (8.8) was not built.** A `SHOULD` gated on V-11 and on every MUST being green; rules
+   X01–X03 do not exist, and the `x402` block in `Policy` is parsed but read by nothing.
+
+---
+
+## 9. Residual-risk statement — what the custody model actually guarantees
+
+This section exists so that nobody reads the tagline *"the self-driving treasury that can't run off
+with the money"* as a stronger claim than the code makes.
+
+**What is true.** The owner's treasury keys never touch Steward. Steward cannot move funds out of
+the owner treasury except through a **Spend Permission the owner signed**, which is capped per
+period, expires, names the agent wallet as the only spender, and is revocable **from the owner's own
+wallet with Steward entirely offline**. No LLM output can move funds: the reasoning layer has no
+write tools (`check:arch`, with deliberate-violation fixtures), and the executor refuses to send
+anything without a valid, unexpired, unused `AllowReceipt` minted by a pure Policy Engine at 100%
+branch coverage. A fully compromised Steward backend still cannot pull more than the allowance,
+proven on-chain: in the Phase 2 live run a spend after revoke was rejected by the chain itself.
+
+**What is not true — the limitation.** The MVP's agent wallet is a **CDP server-controlled smart
+account**. Its signing secret lives with Coinbase, and Steward's operator can instruct it. So:
+
+> **Worst case is not zero. It is bounded.** An attacker who fully compromises the Steward operator
+> — the CDP credentials *and* the receipt HMAC key — can move, at most, the agent wallet's USDC
+> balance, plus the value of the vault shares the agent holds, plus whatever is left of the current
+> period's allowance. That figure is not hidden: it is computed by `maxAtRisk` and shown to the
+> owner on the dashboard as **"Maximum at risk"**. Everything beyond that number stays in the
+> owner's treasury and cannot be reached.
+
+The Policy Engine, the risk gate and the receipt scheme **do not remove this bound** — they make it
+the *only* way to lose money, and they make every step of the path auditable. That is the honest
+claim: Steward cannot run off with the treasury; it can, in the worst imaginable case, lose what the
+owner deliberately put inside the bound.
+
+**The production path that removes it** is already named in `ARCHITECTURE.md` §4 (OQ-2): move to
+**session keys / ERC-7715 permissions on the owner's own account, so funds never leave it**. That is
+designed for and not built in the MVP. Until it is, "non-custodial" is accurate about the
+*treasury* and not about the agent's operating float, and the docs, the UI and the demo must keep
+saying so — `SECURITY.md` §9 already does.
+
+Three further limitations, unchanged and restated for completeness:
+
+- **Vault smart-contract risk is not eliminated.** The allowlist only admits vetted vaults; it does
+  not make them safe. R20's depeg/drawdown exit is a reaction, not a prevention.
+- **LLM classifiers are probabilistic** and are never the last line of defence (RR-4, RR-5).
+- **DEMO_MODE numbers prove nothing about real funds.** `MockUSDC` is mintable without limit by the
+  demo admin, fenced to chain 84532, with a persistent DEMO DATA banner (I11). Phase 9's copy must
+  not imply otherwise.
+
+---
+
+## 10. Verdict
+
+**No HIGH finding. The Phase 8 Opus review gate PASSES.**
+
+- Threat matrix T1–T17: every threat maps to deterministic code with named test evidence (§2). No
+  threat rests on the LLM layer.
+- `SECURITY.md` §8 failure matrix: **19/19 rows executed**, 17 PASS, 2 MITIGATED-WITH-RESIDUAL-RISK
+  (rows 3 and 4 — both are the custody model being honest, not defects), 0 FAIL, 0 skipped (§3).
+- New red-team attempts RT-1…RT-5: 5 attempted, 3 clean, **2 produced fixes** — the freeze-nonce
+  ordering (an I7 denial-of-control) and the Telegram chat-id narrowing (§4).
+- Residual risks RR-1…RR-17: 8 closed, 7 accepted as documented limitations, 2 open and carried as
+  LOW findings (§5).
+- Load/soak: 1,200 concurrent iterations across 10 wallets over a simulated hour,
+  **0 duplicate executions**, p95 **210 ms** against a 20 s target, and one genuine MEDIUM bug found
+  and fixed (F-2, the shared connection pool) (§7).
+- Findings: 1 MEDIUM open (F-1, a control the spec itself labels `should-have`), 1 MEDIUM fixed
+  (F-2), 7 LOW (§6).
+
+**F-1 is the one thing a reader should carry forward.** It does not block this gate — the primary
+control for that row, an owner signature, is built and tested — but it is the largest named gap in
+Steward's security story and it should be specified as a Policy Engine rule rather than bolted on.
+
+Signed off as the Phase 8 review gate. Phase 9 must not treat any item in §8 as closed.
