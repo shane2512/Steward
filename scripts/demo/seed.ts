@@ -22,7 +22,13 @@ import {
   getActivePolicy,
   type Db,
 } from '@steward/db';
-import { getEnv, canonicalJson, hashCanonical, policyActivationMessage, type Env } from '@steward/shared';
+import {
+  getEnv,
+  canonicalJson,
+  hashCanonical,
+  policyActivationMessage,
+  type Env,
+} from '@steward/shared';
 import { policyDraftFromTemplate, type TemplateBinding } from '@steward/policy';
 import { recipientBindings } from '../../apps/web/lib/policyDraft';
 import { loadEnv } from '../live/lib';
@@ -194,18 +200,24 @@ export async function seedDemo(db: Db, env: Env, now: Date): Promise<SeedResult>
   const today = now.toISOString().slice(0, 10);
   const obligationIds: string[] = [];
   for (const r of recipientsBinding) {
-    const recipientId = recipientRowIds.get(r.id)!;
+    const recipientId = recipientRowIds.get(r.id);
+    const schedule = r.schedule;
+    if (!recipientId || !schedule)
+      throw new Error(`seedDemo: missing recipient/schedule for ${r.id}`);
     await db
       .delete(schema.obligations)
       .where(
-        and(eq(schema.obligations.walletId, wallet.id), eq(schema.obligations.recipientId, recipientId)),
+        and(
+          eq(schema.obligations.walletId, wallet.id),
+          eq(schema.obligations.recipientId, recipientId),
+        ),
       );
     const [row] = await db
       .insert(schema.obligations)
       .values({
         walletId: wallet.id,
         recipientId,
-        amount: BigInt(r.schedule!.amountMicroUsd),
+        amount: BigInt(schedule.amountMicroUsd),
         dueDate: today,
         recurrence: 'monthly',
       })
