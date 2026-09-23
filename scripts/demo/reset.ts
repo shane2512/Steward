@@ -33,7 +33,8 @@ export async function resetDemo(
     // Nothing to clear yet; seedDemo below creates it fresh.
     await seedDemo(db, env, now);
     const created = await getWalletByUserId(db, user.id);
-    return { walletId: created!.id, cleared: false };
+    if (!created) throw new Error('resetDemo: seedDemo did not create a wallet');
+    return { walletId: created.id, cleared: false };
   }
 
   const walletId = wallet.id;
