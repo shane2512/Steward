@@ -140,3 +140,116 @@ ever be worth. Recorded as F-5 (LOW, accepted).
   the nonce is still single-use for its own action and still TTL-bound.
 - **Row 1's notification tail.** `/api/me/telegram` now takes numeric chat ids only (RT-2), removing
   `@publicchannel` as a possible destination for an owner's treasury notifications.
+
+---
+
+## 4. Task 8.7 — five new adversarial scenarios (RT-1…RT-5)
+
+The Policy Engine has had an adversarial corpus since Phase 4 and 100% branch coverage since Phase
+3. The **owner path (7.8) and the notification path (8.5/8.6) have had neither**, and the companion
+treasury (Phase 7 addendum) is the newest custody logic in the project. These five attempts target
+exactly that surface. Every one is now a standing test in the normal suite — none is a throwaway
+script.
+
+### RT-1 — can an injected notification body become executable content where it is rendered?
+
+**Attack.** A notification body is the one string in Steward that begins as untrusted data (a vault
+`name()` read off-chain, a DENY reason quoting a proposal, a recipient label) and ends on a screen
+the owner trusts. Make it `<img src=x onerror=…>`, an HTML anchor, or Telegram markup.
+
+**Result: PASS, no fix needed.** Two render surfaces, both safe:
+
+1. The in-app centre is React, which escapes every JSX child. The guarantee only holds while nobody
+   reaches for an HTML sink, so the test is a **static scan of every `.ts`/`.tsx` the web app ships**
+   for `dangerouslySetInnerHTML`, `innerHTML =`, `insertAdjacentHTML`, `document.write`, `eval` and
+   `new Function` — all zero, and the scan asserts it looked at a real, non-empty file set so it
+   cannot pass vacuously. It also pins that the bell interpolates the title and body as *children*
+   and never into an `href`, which React does **not** escape.
+2. Telegram is sent with **no `parse_mode`**, so the Bot API renders the text literally.
+
+Evidence: `apps/web/test/redteam.test.ts` (7); `packages/db/test/notifications.test.ts` ›
+"RT-1: a notification body is sent verbatim with no parse_mode".
+
+### RT-2 — can the Telegram sender be used as an SSRF or exfiltration vector?
+
+**Attack.** Two halves. (a) Steer the outbound request somewhere else with a crafted chat id —
+`../../evil`, an absolute URL, a header-injection newline, a query-string append. (b) Redirect an
+owner's treasury notifications to an attacker-controlled destination.
+
+**Result: (a) PASS. (b) real, and tightened.** The URL is a literal template with only the bot token
+interpolated, and the chat id travels as a JSON **body field**, so nothing a chat id contains can
+change the host, path or headers — asserted for five hostile ids in
+`packages/db/test/notifications.test.ts` › "RT-2: a hostile chat id cannot move the request off
+api.telegram.org".
+
+Half (b) is the real finding. `POST /api/me/telegram` takes no fresh signature — deliberately, it is
+a notification preference, not a money-moving action — so a hijacked session could point
+notifications elsewhere. Telegram also accepts `@publicchannel` as a `chat_id`, which would make the
+destination a *public* channel. **Fixed narrowly**: the route now accepts numeric chat ids only
+(`/^-?\d{1,32}$/`), which is the shape every real private or group chat has, so the public-channel
+destination class is gone entirely. What remains — a session-holding attacker pointing notifications
+at their own private chat — is **F-3 (LOW)**: it leaks the same balances and amounts that same
+session can already read from `/api/dashboard`, and it moves no funds.
+Evidence: `apps/web/test/notificationsRoutes.test.ts` › "POST /api/me/telegram — RT-2 chat id shape"
+(4 tests).
+
+### RT-3 — can the rate limiter's per-user / per-IP keying be bypassed?
+
+**Attack.** Rotate identity to mint fresh allowances and exhaust an expensive resource (a paid SERV
+call, a loop iteration, an on-chain sweep).
+
+**Result: PASS for everything that costs money; a known, deployment-level bound on the rest.**
+Every expensive bucket — `mandate.compile`, `agent.run`, `sweep`, `unfreeze` — is keyed by the
+session `userId`, which a caller cannot rotate; headers buy nothing. The two unauthenticated buckets
+(`auth.nonce`, `auth.verify`) are keyed by `clientIp`, which trusts the first hop of
+`x-forwarded-for`. That is correct behind exactly one proxy that sets the header (Vercel overwrites
+it at the edge) and forgeable if the app is ever exposed directly. A forger cannot *borrow* someone
+else's allowance, but they can mint their own — so those two buckets are a **cost control, not a
+security control**, and nothing behind them moves funds. Recorded as **F-4 (LOW)** and pinned by a
+test so the property is written down rather than assumed.
+Evidence: `apps/web/test/sessionHardening.test.ts` › the two RT-3 tests, plus the pre-existing "has
+no bucket for the owner stop path (I7)".
+
+### RT-4 — can two concurrent freeze / unfreeze / sweep requests race into an inconsistent state?
+
+**Attack.** Fire several owner-path requests together and try to (a) spend one confirmation twice,
+(b) land a freeze and an unfreeze in the same instant, (c) double-sweep.
+
+**Result: one real finding, FIXED; the rest safe.**
+
+- **Found and fixed:** `verifyFreezeSignature` used to clear the session nonce *before* checking
+  that the stored action matched the route being called. A mismatched request therefore **burned the
+  owner's live confirmation** — a stray or hostile POST to `/api/freeze` would invalidate the
+  unfreeze the owner had just prepared, and, more seriously, the reverse: a denial of the one
+  control that stops the agent (I7). The check now runs **before** the nonce is spent. Nothing
+  became replayable: the nonce is still single-use for its own action, still bound to `walletId`,
+  still TTL-bound.
+- **Concurrency itself is safe.** Five concurrent freezes with one confirmation: exactly one 200,
+  four 400s. A *replayed* confirmation (the realistic production shape, since iron-session is a
+  stateless cookie and two simultaneous requests each carry their own copy) is accepted a second
+  time but is a **no-op** — the end state, the audit chain and the `frozen` flag are identical to a
+  single request. That is why the cookie-copy race is **F-6 (LOW)** rather than a defect: every
+  outcome on this path is idempotent and in the safe direction, and the sweep is additionally keyed
+  by the proposal hash (I10).
+Evidence: `apps/web/test/ownerPathApi.test.ts` › "RT-4 — concurrent owner-path requests" (3).
+
+### RT-5 — can the companion-treasury derivation be tricked into deriving for the wrong owner?
+
+**Attack.** Two routes in. (a) A SIWE message naming somebody else's address, signed with the
+attacker's key. (b) Make a *later* sign-in re-derive: the EOA acquires on-chain code (an EIP-7702
+delegation, or simply a node that answers `getCode` differently), which would re-classify it as a
+deployed contract wallet and hand back the raw address instead of the companion — stranding
+everything already sent to the companion.
+
+**Result: PASS on both, no fix needed.** (a) is refused at the signature check: the address is
+parsed from the message and the signature is verified against *that* address, so a mismatched
+signature is a 401 and **no user row is created for the claimed address at all**. (b) is structurally
+impossible: the treasury is resolved **only when the wallet row does not exist**, and the row is the
+record of truth forever after — the test flips `getCode` between sign-ins and asserts the stored
+treasury does not move. The derivation itself is a CREATE2 address over the owner bytes and a pinned
+nonce, already proven deterministic and injective by a `fast-check` property in Phase 7's addendum.
+Evidence: `apps/web/test/authVerifyTreasury.test.ts` › the two RT-5 tests, plus the four existing
+ones; `packages/wallet/test/companionTreasury.test.ts`.
+
+**Summary: 5 attempted, 3 clean passes, 2 produced a fix (RT-2 narrowing, RT-4 nonce ordering), 0
+HIGH.**
