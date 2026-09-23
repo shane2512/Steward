@@ -3,10 +3,11 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 8 IN PROGRESS — part 1 done** (tasks 8.1-8.4, Opus, 2026-09-23). Phase 8 is NOT
-complete: 8.5/8.6 notifications (Sonnet) and 8.7/8.9 red-team + load/soak + `docs/SECURITY_REVIEW.md`
-(Opus) remain. Awaiting human "continue".
-Required model: Phase 8 = Opus (Sonnet sub-tasks 8.5, 8.6)
+Phase: **Phase 8 complete** (parts 1-3, tasks 8.1-8.7 and 8.9, done 2026-09-23; 8.8 x402 stretch
+skipped — SHOULD-have, gated on an unverified fact, deprioritized given the deadline).
+`docs/SECURITY_REVIEW.md` gate PASSES: no open HIGH finding. Awaiting human "continue". Phase 9
+requires Sonnet (Opus gate 9.8).
+Required model: Phase 8 = Opus (Sonnet sub-tasks 8.5, 8.6 — both done)
 Last updated: 2026-09-23
 
 **7.8 note:** the Opus agent's post-close-out visual QA/screenshot pass was cut short on the human's
