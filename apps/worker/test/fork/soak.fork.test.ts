@@ -24,7 +24,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createPublicClient,
   createTestClient,
-  erc20Abi,
   getAddress,
   http,
   publicActions,
