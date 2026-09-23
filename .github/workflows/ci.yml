@@ -24,5 +24,7 @@ jobs:
       - run: pnpm check:arch
       - run: pnpm check:arch:fixture
       - run: pnpm test
+      # 8.3: the prompt-injection corpus is an exit gate from Phase 4 on; CI ran everything but it.
+      - run: pnpm test:adversarial
       - uses: gitleaks/gitleaks-action@v2
         env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
