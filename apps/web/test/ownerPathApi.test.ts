@@ -64,6 +64,7 @@ import {
   listAuditPage,
   setWalletFrozen,
   upsertUserByAddress,
+  verifyChain,
   type Db,
 } from '@steward/db';
 
@@ -345,5 +346,83 @@ describe('POST /api/spend-permission/revoked', () => {
       post('/api/spend-permission/revoked', { txHash: `0x${'ab'.repeat(32)}` }),
     );
     expect(res.status).toBe(404);
+  });
+});
+
+// ── 8.7 red-team RT-4 ────────────────────────────────────────────────────────────────────────────
+// "Can two concurrent freeze / unfreeze / sweep requests race into an inconsistent state?"
+//
+// The single-use nonce lives in the SESSION. In this harness (and in any shared session store) the
+// read-and-clear is synchronous, so exactly one concurrent request can spend it. iron-session is a
+// stateless COOKIE, though: two requests sent together each carry their own decrypted copy, so in
+// production the same confirmation can be spent twice inside its 2-minute TTL. That is recorded as
+// finding RT-4 (LOW), and the reason it is LOW is asserted here — every outcome on this path is
+// idempotent and in the SAFE direction, so a doubled request changes nothing.
+describe('RT-4 — concurrent owner-path requests', () => {
+  it('only one of five concurrent freezes can spend the confirmation', async () => {
+    signedIn();
+    const prepared = await json(
+      await routes.prepare.POST(post('/api/freeze/prepare', { action: 'freeze' })),
+    );
+    const signature = await owner.signMessage({ message: prepared['message'] as string });
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => routes.freeze.POST(post('/api/freeze', { signature }))),
+    );
+    expect(results.filter((r) => r.status === 200)).toHaveLength(1);
+    expect(results.filter((r) => r.status === 400)).toHaveLength(4);
+    expect((await getWalletById(db, walletId))?.frozen).toBe(true);
+  });
+
+  it('a REPLAYED confirmation (the cookie-copy race) is still a safe no-op', async () => {
+    signedIn();
+    const prepared = await json(
+      await routes.prepare.POST(post('/api/freeze/prepare', { action: 'freeze' })),
+    );
+    const message = prepared['message'] as string;
+    const signature = await owner.signMessage({ message });
+    const nonce = sess().freezeNonce;
+    const at = sess().freezeNonceAt;
+
+    expect((await routes.freeze.POST(post('/api/freeze', { signature }))).status).toBe(200);
+    // Put the cookie back exactly as a second concurrent request would still have it.
+    sess().freezeNonce = nonce;
+    sess().freezeNonceAt = at;
+    sess().freezeAction = 'freeze';
+    const again = await routes.freeze.POST(post('/api/freeze', { signature }));
+    expect(again.status).toBe(200);
+    expect((await json(again))['alreadyFrozen']).toBe(true);
+
+    // The end state is exactly the same as after one request: frozen, and still frozen.
+    expect((await getWalletById(db, walletId))?.frozen).toBe(true);
+    const chain = await verifyChain(db, walletId);
+    expect(chain.ok).toBe(true);
+  });
+
+  it('a freeze racing an unfreeze cannot leave the wallet running with an unspent freeze', async () => {
+    signedIn();
+    await setWalletFrozen(db, walletId, true, 'owner', new Date());
+    // Two confirmations cannot coexist: `/prepare` overwrites the session slot, so the second
+    // action is the only one that can be spent. A captured signature for the other action is
+    // refused by the action check (D-90) rather than applied out of order — and, since the RT-4
+    // fix, that refusal does NOT consume the live confirmation, so the owner's own action still
+    // lands even when a stale request for the opposite one arrives at the same moment.
+    const freezePrep = await json(
+      await routes.prepare.POST(post('/api/freeze/prepare', { action: 'freeze' })),
+    );
+    const freezeSig = await owner.signMessage({ message: freezePrep['message'] as string });
+    const unfreezePrep = await json(
+      await routes.prepare.POST(post('/api/freeze/prepare', { action: 'unfreeze' })),
+    );
+    const unfreezeSig = await owner.signMessage({ message: unfreezePrep['message'] as string });
+
+    const [a, b] = await Promise.all([
+      routes.freeze.POST(post('/api/freeze', { signature: freezeSig })),
+      routes.unfreeze.POST(post('/api/unfreeze', { signature: unfreezeSig })),
+    ]);
+    // The freeze is refused (its confirmation was overwritten) and the unfreeze still succeeds.
+    expect(a.status).toBe(400);
+    expect(b.status).toBe(200);
+    expect((await getWalletById(db, walletId))?.frozen).toBe(false);
+    expect((await verifyChain(db, walletId)).ok).toBe(true);
   });
 });

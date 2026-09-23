@@ -65,16 +65,23 @@ export async function verifyFreezeSignature(args: {
   const nonce = session.freezeNonce;
   const issuedAt = session.freezeNonceAt;
   const action = session.freezeAction;
-  // Spend it now, whatever the outcome: a request that got this far has used its one attempt.
+
+  if (!nonce || issuedAt === undefined || action === undefined)
+    return apiError(400, 'nonce_expired', 'ask for a fresh confirmation and sign that');
+  // 8.7 red-team RT-4: refuse a mismatched action WITHOUT spending the nonce. Clearing it here
+  // would mean a stray (or hostile) POST to /api/freeze could burn the confirmation the owner just
+  // prepared for an unfreeze — or, worse, the other way round: a denial of the one control that
+  // stops the agent (I7). The nonce stays bound to its own action, single-use and TTL-bound, so
+  // nothing is replayable that was not replayable before.
+  if (action !== args.action)
+    return apiError(400, 'nonce_expired', 'that confirmation was issued for a different action');
+
+  // Spend it now, whatever the outcome: a request for THIS action has used its one attempt.
   session.freezeNonce = undefined;
   session.freezeNonceAt = undefined;
   session.freezeAction = undefined;
   await session.save();
 
-  if (!nonce || issuedAt === undefined || action === undefined)
-    return apiError(400, 'nonce_expired', 'ask for a fresh confirmation and sign that');
-  if (action !== args.action)
-    return apiError(400, 'nonce_expired', 'that confirmation was issued for a different action');
   if (Date.now() - issuedAt > FREEZE_CONFIRMATION_TTL_MS)
     return apiError(400, 'nonce_expired', 'that confirmation expired; sign a fresh one');
 

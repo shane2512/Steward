@@ -27,6 +27,7 @@ let routes: {
   list: typeof import('../app/api/notifications/route');
   read: typeof import('../app/api/notifications/[id]/read/route');
   readAll: typeof import('../app/api/notifications/read-all/route');
+  telegram: typeof import('../app/api/me/telegram/route');
 };
 
 const get = (path: string) => new Request(`http://localhost:3000${path}`);
@@ -68,6 +69,7 @@ beforeAll(async () => {
     list: await import('../app/api/notifications/route'),
     read: await import('../app/api/notifications/[id]/read/route'),
     readAll: await import('../app/api/notifications/read-all/route'),
+    telegram: await import('../app/api/me/telegram/route'),
   };
   session.current = { userId, address: OWNER };
 });
@@ -179,5 +181,38 @@ describe('POST /api/notifications/read-all', () => {
       unreadCount: number;
     };
     expect(after.unreadCount).toBe(0);
+  });
+});
+
+// ── 8.7 red-team RT-2 ────────────────────────────────────────────────────────────────────────────
+// The chat id is the one attacker-influenceable field in the outbound notification path. Telegram
+// also accepts `@publicchannel` as a `chat_id`, so an unconstrained string is a way to redirect an
+// owner's treasury notifications somewhere public. A real chat id is an integer.
+describe('POST /api/me/telegram — RT-2 chat id shape', () => {
+  const body = (v: unknown) =>
+    new Request('http://localhost:3000/api/me/telegram', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chatId: v }),
+    });
+
+  it('accepts a numeric id (private chats and negative group ids)', async () => {
+    expect((await routes.telegram.POST(body('123456789'))).status).toBe(200);
+    expect((await routes.telegram.POST(body('-1001234567890'))).status).toBe(200);
+  });
+
+  it('unlinks on an empty string or null', async () => {
+    expect((await routes.telegram.POST(body(''))).status).toBe(200);
+    expect((await routes.telegram.POST(body(null))).status).toBe(200);
+  });
+
+  it('refuses a channel handle, a URL, or anything else that is not a number', async () => {
+    for (const bad of ['@publicchannel', 'https://evil.example', '12 34', '1e9', '../../x', '+1'])
+      expect((await routes.telegram.POST(body(bad))).status, bad).toBe(400);
+  });
+
+  it('requires a session', async () => {
+    session.current = {};
+    expect((await routes.telegram.POST(body('1'))).status).toBe(401);
   });
 });

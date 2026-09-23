@@ -153,4 +153,53 @@ describe('POST /api/auth/verify — treasury assignment', () => {
     await signIn(owner);
     expect(getAddress(session.current.address!)).toBe(getAddress(owner.address));
   });
+
+  // ── 8.7 red-team RT-5 ───────────────────────────────────────────────────────────────────────────
+  // The companion derivation is the newest piece of custody logic in the project, so it gets its own
+  // attempt at being pointed at the wrong owner.
+
+  it('RT-5: a later classification FLIP cannot move an existing treasury', async () => {
+    // The EOA signs in once (companion derived), and then acquires on-chain code — an EIP-7702
+    // delegation, or simply a node that answers differently. `resolveTreasuryAddress` would now say
+    // "deployed contract, use the raw address"; the route must not ask it again. Re-deriving here
+    // would strand everything already sent to the companion.
+    const first = await treasuryOf(owner.address);
+    chain.code = '0x60806040';
+    const res = await signIn(owner);
+    expect(res.status).toBe(200);
+    expect(await treasuryOf(owner.address)).toBe(first);
+  });
+
+  it('RT-5: a SIWE message naming somebody else is refused, so no treasury is stored for them', async () => {
+    const victim = privateKeyToAccount(`0x${'33'.repeat(32)}` as Hex);
+    session.current = { nonce: NONCE, nonceIssuedAt: Date.now() };
+    // The attacker claims the victim's address in the message and signs it with their OWN key.
+    const message = createSiweMessage({
+      address: victim.address,
+      chainId: 84532,
+      domain: DOMAIN,
+      nonce: NONCE,
+      uri: `http://${DOMAIN}`,
+      version: '1',
+      issuedAt: new Date(),
+    });
+    const signature = await owner.signMessage({ message });
+    const res = await route.POST(
+      new Request(`http://${DOMAIN}/api/auth/verify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message, signature }),
+      }),
+    );
+    expect(res.status).toBe(401);
+    // No session, and no row for the victim: the derivation never ran.
+    expect(session.current.userId).toBeUndefined();
+    const { schema } = await import('@steward/db');
+    const { eq } = await import('drizzle-orm');
+    const rows = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.ownerAddress, getAddress(victim.address)));
+    expect(rows).toHaveLength(0);
+  });
 });

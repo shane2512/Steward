@@ -142,6 +142,55 @@ describe('insertNotification Telegram best-effort send', () => {
       expect(JSON.parse(init.body as string)).toEqual({ chat_id: '555', text: 'Frozen\nstop' });
     });
 
+    // ── 8.7 red-team RT-1/RT-2 ────────────────────────────────────────────────────────────────────
+    // The Telegram transport is the only place a notification body leaves the app, and the chat id
+    // is the only attacker-influenceable part of it. Two properties must hold no matter what either
+    // string contains: the request goes to api.telegram.org and nowhere else (no SSRF), and the
+    // body is sent as plain text with NO `parse_mode` (no HTML/Markdown entity parsing, so a memo
+    // or vault name cannot become a clickable exfiltration link in the owner's chat).
+    it('RT-2: a hostile chat id cannot move the request off api.telegram.org', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+      const hostile = [
+        '../../../evil',
+        '@publicchannel',
+        'https://evil.example/x',
+        '555\nHost: evil.example',
+        '555?chat_id=-100123',
+      ];
+      for (const chatId of hostile) {
+        const user = await upsertUserByAddress(db, addr(), new Date());
+        await setTelegramChatId(db, user.id, chatId);
+        await insertNotification(db, { userId: user.id, type: 'freeze', title: 'T', body: 'b' });
+      }
+      expect(fetchSpy).toHaveBeenCalledTimes(hostile.length);
+      for (const [url, init] of fetchSpy.mock.calls as [string, RequestInit][]) {
+        expect(url).toBe('https://api.telegram.org/botbot-token/sendMessage');
+        expect(new URL(url).host).toBe('api.telegram.org');
+        // The chat id is a JSON field, never part of the URL — so it cannot add a path, a query
+        // parameter or a header no matter what it contains.
+        const parsed = JSON.parse(init.body as string) as Record<string, unknown>;
+        expect(typeof parsed['chat_id']).toBe('string');
+      }
+    });
+
+    it('RT-1: a notification body is sent verbatim with no parse_mode', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+      const user = await upsertUserByAddress(db, addr(), new Date());
+      await setTelegramChatId(db, user.id, '555');
+      const nasty = '<a href="https://evil.example">click</a> [x](https://evil.example) <b>*_`';
+      await insertNotification(db, { userId: user.id, type: 'blocked', title: 'T', body: nasty });
+
+      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      const parsed = JSON.parse(init.body as string) as Record<string, unknown>;
+      expect(parsed['text']).toBe(`T\n${nasty}`);
+      // Absent, not 'none': Telegram only parses entities when asked to.
+      expect(parsed).not.toHaveProperty('parse_mode');
+    });
+
     it('a failed send does not throw or propagate to the caller', async () => {
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
       const user = await upsertUserByAddress(db, addr(), new Date());

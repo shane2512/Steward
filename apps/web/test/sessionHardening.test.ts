@@ -102,6 +102,37 @@ describe('the rate limiter', () => {
       expect(rule.windowMs, name).toBeGreaterThanOrEqual(60_000);
     }
   });
+
+  // ── 8.7 red-team RT-3 ─────────────────────────────────────────────────────────────────────────
+  // "Can the per-user / per-IP keying be bypassed to still exhaust a resource?" Two halves, and the
+  // answers are different. Both are pinned here so the trust boundary is a test, not a comment.
+
+  it('RT-3: an authenticated bucket is keyed by userId, so headers cannot widen it', () => {
+    // Every expensive bucket that costs Steward money or gas (mandate.compile, agent.run, sweep,
+    // unfreeze) is keyed by the session userId. A caller controls their headers but not their
+    // userId, so rotating IPs, proxies or user agents buys nothing.
+    for (const b of ['mandate.compile', 'agent.run', 'sweep', 'unfreeze'] as const) {
+      const { limit } = RATE_LIMITS[b];
+      for (let i = 0; i < limit; i += 1) expect(rateLimit(b, 'user-1', 1000)).toBeNull();
+      expect(rateLimit(b, 'user-1', 1000)).not.toBeNull();
+      // A second identity is untouched — that is the point of keying, not a bypass.
+      expect(rateLimit(b, 'user-2', 1000)).toBeNull();
+    }
+  });
+
+  it('RT-3: the UNAUTHENTICATED buckets follow x-forwarded-for — a known, deployment-level bound', () => {
+    // KNOWN AND ACCEPTED (8.7 finding RT-3, LOW). `clientIp` trusts the first hop of
+    // x-forwarded-for, which is correct behind exactly one proxy that sets it (Vercel overwrites the
+    // header at its edge) and forged-able if the app is ever exposed directly. A forger cannot
+    // borrow somebody else's allowance — but they can mint fresh ones for themselves, so the SIWE
+    // handshake limit is a cost control, never a security control. Nothing behind it moves funds:
+    // /api/auth/nonce writes a cookie, /api/auth/verify does one ecrecover or eth_call.
+    const { limit } = RATE_LIMITS['auth.nonce'];
+    for (let i = 0; i < limit; i += 1) expect(rateLimit('auth.nonce', '198.51.100.1', 1000)).toBeNull();
+    expect(rateLimit('auth.nonce', '198.51.100.1', 1000)).not.toBeNull();
+    // Rotating the claimed address gets a fresh window. This test exists to record that fact.
+    expect(rateLimit('auth.nonce', '198.51.100.2', 1000)).toBeNull();
+  });
 });
 
 // End-to-end: an actual route handler, not just the limiter in isolation. `/api/auth/nonce` is the

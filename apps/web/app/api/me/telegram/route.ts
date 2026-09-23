@@ -11,7 +11,19 @@ import { isResponse, requireOwner } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
-const body = z.object({ chatId: z.string().trim().max(64).nullable() });
+// 8.7 red-team (RT-2): numeric ids only. Telegram also accepts `@publicchannel` as a `chat_id`,
+// which would let a hijacked session redirect an owner's treasury notifications into a public
+// channel. A real private/group chat id is always an integer (negative for groups), so restricting
+// the shape costs the owner nothing and removes that target class entirely. Empty string unlinks.
+const CHAT_ID = /^-?\d{1,32}$/;
+const body = z.object({
+  chatId: z
+    .string()
+    .trim()
+    .max(64)
+    .refine((v) => v === '' || CHAT_ID.test(v), 'a Telegram chat id is a number')
+    .nullable(),
+});
 
 export async function POST(req: Request) {
   const owner = await requireOwner();
