@@ -12,6 +12,8 @@ export async function GET() {
     demoMode: env.DEMO_MODE && env.CHAIN_ID === 84532,
     chainId: env.CHAIN_ID,
     explorerBase: env.CHAIN_ID === 8453 ? 'https://basescan.org' : 'https://sepolia.basescan.org',
+    // 8.5: whether TELEGRAM_BOT_TOKEN is configured on this deployment — never the token itself.
+    telegramEnabled: env.TELEGRAM_BOT_TOKEN !== undefined,
   };
   return Response.json(body);
 }

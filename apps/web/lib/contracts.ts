@@ -11,11 +11,17 @@ export const zConfig = z.object({
   demoMode: z.boolean(),
   chainId: z.number(),
   explorerBase: z.string(),
+  telegramEnabled: z.boolean(),
 });
 export type ConfigResponse = z.infer<typeof zConfig>;
 
 export const zMe = z.object({
-  user: z.object({ id: z.string(), address: z.string(), displayName: z.string().nullable() }),
+  user: z.object({
+    id: z.string(),
+    address: z.string(),
+    displayName: z.string().nullable(),
+    telegramChatId: z.string().nullable(),
+  }),
   wallet: z
     .object({
       id: z.string(),
@@ -409,3 +415,20 @@ export const zSweepResult = zSweepStep.extend({
   nothingToSweep: z.boolean().optional(),
 });
 export type SweepResult = z.infer<typeof zSweepResult>;
+
+// ── notifications (task 8.5) ────────────────────────────────────────────────────────────────────
+export const zNotification = z.object({
+  id: z.string(),
+  type: z.enum(['execution', 'escalation', 'blocked', 'risk', 'freeze', 'report']),
+  title: z.string(),
+  body: z.string(),
+  read: z.boolean(),
+  createdAt: iso,
+});
+export type NotificationItem = z.infer<typeof zNotification>;
+export const zNotificationList = z.object({
+  rows: z.array(zNotification),
+  nextCursor: z.string().nullable(),
+  unreadCount: z.number(),
+});
+export type NotificationList = z.infer<typeof zNotificationList>;

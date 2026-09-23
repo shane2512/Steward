@@ -27,7 +27,7 @@ const AGENT = '0xe77C2DcC31444d4D822501B10e58Aa4ab39D8a14';
 const TX = '0x9f3c44ae7b12a21b5d0e88c1c0ffee00a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
 export const fixtureMe = (scenario: FixtureScenario): MeResponse => ({
-  user: { id: 'fx-user', address: OWNER, displayName: null },
+  user: { id: 'fx-user', address: OWNER, displayName: null, telegramChatId: null },
   wallet:
     scenario === 'onboarding'
       ? null
@@ -43,6 +43,7 @@ export const fixtureConfig = (): ConfigResponse => ({
   demoMode: true,
   chainId: 84532,
   explorerBase: 'https://sepolia.basescan.org',
+  telegramEnabled: false,
 });
 
 const check = (

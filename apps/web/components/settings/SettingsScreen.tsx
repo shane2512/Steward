@@ -3,19 +3,48 @@
 // close account. Nothing here makes a security decision in the browser — export and verify are both
 // plain server reads, and Unfreeze (7.8) is an owner signature over a server-issued message that
 // `POST /api/unfreeze` verifies before it clears the frozen flag and the circuit breaker.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { z } from 'zod';
 import { UnfreezeSlot } from '@/components/freeze/UnfreezeSlot';
 import { Banner, Button, Eyebrow, TextButton } from '@/components/ui/primitives';
-import { apiGet } from '@/lib/api';
-import { zAuditVerify, zDashboard, type AuditVerify } from '@/lib/contracts';
+import { apiGet, apiPost } from '@/lib/api';
+import { zAuditVerify, zConfig, zDashboard, zMe, type AuditVerify } from '@/lib/contracts';
 import { useApi } from '@/lib/useApi';
+
+const zTelegramLink = z.object({ chatId: z.string().nullable() });
 
 export function SettingsScreen() {
   const dash = useApi('/api/dashboard', zDashboard);
+  const cfg = useApi('/api/config', zConfig);
+  const me = useApi('/api/me', zMe);
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<AuditVerify | null>(null);
   const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
+  const [chatId, setChatId] = useState('');
+  const [savingChatId, setSavingChatId] = useState(false);
+  const [chatIdSaved, setChatIdSaved] = useState(false);
+
+  // Seed the field from whatever `/api/me` returns, but never once the owner has touched it —
+  // `/api/me` and `/api/config` resolve independently, so a slow `/api/me` (or its refetch after
+  // Save) could otherwise land mid-keystroke and silently wipe what they typed.
+  const touchedChatId = useRef(false);
+  useEffect(() => {
+    if (touchedChatId.current || !me.data) return;
+    setChatId(me.data.user?.telegramChatId ?? '');
+  }, [me.data]);
+
+  const saveChatId = async () => {
+    setSavingChatId(true);
+    setChatIdSaved(false);
+    try {
+      await apiPost('/api/me/telegram', zTelegramLink, { chatId: chatId.trim() || null });
+      setChatIdSaved(true);
+      me.refetch();
+    } finally {
+      setSavingChatId(false);
+    }
+  };
 
   const runVerify = async () => {
     setVerifying(true);
@@ -59,18 +88,46 @@ export function SettingsScreen() {
         <label htmlFor="telegram" className="block text-small font-semibold text-ink">
           Telegram chat ID
         </label>
-        <input
-          id="telegram"
-          disabled
-          placeholder="Coming soon"
-          className="mt-2 h-14 w-full rounded-md bg-surface-2 px-4 text-h3 text-faint placeholder:text-faint"
-        />
-        {/* TODO(Phase 8.5): wire this to a real notifications route once one exists. Shipping a
-            disabled field beats a route that silently accepts an ID and never sends anything. */}
-        <p className="pt-2 text-small text-muted">
-          Steward will be able to message you on Telegram when it needs a decision. This arrives in
-          a later phase.
-        </p>
+        {cfg.data && !cfg.data.telegramEnabled ? (
+          <p className="pt-2 text-small text-muted">
+            Telegram is not configured on this deployment yet. In-app notifications above always
+            work.
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 flex gap-2">
+              <input
+                id="telegram"
+                value={chatId}
+                onChange={(e) => {
+                  touchedChatId.current = true;
+                  setChatId(e.target.value);
+                  setChatIdSaved(false);
+                }}
+                placeholder="e.g. 123456789"
+                className="h-14 flex-1 rounded-md bg-surface-2 px-4 text-h3 text-ink placeholder:text-faint"
+              />
+              <Button
+                variant="ghost"
+                className="w-auto"
+                loading={savingChatId}
+                onClick={() => void saveChatId()}
+              >
+                Save
+              </Button>
+            </div>
+            <p className="pt-2 text-small text-muted">
+              Message Steward&apos;s Telegram bot once — it replies with your chat ID. Paste that ID
+              here and Steward will message you there too, for the same things it shows in the bell
+              above. Leave it blank and save to unlink.
+            </p>
+            <div aria-live="polite">
+              {chatIdSaved ? (
+                <p className="pt-2 text-small font-semibold text-allow">Saved.</p>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
 
       <Eyebrow>Audit log</Eyebrow>

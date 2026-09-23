@@ -18,7 +18,12 @@ export async function GET(req: Request) {
   if (!user) return apiError(401, 'unauthorized', 'unknown user');
   const w = await getWalletByUserId(db, userId);
   return Response.json({
-    user: { id: user.id, address: user.ownerAddress, displayName: user.displayName },
+    user: {
+      id: user.id,
+      address: user.ownerAddress,
+      displayName: user.displayName,
+      telegramChatId: user.telegramChatId,
+    },
     wallet: w
       ? { id: w.id, chainId: w.chainId, agentWalletAddress: w.agentWalletAddress, frozen: w.frozen }
       : null,

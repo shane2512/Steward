@@ -18,7 +18,13 @@
 // Idempotent: freezing an already-frozen wallet is a successful no-op (it still requires a valid
 // signature, but it does not error, does not re-audit and does not re-cancel).
 import { z } from 'zod';
-import { appendAudit, cancelPendingApprovals, setWalletFrozen } from '@steward/db';
+import {
+  appendAudit,
+  cancelPendingApprovals,
+  getUserIdForWallet,
+  insertNotification,
+  setWalletFrozen,
+} from '@steward/db';
 import { zHex } from '@steward/shared';
 import { fixtureFor } from '@/lib/fixture';
 import { fixtureOwnerPath } from '@/lib/fixtures';
@@ -82,6 +88,15 @@ export async function POST(req: Request) {
 
   await setWalletFrozen(owner.db, wallet.id, true, 'owner freeze', now);
   const cancelled = await cancelPendingApprovals(owner.db, wallet.id, now);
+  const userId = await getUserIdForWallet(owner.db, wallet.id);
+  if (userId)
+    await insertNotification(owner.db, {
+      userId,
+      walletId: wallet.id,
+      type: 'freeze',
+      title: 'Steward frozen',
+      body: 'You froze the wallet. Nothing will move until you unfreeze it.',
+    });
   for (const row of cancelled) {
     await appendAudit(owner.db, {
       walletId: wallet.id,

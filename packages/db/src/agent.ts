@@ -1,7 +1,7 @@
 // Phase 6 repositories: the tables the decision loop, the scheduler and the approval flow read and
 // write. Thin and typed, like `executions.ts` — every decision about *whether* something may happen
 // lives in the Policy Engine or the loop, never here.
-import { and, asc, desc, eq, gte, lt, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm';
 import { appendAudit } from './audit';
 import type { Db } from './client';
 import {
@@ -452,17 +452,81 @@ export async function insertRecipient(
 
 // ── notifications ────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Newest-first, keyset-paginated on `(createdAt, id)` — `id` is a random UUID (not sortable on its
+ * own), so `createdAt` is the real order and `id` only breaks ties within the same millisecond.
+ * `beforeId` names a row from a previous page; its own `(createdAt, id)` becomes the cursor.
+ */
 export async function listNotifications(
   db: Db,
   userId: string,
-  limit = 50,
+  opts: { limit?: number; beforeId?: string } = {},
 ): Promise<NotificationRow[]> {
+  const limit = opts.limit ?? 50;
+  const conds = [eq(notifications.userId, userId)];
+  if (opts.beforeId !== undefined) {
+    const [cursor] = await db
+      .select({ createdAt: notifications.createdAt, id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.id, opts.beforeId))
+      .limit(1);
+    if (cursor)
+      conds.push(
+        sql`(${notifications.createdAt}, ${notifications.id}) < (${cursor.createdAt}, ${cursor.id})`,
+      );
+  }
   return db
     .select()
     .from(notifications)
-    .where(eq(notifications.userId, userId))
-    .orderBy(desc(notifications.createdAt))
+    .where(and(...conds))
+    .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(limit);
+}
+
+/** Newest notification of one kind for this owner — 8.6 uses this to serve the last weekly report. */
+export async function latestNotificationOfType(
+  db: Db,
+  userId: string,
+  type: NotificationRow['type'],
+): Promise<NotificationRow | undefined> {
+  return (
+    await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.type, type)))
+      .orderBy(desc(notifications.createdAt), desc(notifications.id))
+      .limit(1)
+  )[0];
+}
+
+export async function unreadNotificationCount(db: Db, userId: string): Promise<number> {
+  const rows = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+  return rows.length;
+}
+
+/** Returns the updated row, or `undefined` if it does not exist or belongs to another user. */
+export async function markNotificationRead(
+  db: Db,
+  userId: string,
+  id: string,
+  now: Date,
+): Promise<NotificationRow | undefined> {
+  const [row] = await db
+    .update(notifications)
+    .set({ readAt: now })
+    .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
+    .returning();
+  return row;
+}
+
+export async function markAllNotificationsRead(db: Db, userId: string, now: Date): Promise<void> {
+  await db
+    .update(notifications)
+    .set({ readAt: now })
+    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
 }
 
 // ── ledger windows ───────────────────────────────────────────────────────────────────────────────
@@ -489,6 +553,28 @@ export async function pendingApprovalHashes(db: Db, walletId: string): Promise<s
     .where(and(eq(approvals.walletId, walletId), eq(approvals.status, 'pending')))
     .orderBy(desc(approvals.expiresAt));
   return rows.map((r) => r.proposalHash);
+}
+
+/** DENY verdicts for this wallet's decisions in `[start, end)` — task 8.6's "blocked events". */
+export async function deniedVerdictCountSince(
+  db: Db,
+  walletId: string,
+  start: Date,
+  end: Date,
+): Promise<number> {
+  const rows = await db
+    .select({ id: verdicts.id })
+    .from(verdicts)
+    .innerJoin(agentDecisions, eq(verdicts.decisionId, agentDecisions.id))
+    .where(
+      and(
+        eq(agentDecisions.walletId, walletId),
+        eq(verdicts.decision, 'DENY'),
+        gte(agentDecisions.createdAt, start),
+        lt(agentDecisions.createdAt, end),
+      ),
+    );
+  return rows.length;
 }
 
 /** Set `wallets.frozen`, for the breaker and the owner path. */

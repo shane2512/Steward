@@ -51,7 +51,19 @@ export async function getUserById(db: Db, id: string): Promise<User | undefined>
  * (I6, append-only; they are retained, anonymized only in that they no longer join to a display name).
  */
 export async function scrubUserPersonalData(db: Db, userId: string): Promise<void> {
-  await db.update(users).set({ displayName: null }).where(eq(users.id, userId));
+  await db
+    .update(users)
+    .set({ displayName: null, telegramChatId: null })
+    .where(eq(users.id, userId));
+}
+
+/** 8.5 Settings: link or unlink the owner's Telegram chat id (`null` unlinks). */
+export async function setTelegramChatId(
+  db: Db,
+  userId: string,
+  chatId: string | null,
+): Promise<void> {
+  await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, userId));
 }
 
 export async function getWalletByUserId(db: Db, userId: string): Promise<Wallet | undefined> {

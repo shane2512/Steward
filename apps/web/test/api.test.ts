@@ -150,9 +150,14 @@ describe('GET /api/config', () => {
     expect(on.demoMode).toBe(true);
     expect(on.explorerBase).toBe('https://sepolia.basescan.org');
   });
-  it('exposes nothing but the three flags', async () => {
+  it('exposes nothing but the known flags', async () => {
     const body = await (await (await load(true)).config.GET()).json();
-    expect(Object.keys(body).sort()).toEqual(['chainId', 'demoMode', 'explorerBase']);
+    expect(Object.keys(body).sort()).toEqual([
+      'chainId',
+      'demoMode',
+      'explorerBase',
+      'telegramEnabled',
+    ]);
   });
 });
 

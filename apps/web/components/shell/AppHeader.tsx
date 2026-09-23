@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { IconBack } from '@/components/icons';
 import { StatusPill, Wordmark } from '@/components/ui/primitives';
 import { pillLabel, type PillState } from '@/lib/status';
+import { NotificationBell } from './NotificationBell';
 
 /**
  * The global Freeze control (DESIGN §5): calm outlined pill; a filled chip once frozen.
@@ -72,7 +73,10 @@ export function AppHeader({
             {pill ? <StatusPill state={pill} label={pillLabel(pill, pending)} /> : <span />}
           </>
         )}
-        <FreezeButton frozen={frozen} onOpen={onFreeze} />
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <FreezeButton frozen={frozen} onOpen={onFreeze} />
+        </div>
       </div>
     </header>
   );

@@ -3,7 +3,7 @@
 // database can provide (I10): the single-use receipt nonce and the one-execution-per-proposal-hash
 // unique index, claimed together in one transaction.
 import { and, asc, desc, eq, gt, gte, inArray, sql } from 'drizzle-orm';
-import { err, ok, type Result } from '@steward/shared';
+import { getEnv, err, ok, type Result } from '@steward/shared';
 import type { Db } from './client';
 import {
   executions,
@@ -14,9 +14,11 @@ import {
   priceSnapshots,
   receiptNonces,
   simulations,
+  users,
   vaultSnapshots,
   wallets,
 } from './schema';
+import { sendTelegramMessage } from './telegram';
 
 export type ExecutionRow = typeof executions.$inferSelect;
 export type ExecutionStatus = ExecutionRow['status'];
@@ -272,6 +274,52 @@ export async function outflowsSince(db: Db, walletId: string, since: Date): Prom
   return rows.reduce((sum, r) => sum + r.usdMicro, 0n);
 }
 
+/** 8.6: confirmed `pay_recipient` money out in `[start, end)` — ledger entries with a counterparty
+ * label are exactly the ones a recipient payment writes (vault moves and sweeps never set one). */
+export async function paymentsSummarySince(
+  db: Db,
+  walletId: string,
+  start: Date,
+  end: Date,
+): Promise<{ count: number; totalMicroUsd: bigint }> {
+  const rows = await db
+    .select({ usdMicro: ledgerEntries.usdMicro })
+    .from(ledgerEntries)
+    .where(
+      and(
+        eq(ledgerEntries.walletId, walletId),
+        eq(ledgerEntries.direction, 'out'),
+        sql`${ledgerEntries.counterpartyLabel} is not null`,
+        gte(ledgerEntries.createdAt, start),
+        sql`${ledgerEntries.createdAt} < ${end}`,
+      ),
+    );
+  return { count: rows.length, totalMicroUsd: rows.reduce((sum, r) => sum + r.usdMicro, 0n) };
+}
+
+/** The most recent vault snapshot at or before `at` — a window boundary for the weekly report (8.6). */
+export async function vaultSnapshotAsOf(
+  db: Db,
+  walletId: string,
+  vaultId: string,
+  at: Date,
+): Promise<VaultSnapshotRow | undefined> {
+  return (
+    await db
+      .select()
+      .from(vaultSnapshots)
+      .where(
+        and(
+          eq(vaultSnapshots.walletId, walletId),
+          eq(vaultSnapshots.vaultId, vaultId),
+          sql`${vaultSnapshots.createdAt} <= ${at}`,
+        ),
+      )
+      .orderBy(desc(vaultSnapshots.id))
+      .limit(1)
+  )[0];
+}
+
 export async function insertSimulation(
   db: Db,
   row: {
@@ -335,6 +383,29 @@ export async function insertNotification(
   },
 ): Promise<void> {
   await db.insert(notifications).values(row);
+
+  // Telegram (8.5, FR-22 should-have): best-effort, never blocks or fails the caller. `getEnv()` is
+  // the same cached, process-wide parse every other module uses (D-106) — no deps threading needed
+  // just to reach an optional env var. Off unless BOTH the bot token and a linked chat id exist.
+  // A process whose env is not fully valid (e.g. a `packages/db` unit test that never calls
+  // `getEnv()` itself) is treated the same as "not configured" — Telegram is the one thing here
+  // allowed to no-op on a bad env, since the write above already succeeded.
+  let env;
+  try {
+    env = getEnv();
+  } catch {
+    return;
+  }
+  if (!env.TELEGRAM_BOT_TOKEN) return;
+  const [u] = await db
+    .select({ telegramChatId: users.telegramChatId })
+    .from(users)
+    .where(eq(users.id, row.userId))
+    .limit(1);
+  if (!u?.telegramChatId) return;
+  // Awaited (not void): sendTelegramMessage never throws (own try/catch), so this adds latency but
+  // never risk — and awaiting keeps the send deterministic for tests and for callers that log after.
+  await sendTelegramMessage(env, u.telegramChatId, `${row.title}\n${row.body}`);
 }
 
 export async function setObligationStatus(

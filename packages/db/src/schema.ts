@@ -76,6 +76,9 @@ export const users = pgTable('users', {
   id: id(),
   ownerAddress: text('owner_address').notNull().unique(), // checksummed
   displayName: text('display_name'),
+  // 8.5: Telegram chat id the owner links in Settings. Not an address, not a secret — just a
+  // routing id for the optional outbound notifier (nullable; unset means Telegram is off for them).
+  telegramChatId: text('telegram_chat_id'),
   createdAt: createdAt(),
   lastLoginAt: ts('last_login_at'),
 });
