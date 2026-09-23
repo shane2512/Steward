@@ -7,6 +7,7 @@
 //   exec.confirm      Phase 5's confirmer (registered in jobs/confirm.ts)
 //   obligations.scan  hourly; creates the next monthly occurrence, idempotently
 //   risk.scan         every minute; writes vault + price snapshots and triggers the loop on a hit
+//   permission.scan   every 5 minutes; detects an out-of-band spend-permission revoke (8.1)
 //   approvals.expire  every 5 minutes
 //   price.refresh     every minute, DEMO_MODE + chain 84532 ONLY (I11)
 //
@@ -39,6 +40,7 @@ import { priceSnapshotRow, type PriceAdapter } from '@steward/risk';
 import { createLogger, zPolicy, zProposal, type Address, type Env } from '@steward/shared';
 import { reconcileExecution, type DemoPriceRefresher, type TxSender } from '@steward/wallet';
 import { EXEC_CONFIRM_QUEUE, registerConfirmJob } from './jobs/confirm';
+import { registerPermissionScanJob } from './jobs/permissionScan';
 import { gather, isoDate } from './gather';
 import { withWalletLock } from './lock';
 import { runIteration, type DecisionLoopDeps } from './loop';
@@ -99,6 +101,15 @@ export async function registerJobs(deps: JobDeps): Promise<void> {
   const allowMainnet = env.STEWARD_ALLOW_MAINNET;
 
   await registerConfirmJob({ boss, db, env, publicClient: deps.publicClient });
+  // 8.1 — out-of-band revoke detection. Its own module so `owner-path-no-reasoning` can prove it
+  // never reaches the reasoning layer (I7).
+  await registerPermissionScanJob({
+    boss,
+    db,
+    env,
+    publicClient: deps.publicClient,
+    ...(deps.now ? { now: deps.now } : {}),
+  });
 
   const enqueueConfirm = async (job: ConfirmRequest): Promise<void> => {
     await boss.send(EXEC_CONFIRM_QUEUE, {

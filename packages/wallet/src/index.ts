@@ -17,5 +17,6 @@ export * from './executor';
 export * from './provision';
 export * from './reads';
 export * from './reconcile';
+export * from './revocation';
 export * from './spendPermission';
 export * from './sweepHome';

@@ -72,7 +72,9 @@ module.exports = {
       'owner-path-no-reasoning',
       // 7.8 widened this: unfreeze and the owner's revoke report are the same owner path, and the
       // freeze flow's own client module drives all three.
-      '^(apps/web/app/api/(freeze|unfreeze|sweep)/|apps/web/app/api/spend-permission/revoked/|apps/web/components/freeze/|apps/web/lib/ownerPath\\.ts$|packages/wallet/src/sweepHome\\.ts$)',
+      // 8.1 widened it again: the shared revocation recorder and the worker's out-of-band revoke
+      // scan are the same owner path and must survive a dead reasoning layer too.
+      '^(apps/web/app/api/(freeze|unfreeze|sweep)/|apps/web/app/api/spend-permission/revoked/|apps/web/components/freeze/|apps/web/lib/ownerPath\\.ts$|packages/wallet/src/(sweepHome|revocation)\\.ts$|apps/worker/src/jobs/permissionScan\\.ts$)',
       '^packages/reasoning/',
       'owner-path modules never touch reasoning (I7)',
     ),

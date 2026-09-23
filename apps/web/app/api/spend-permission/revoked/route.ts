@@ -5,18 +5,16 @@
 // calldata (`encodeRevoke`, Phase 2) and the owner's wallet sends it. This route only records what
 // the CHAIN says afterwards.
 //
-// The reported `txHash` is never trusted as proof: the route reads `isRevoked(permission)` from the
+// 8.1: the recording itself lives in `recordRevocationIfRevoked` (@steward/wallet), shared with the
+// worker's `permission.scan`, so an owner-reported revoke and one the scan discovers out-of-band
+// leave exactly the same rows behind. This route is the HTTP shell: session, body, status mapping.
+//
+// The reported `txHash` is never trusted as proof: the shared function reads `isRevoked` from the
 // manager and only marks the row revoked when the chain agrees (I5 — an unreadable chain is not a
 // revocation). Idempotent: reporting an already-recorded revoke is a successful no-op.
 import { z } from 'zod';
-import {
-  appendAudit,
-  getActiveSpendPermission,
-  listSpendPermissions,
-  markSpendPermissionRevoked,
-} from '@steward/db';
 import { getEnv, zHex } from '@steward/shared';
-import { isRevoked, parseSpendPermission } from '@steward/wallet';
+import { recordRevocationIfRevoked } from '@steward/wallet';
 import { getAddress } from 'viem';
 import { apiError, getPublicClient } from '@/lib/server';
 import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
@@ -24,6 +22,12 @@ import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 export const dynamic = 'force-dynamic';
 
 const body = z.object({ txHash: zHex }).strict();
+
+const STATUS: Record<'bad_permission' | 'chain_unreadable' | 'audit_failed', number> = {
+  bad_permission: 500,
+  chain_unreadable: 502,
+  audit_failed: 503,
+};
 
 export async function POST(req: Request) {
   const owner = await requireOwner();
@@ -34,40 +38,30 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return apiError(400, 'bad_request', 'txHash is required');
 
-  const active = await getActiveSpendPermission(owner.db, wallet.id);
-  if (!active) {
-    // Nothing active to revoke. If one was already revoked, that is the answer the owner wants.
-    const all = await listSpendPermissions(owner.db, wallet.id);
-    if (all.some((p) => p.status === 'revoked'))
-      return Response.json({ revoked: true, alreadyRevoked: true });
-    return apiError(404, 'no_permission', 'this wallet has no spend permission to revoke');
-  }
-
-  const permission = parseSpendPermission(active.permission);
-  if (!permission.ok) return apiError(500, 'bad_permission', permission.error);
-
-  const manager = getAddress(getEnv().SPEND_PERMISSION_MANAGER_ADDRESS);
-  const onchain = await isRevoked(getPublicClient(), manager, permission.value);
-  if (!onchain.ok) return apiError(502, 'chain_unreadable', onchain.error);
-  if (!onchain.value)
-    return apiError(
-      409,
-      'not_revoked_onchain',
-      'the chain still shows this permission as live; wait for the transaction to confirm and try again',
-    );
-
-  const now = new Date();
-  const audited = await appendAudit(owner.db, {
+  const recorded = await recordRevocationIfRevoked({
+    db: owner.db,
+    publicClient: getPublicClient(),
+    manager: getAddress(getEnv().SPEND_PERMISSION_MANAGER_ADDRESS),
     walletId: wallet.id,
     actor: 'owner',
-    event: 'SPEND_PERMISSION_REVOKED',
-    entityType: 'spend_permission',
-    entityId: active.permissionHash,
-    payload: { permissionHash: active.permissionHash, txHash: parsed.data.txHash },
-    createdAt: now,
+    txHash: parsed.data.txHash,
+    now: new Date(),
   });
-  if (!audited.ok) return apiError(503, 'audit_failed', audited.error.message);
+  if (!recorded.ok)
+    return apiError(STATUS[recorded.error.code], recorded.error.code, recorded.error.message);
 
-  await markSpendPermissionRevoked(owner.db, active.id, now);
-  return Response.json({ revoked: true, alreadyRevoked: false });
+  switch (recorded.value.state) {
+    case 'none':
+      return apiError(404, 'no_permission', 'this wallet has no spend permission to revoke');
+    case 'not-revoked':
+      return apiError(
+        409,
+        'not_revoked_onchain',
+        'the chain still shows this permission as live; wait for the transaction to confirm and try again',
+      );
+    case 'already-recorded':
+      return Response.json({ revoked: true, alreadyRevoked: true });
+    case 'recorded':
+      return Response.json({ revoked: true, alreadyRevoked: false });
+  }
 }
