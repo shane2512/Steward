@@ -201,7 +201,8 @@ describe('SpendLimitSign with a companion treasury', () => {
     // Sent verbatim, and wrapped so the server can verify it before the wallet is deployed.
     expect(body.permission).toBe(TYPED_DATA.message);
     const unwrapped = parseErc6492Signature(body.signature);
-    expect(getAddress(unwrapped.address!)).toBe(COINBASE_FACTORY_V1_1);
+    expect(unwrapped.address).toBeDefined();
+    expect(getAddress(unwrapped.address as `0x${string}`)).toBe(COINBASE_FACTORY_V1_1);
     expect(unwrapped.signature).not.toBe(body.signature); // it really was wrapped
   });
 });
