@@ -2,7 +2,7 @@
 // policy lives in `packages/wallet/src/executor.ts`; what lives HERE is the atomicity that only the
 // database can provide (I10): the single-use receipt nonce and the one-execution-per-proposal-hash
 // unique index, claimed together in one transaction.
-import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, sql } from 'drizzle-orm';
 import { err, ok, type Result } from '@steward/shared';
 import type { Db } from './client';
 import {
@@ -236,6 +236,25 @@ export async function insertLedgerEntry(
 ): Promise<LedgerEntryRow | undefined> {
   const [inserted] = await db.insert(ledgerEntries).values(row).returning();
   return inserted;
+}
+
+/**
+ * 8.4 — one page of the ledger for `/api/export`, oldest first, cursor by `createdAt` so a big
+ * export can be resumed. Read-only.
+ */
+export async function listLedgerPage(
+  db: Db,
+  walletId: string,
+  opts: { limit: number; after?: Date },
+): Promise<LedgerEntryRow[]> {
+  const conds = [eq(ledgerEntries.walletId, walletId)];
+  if (opts.after !== undefined) conds.push(gt(ledgerEntries.createdAt, opts.after));
+  return db
+    .select()
+    .from(ledgerEntries)
+    .where(and(...conds))
+    .orderBy(asc(ledgerEntries.createdAt))
+    .limit(opts.limit);
 }
 
 /** Rolling-window outflows for R07. Same window the rule assumes (24h). */

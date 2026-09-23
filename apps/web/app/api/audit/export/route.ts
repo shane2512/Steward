@@ -2,11 +2,15 @@
 // append-only audit chain. Read-only; cursor-paginated by row id rather than streamed (see
 // packages/db's listAuditPage ponytail note — fine at hackathon scale, upgrade if it ever isn't).
 //
+// 8.4: the row shape and the CSV quoting now live in `@/lib/auditRows`, shared with the plain
+// `GET /api/audit` listing, so the two can never disagree about what an audit row is.
+//
 // Every row exported here was already checked for secret-looking keys when it was WRITTEN
 // (appendAudit refuses those, SECURITY §6), so there is nothing to redact on the way out.
 import { z } from 'zod';
 import { listAuditPage } from '@steward/db';
 import { canonicalJson } from '@steward/shared';
+import { auditRowJson, csvField } from '@/lib/auditRows';
 import { apiError } from '@/lib/server';
 import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 
@@ -17,11 +21,6 @@ const zQuery = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(200),
   cursor: z.coerce.number().int().positive().optional(),
 });
-
-const csvField = (v: unknown): string => {
-  const s = v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
 
 export async function GET(req: Request) {
   const owner = await requireOwner();
@@ -42,17 +41,7 @@ export async function GET(req: Request) {
 
   if (format === 'json') {
     return Response.json({
-      rows: rows.map((r) => ({
-        id: r.id,
-        createdAt: r.createdAt.toISOString(),
-        actor: r.actor,
-        event: r.event,
-        entityType: r.entityType,
-        entityId: r.entityId,
-        payload: JSON.parse(canonicalJson(r.payload)) as unknown,
-        prevHash: r.prevHash,
-        rowHash: r.rowHash,
-      })),
+      rows: rows.map(auditRowJson),
       nextCursor,
     });
   }

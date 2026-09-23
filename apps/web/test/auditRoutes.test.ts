@@ -11,7 +11,13 @@ vi.mock('../lib/session', () => ({
 }));
 
 import { freshTestDb, testDbUrl } from '../../../packages/db/test/helpers';
-import { appendAudit, ensureWalletForUser, upsertUserByAddress, type Db } from '@steward/db';
+import {
+  appendAudit,
+  ensureWalletForUser,
+  schema,
+  upsertUserByAddress,
+  type Db,
+} from '@steward/db';
 
 const OWNER = getAddress('0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C');
 
@@ -22,8 +28,10 @@ let pool: {
 };
 let walletId: string;
 let routes: {
+  audit: typeof import('../app/api/audit/route');
   export: typeof import('../app/api/audit/export/route');
   verify: typeof import('../app/api/audit/verify/route');
+  dataExport: typeof import('../app/api/export/route');
 };
 
 const get = (path: string) => new Request(`http://localhost:3000${path}`);
@@ -53,8 +61,10 @@ beforeAll(async () => {
   }
 
   routes = {
+    audit: await import('../app/api/audit/route'),
     export: await import('../app/api/audit/export/route'),
     verify: await import('../app/api/audit/verify/route'),
+    dataExport: await import('../app/api/export/route'),
   };
   session.current = { userId: user.id, address: OWNER };
 });
@@ -111,6 +121,108 @@ describe('GET /api/audit/export', () => {
     expect(lines[0]).toBe('id,createdAt,actor,event,entityType,entityId,payload,prevHash,rowHash');
     expect(lines).toHaveLength(3); // header + 2 rows
     expect(res.headers.get('x-next-cursor')).toBeTruthy();
+  });
+});
+
+// 8.4 — the plain listing (API.md `GET /api/audit?cursor=`). Same rows as the json export, without
+// the attachment headers.
+describe('GET /api/audit', () => {
+  it('requires a session', async () => {
+    expect((await routes.audit.GET(get('/api/audit'))).status).toBe(401);
+  });
+
+  it('rejects a nonsense cursor or limit', async () => {
+    await signedIn();
+    expect((await routes.audit.GET(get('/api/audit?cursor=-1'))).status).toBe(400);
+    expect((await routes.audit.GET(get('/api/audit?limit=9999'))).status).toBe(400);
+  });
+
+  it('pages oldest-first and carries the chain hashes so a caller can verify it themselves', async () => {
+    await signedIn();
+    const res = await routes.audit.GET(get('/api/audit?limit=2'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      rows: { event: string; rowHash: string }[];
+      nextCursor: number | null;
+    };
+    expect(body.rows.map((r) => r.event)).toEqual(['EVENT_0', 'EVENT_1']);
+    expect(body.rows[0]?.rowHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(body.nextCursor).not.toBeNull();
+
+    const next = await routes.audit.GET(get(`/api/audit?limit=2&cursor=${body.nextCursor}`));
+    const page2 = (await next.json()) as { rows: { event: string }[] };
+    expect(page2.rows.map((r) => r.event)).toEqual(['EVENT_2', 'EVENT_3']);
+  });
+
+  it('returns the last page with a null cursor', async () => {
+    await signedIn();
+    const body = (await (await routes.audit.GET(get('/api/audit?limit=50'))).json()) as {
+      rows: unknown[];
+      nextCursor: number | null;
+    };
+    expect(body.rows).toHaveLength(5);
+    expect(body.nextCursor).toBeNull();
+  });
+});
+
+// 8.4 — ledger + decisions (API.md `GET /api/export?format=csv|json`).
+describe('GET /api/export', () => {
+  const QUOTED_LABEL = 'Alex, "the contractor"';
+
+  it('requires a session', async () => {
+    expect((await routes.dataExport.GET(get('/api/export?format=json'))).status).toBe(401);
+  });
+
+  it('rejects an unknown format or dataset', async () => {
+    await signedIn();
+    expect((await routes.dataExport.GET(get('/api/export?format=xml'))).status).toBe(400);
+    expect((await routes.dataExport.GET(get('/api/export?format=json&dataset=wat'))).status).toBe(
+      400,
+    );
+  });
+
+  it('json: emits money as decimal strings, never JS numbers (I12)', async () => {
+    await signedIn();
+    // Straight to the table: `insertLedgerEntry` wants an execution id and this row does not need
+    // one (the column is nullable — a ledger entry can predate its execution row being resolved).
+    await db.insert(schema.ledgerEntries).values({
+      walletId,
+      token: getAddress('0x036CbD53842c5426634e7929541eC2318f3dCF7e'),
+      amount: 1_234_567_890n,
+      direction: 'out',
+      counterpartyLabel: QUOTED_LABEL,
+      usdMicro: 1_234_567_890n,
+    });
+    const res = await routes.dataExport.GET(get('/api/export?format=json'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ledger: { amount: unknown; usdMicro: unknown }[];
+      decisions: unknown[];
+    };
+    expect(body.ledger).toHaveLength(1);
+    expect(body.ledger[0]?.amount).toBe('1234567890');
+    expect(typeof body.ledger[0]?.usdMicro).toBe('string');
+    expect(Array.isArray(body.decisions)).toBe(true);
+  });
+
+  it('csv: two labelled sections, with commas and quotes escaped', async () => {
+    await signedIn();
+    const res = await routes.dataExport.GET(get('/api/export?format=csv'));
+    expect(res.headers.get('content-type')).toContain('text/csv');
+    expect(res.headers.get('content-disposition')).toContain('attachment');
+    const text = await res.text();
+    expect(text).toContain('# ledger');
+    expect(text).toContain('# decisions');
+    // One CSV field: the comma must not split it and the inner quotes must be doubled.
+    expect(text).toContain(`"${QUOTED_LABEL.replace(/"/g, '""')}"`);
+  });
+
+  it('dataset=ledger omits decisions entirely', async () => {
+    await signedIn();
+    const body = (await (
+      await routes.dataExport.GET(get('/api/export?format=json&dataset=ledger'))
+    ).json()) as Record<string, unknown>;
+    expect(Object.keys(body)).toEqual(['ledger']);
   });
 });
 
