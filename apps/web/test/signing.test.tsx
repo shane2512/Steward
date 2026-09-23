@@ -34,6 +34,7 @@ vi.mock('wagmi', () => ({
   useSwitchChain: () => ({ switchChain: mocks.switchChain, isPending: false }),
   useSignMessage: () => ({ signMessageAsync: mocks.signMessageAsync }),
   useSignTypedData: () => ({ signTypedDataAsync: mocks.signTypedDataAsync }),
+  usePublicClient: () => undefined,
 }));
 vi.mock('../lib/useApi', () => ({
   useApi: () => ({

@@ -26,6 +26,7 @@ vi.mock('wagmi', () => ({
   useSwitchChain: () => ({ switchChain: vi.fn(), isPending: false }),
   useSignMessage: () => ({ signMessageAsync: vi.fn() }),
   useSignTypedData: () => ({ signTypedDataAsync: vi.fn() }),
+  usePublicClient: () => undefined,
 }));
 vi.mock('../lib/useApi', () => ({
   // Only /api/onboarding has canned data here; the signing steps' own reads resolve to undefined.
