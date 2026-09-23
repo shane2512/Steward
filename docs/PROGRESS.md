@@ -1632,6 +1632,132 @@ true and in-scope for 7.9 regardless of how it was found. `pnpm test:e2e` remain
 **Phase 7 is now complete** (7.9 done, 7.10 skipped by human decision) — awaiting the human's
 "continue". Phase 8 requires Opus (Sonnet sub-tasks 8.5, 8.6 per PHASES.md).
 
+## Phase 8 part 3 — red-team, load/soak, security review gate (Opus, tasks 8.7 + 8.9, 2026-09-23)
+
+**Phase 8 is COMPLETE.** The gate **PASSES**: no open HIGH finding.
+Full detail lives in **`docs/SECURITY_REVIEW.md`** (485 lines) — this section is the index, not a
+duplicate of it.
+
+### What the deliverable contains
+
+| § | Content |
+|---|---|
+| 2 | T1–T17 threat → control → test evidence, updated from Phase 3's Policy-Engine-only matrix to cover the risk gate, executor, loop, signing UI, owner path and 8.x hardening |
+| 3 | **Every row of `SECURITY.md` §8 executed: 19/19.** 17 PASS, 2 MITIGATED-WITH-RESIDUAL-RISK (rows 3 and 4 — the custody model being honest), 0 FAIL, 0 skipped. Two rows needed a recorded manual check (owner-wallet compromise, phishing site) with the exact steps written down |
+| 4 | Five NEW adversarial scenarios RT-1…RT-5 against the owner path and notifications |
+| 5 | RR-1…RR-17 disposition: **8 closed, 7 accepted, 2 open** |
+| 6 | Findings F-1…F-9 with severities, plus the audit-tail-truncation decision deferred since 1.9 |
+| 7 | 8.9 load/soak numbers |
+| 8 | Open risks — the honest list, including the standing "no real browser Smart Wallet click-tested here" gap |
+| 9 | Residual-risk statement: what the custody model actually guarantees, and the OQ-2 production path that would remove the bound |
+
+### 8.7 — the five new red-team attempts (3 clean, 2 produced fixes)
+
+- **RT-1 injected notification body as executable content → PASS.** Static scan of every `.ts`/`.tsx`
+  the web app ships for `dangerouslySetInnerHTML`, `innerHTML =`, `insertAdjacentHTML`,
+  `document.write`, `eval`/`new Function` — all zero, and the scan asserts it looked at a real file
+  set so it cannot pass vacuously. Telegram sends with **no `parse_mode`**.
+  (`apps/web/test/redteam.test.ts`, +`packages/db/test/notifications.test.ts`.)
+- **RT-2 Telegram as SSRF / exfil → host side PASS, destination side tightened.** The URL is a
+  literal template and the chat id is a JSON body field, asserted for five hostile ids. But
+  Telegram accepts `@publicchannel` as a `chat_id`, and `POST /api/me/telegram` takes no fresh
+  signature — so `apps/web/app/api/me/telegram/route.ts` now accepts **numeric ids only**.
+- **RT-3 rate-limiter keying bypass → PASS where it matters.** Every expensive bucket is keyed by
+  `userId`, which a caller cannot rotate. The two unauthenticated buckets follow `x-forwarded-for`
+  and are therefore a **cost** control, not a security one — now pinned by a test rather than
+  assumed (F-4, LOW).
+- **RT-4 concurrent freeze/unfreeze/sweep → REAL FINDING, FIXED.** `verifyFreezeSignature` cleared
+  the session nonce **before** checking the stored action matched, so a mismatched request burned
+  the owner's live confirmation — a denial of the one control that stops the agent (I7). The check
+  now runs before the nonce is spent. Three concurrency tests added; a replayed confirmation (the
+  real iron-session cookie-copy race) is proven to be a safe no-op.
+- **RT-5 companion treasury derived for the wrong owner → PASS.** A later `getCode` flip cannot move
+  an existing treasury (the row is resolved once and is the record of truth), and a SIWE message
+  naming somebody else creates no user row at all.
+
+### 8.9 — load/soak
+
+`STEWARD_FORK=1 STEWARD_SOAK_ROUNDS=120 npx vitest run apps/worker/test/fork/soak.fork.test.ts`
+(new, opt-in like every fork suite, reuses the Phase 5/6 anvil harness).
+
+10 wallets, each with its own agent address, on one anvil fork of Base Sepolia + real Postgres.
+120 rounds × 30 s = **one simulated hour**; 3 concurrent triggers per wallet per round.
+
+| Metric | Value |
+|---|---|
+| Triggers fired / iterations run | 3,600 / **1,200** (2,400 refused by the advisory lock, as intended) |
+| Outcomes | 200 executed · 1,000 denied · 0 skipped · 0 failed |
+| Executions · submitted · `TxSender.send` | 200 · 200 · **200** |
+| **Duplicate executions** | **0** |
+| **p50 / p95 / p99 / max** | **119 / 210 / 270 / 404 ms** (NFR-2 target < 20 s) |
+| Audit chain after the run | verifies for all 10 wallets |
+
+**Wall-clock was compressed, nothing else.** The clock is injected, so a round advances `now` by the
+DEMO cadence instead of sleeping. Iteration count, concurrency, chain work, policy evaluation, the
+`eth_simulateV1` risk gate, the executor, the confirmer and the rolling R07/R14 windows are all
+real. 200 executions is exactly 20/wallet = `MAX_ACTIONS_PER_HOUR`, so the run also demonstrates R14
+and the circuit breaker firing under load (the harness unfreezes breaker-frozen wallets between
+rounds, as an owner would, or the "hour" would have been ten minutes).
+
+### Real bug the soak found (F-2, MEDIUM, fixed)
+
+**The worker's per-wallet advisory lock and all its query traffic came from the same 10-connection
+pool.** `tryWalletLock` holds its connection for the whole iteration, and everything inside that
+iteration needs one too — so at wallet concurrency ≥ the pool size the worker **deadlocks
+permanently**. The first soak attempt hung for 70 minutes before this was understood. Latent in the
+MVP (the `loop.run` handler concurrency is 1), fatal on scale-out. Fixed in
+`apps/worker/src/index.ts` with a separate `lockPool`; the soak harness does the same.
+
+### Findings
+
+| ID | Severity | Status |
+|---|---|---|
+| F-1 no 24 h cooldown on recipient/policy changes (`SECURITY` §8 row 3) | **MEDIUM** | **OPEN** — does not block (spec labels it `should-have`; the owner-signature half is built). Deliberately NOT rushed: it needs a new rule in a 100%-branch-covered engine and a schema column, and `POLICY_ENGINE.md` defines no such rule. Recommend specifying it as R22 |
+| F-2 shared connection pool deadlock | MEDIUM | **FIXED** |
+| F-3 `/api/me/telegram` needs no fresh signature | LOW | narrowed (numeric ids), accepted |
+| F-4 unauthenticated buckets key on `x-forwarded-for` | LOW | accepted, pinned by test |
+| F-5 a third-party page can induce a signature elsewhere | LOW | accepted, structural |
+| F-6 iron-session cookie-copy lets one freeze nonce be spent twice | LOW | accepted — every outcome is idempotent and safe-direction |
+| F-7 SERV golden fixtures skip instead of failing when missing | LOW | open (RR-9) |
+| F-8 `untrusted` carries only vault names + caller injection | LOW | open (RR-16) |
+| F-9 audit tail truncation undetectable | LOW | **DECIDED: accepted for the MVP with a production plan** — see below |
+
+### The audit-tail-truncation decision (deferred from 1.9, again from 8.4, decided here)
+
+**Accepted as a residual risk for the MVP.** Neither mitigation was built: a second DB role is a
+*deployment* change this repo cannot make without breaking every local run (dev and test run as the
+owner), and an external anchor is a new subsystem, which a review gate is the worst moment to add.
+The threat model is an attacker who already holds DB-owner rights, at which point
+`RECEIPT_HMAC_SECRET` is the bigger prize than the log. **Production checklist:** `GRANT INSERT,
+SELECT ON audit_log TO <app_role>` with ownership elsewhere, and send the weekly `(rows, head)` pair
+with the 8.6 report — the cheapest anchor, over a transport that already exists.
+
+### Exit gate (run in full after every change above)
+
+| Gate | Result |
+|---|---|
+| `pnpm typecheck` | 9/9 successful |
+| `pnpm lint` | clean (eslint + prettier) |
+| `pnpm check:arch` | **0 violations, 397 modules / 1064 dependencies**; all 4 fixture rules fire (7 deliberate violations) + 10 purity problems. **No rule weakened** |
+| `pnpm test` | **1114 passed**, 28 skipped (pre-existing opt-in fork/e2e), 71 files |
+| policy coverage | 344/344, **100% statements / branches / functions / lines** |
+| `pnpm test:adversarial` | 60 cases, **GUARANTEE 48/48 (100%)**, benign false positives 0/12 |
+| 8.9 soak (opt-in) | passed: 1,200 iterations, 0 duplicates, p95 210 ms |
+| secrets in git | none; `.env.local` never read; `docs/design/Photos/` untouched |
+
+### Tests added this part
+
+`apps/web/test/redteam.test.ts` (7, new) · `apps/web/test/ownerPathApi.test.ts` (+3 RT-4) ·
+`apps/web/test/sessionHardening.test.ts` (+2 RT-3) · `apps/web/test/authVerifyTreasury.test.ts`
+(+2 RT-5) · `apps/web/test/notificationsRoutes.test.ts` (+4 RT-2 route) ·
+`packages/db/test/notifications.test.ts` (+2 RT-1/RT-2 transport) ·
+`apps/worker/test/fork/soak.fork.test.ts` (2, new, opt-in). Total `pnpm test` 1094 → 1114.
+
+### Not done in Phase 8
+
+- **8.8 (x402)** — a `SHOULD`, gated on V-11 and on every MUST being green. Rules X01–X03 do not
+  exist; the `x402` block in `Policy` is parsed and read by nothing. Not started.
+
 ## Phase 8 part 1 — owner-path hardening, session, secrets, audit (Opus, tasks 8.1–8.4, 2026-09-23)
 
 Phase 8 is **NOT complete**. Parts 2/3 remain: 8.5/8.6 notifications (Sonnet), 8.7/8.9 red-team +
@@ -2047,7 +2173,8 @@ DENY/ESCALATE, 0 benign false positives.
 - The weekly-report yield figure has the documented per-transaction-timing ceiling above; upgrade
   path is deriving shares from ledger deltas instead of snapshot deltas once that bookkeeping exists.
 - No new dependency was added (D-109 below is the only Decisions entry this part needed).
-- Phase 8 part 3 (8.7 red-team, 8.9 load/soak, `docs/SECURITY_REVIEW.md`) is untouched.
+- Phase 8 part 3 (8.7 red-team, 8.9 load/soak, `docs/SECURITY_REVIEW.md`) is now DONE — see the
+  "Phase 8 part 3" section at the top of this file.
 
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
@@ -2062,6 +2189,10 @@ DENY/ESCALATE, 0 benign false positives.
 | D-107 | 2026-09-23 | Rate limiting is an **in-process fixed-window counter** (`apps/web/lib/rateLimit.ts`), no new dependency, and `/api/freeze`, `/api/freeze/prepare` and `/api/spend-permission/revoked` are **exempt from it** | Single-instance is the stance ARCHITECTURE §7 already takes for the worker, and a Map plus a timestamp is a dozen lines against a Redis dependency or a new table. The exemptions are I7: a limiter that can refuse a freeze turns a safety feature into denial of the one control that stops the agent, and the revoke report only ever moves state toward frozen. A test asserts no bucket exists for those routes | Postgres-backed counters (deferred to horizontal scaling); `@upstash/ratelimit` or similar (rejected: a hosted dependency for a counter); limiting every route uniformly including freeze (rejected: violates I7) |
 | D-108 | 2026-09-23 | **No owner-path exception to I6 was added.** A failed audit write still refuses freeze/unfreeze/sweep (503 `audit_failed`) — the question Phase 1.9 raised for 8.1 is answered "no exception needed" | If the database is unreachable, the agent is ALREADY stopped: `frozen` lives in that database, the worker halts on a DB outage because it cannot audit (SECURITY §8), and every execution path writes audit before it acts. So a DB outage IS a freeze, and weakening I6 to write a freeze flag nobody can read would buy nothing while breaking append-only. The owner's real backstop in that scenario needs no Steward at all: revoke the spend permission directly from their own Coinbase wallet, which Phase 7.8 already surfaces as unsigned calldata and 8.1's `permission.scan` now reconciles automatically once the DB is back | Writing the frozen flag first and auditing best-effort (rejected: breaks I6 for no gain — an unreadable DB cannot serve the flag either); an in-memory freeze latch in the web process (rejected: the web process does not execute anything, and the worker is a separate process that would never see it) |
 | D-109 | 2026-09-23 | The Telegram best-effort send lives in ONE place — inside `insertNotification` (`packages/db/src/executions.ts`) — rather than threaded through the ~6 existing call sites that already write notifications (pipeline.ts, confirmer.ts, jobs.ts, the new freeze route). `getEnv()` is called there directly and wrapped in try/catch so a caller whose env is not fully valid degrades to "Telegram off" instead of throwing | Every one of those call sites already imports `insertNotification` from `@steward/db`; making each one ALSO import and call a `sendTelegramMessage` helper (and thread `Env`/`chatId` through call signatures that do not have them) is pure churn for identical behaviour at every site. `getEnv()` is a cached, process-wide singleton (D-106) reachable from anywhere in `packages/`/`apps/`, so no dependency injection is needed just to reach one optional env var | Threading `env` through `PipelineDeps`/`ConfirmDeps`/`JobDeps` to each call site (rejected: touches 6+ files for no behavioural difference); a separate outbox table polled by a new job (rejected: more moving parts than a fire-and-forget `fetch` needs) |
+| D-110 | 2026-09-23 | **The freeze/unfreeze/sweep confirmation nonce is checked against its stored ACTION before it is spent**, not after (`apps/web/lib/ownerPath.ts`, 8.7 finding RT-4) | Spending it first meant a stray or hostile POST to `/api/freeze` burned the confirmation the owner had just prepared for an unfreeze, and vice versa — a denial of the one control that stops the agent (I7). Nothing became replayable: the nonce is still single-use for its own action, still bound to `walletId`, still TTL-bound | Leaving the clear-first ordering (rejected: I7); a per-action nonce slot so both can be live at once (rejected: more session state for a case the UI never produces) |
+| D-111 | 2026-09-23 | **The worker gives the per-wallet advisory lock its own connection pool** (`apps/worker/src/index.ts`, 8.9 finding F-2) | `tryWalletLock` holds a connection for the whole iteration and everything inside that iteration needs one too; from one 10-connection pool they deadlock permanently the moment wallet concurrency reaches the pool size. Found by the soak, which hung for 70 minutes. Two lines against a hard ceiling on wallet concurrency | Raising `max` on the single pool (rejected: moves the ceiling, does not remove it); releasing the lock connection during the iteration (rejected: that is not what an advisory lock is) |
+| D-112 | 2026-09-23 | **Audit tail truncation is formally ACCEPTED as an MVP residual risk** (F-9), with a production checklist rather than code: a second DB role, plus the weekly `(rows, head)` pair sent over the 8.6 report transport | Deferred at 1.9 and again at 8.4; decided here rather than deferred a third time. The threat model is an attacker who already holds DB-owner rights, at which point `RECEIPT_HMAC_SECRET` is the bigger prize. The role change is a deployment change this repo cannot make without breaking every local run (dev/test run as the owner), and an external anchor is a new subsystem — a review gate is the worst moment to add one | Building the anchor table now (rejected: new subsystem at a gate); applying the GRANT in a migration (rejected: breaks local dev and test) |
+| D-113 | 2026-09-23 | **`POST /api/me/telegram` accepts numeric chat ids only** (8.7 finding RT-2) | Telegram also accepts `@publicchannel` as a `chat_id`, so an unconstrained string let a hijacked session redirect an owner's treasury notifications into a *public* channel. Every real private or group chat id is an integer, so a one-line regex removes that destination class at zero cost to the owner | Requiring a fresh owner signature on the route (rejected for now: it is a notification preference, and the residual — an attacker's own private chat — leaks nothing `/api/dashboard` does not already show that session, recorded as F-3) |
 | D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
 | D-2 | 2026-09-20 | APPROVED by human 2026-09-20: vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
 | D-3 | 2026-09-20 | APPROVED by human 2026-09-20: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
@@ -2320,25 +2451,32 @@ DENY/ESCALATE, 0 benign false positives.
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 8 part 1 is done (tasks 8.1-8.4, 2026-09-23).** See "Phase 8 part 1" above for what was
-  built versus what Phase 7 had already shipped, the gate numbers, and the six carried-forward risks.
-  Full gate green: typecheck 9/9, lint clean, check:arch 0 (384 modules), 1072 tests, policy 100%
-  branches, adversarial 48/48.
-- **Phase 8 is NOT complete.** Remaining, in order:
-  - **8.5 / 8.6 (Sonnet)** — notifications (in-app centre + optional Telegram) and the weekly
-    treasury report. `insertNotification` and the `notifications` table already exist (Phase 6 writes
-    risk/execution/escalation rows into them); what is missing is the UI, the Telegram transport and
-    the weekly job. Run `/model sonnet`.
-  - **8.7 (Opus)** — red-team: execute every row of SECURITY §8 as a test or scripted check. Start
-    from the six carried-forward risks in "Phase 8 part 1"; three of them (audit tail truncation, the
-    I7 rate-limit exemptions, SameSite vs the live wallet popup) are already written up so 8.7 does
-    not rediscover them.
-  - **8.9 (Opus)** — load/soak: 10 wallets x 1 hour in DEMO_MODE on a fork; no duplicate executions,
-    record p95 iteration time.
-  - **Opus review gate** — `docs/SECURITY_REVIEW.md`: threat -> control -> test evidence for T1-T17.
-    Any open HIGH blocks the gate. The Phase 3 threat matrix in this file is the starting point.
-  - 8.8 (x402) is a SHOULD and only if V-11 is verified and every MUST is green.
-- Do not start 8.5 onward before the human says so.
+- **PHASE 8 IS COMPLETE (2026-09-23).** All MUST tasks done: 8.1-8.4 (part 1), 8.5-8.6 (part 2),
+  8.7 + 8.9 + the Opus review gate (part 3). **The gate PASSES: no open HIGH finding.**
+  The formal deliverable is **`docs/SECURITY_REVIEW.md`** — T1-T17, all 19 rows of SECURITY §8,
+  RT-1..RT-5, RR-1..RR-17 dispositions, findings F-1..F-9, the soak numbers, open risks and the
+  custody residual-risk statement.
+  Full gate green: typecheck 9/9, lint clean, check:arch 0 violations (397 modules, all fixtures
+  firing), **1114 tests**, policy 100% branches, adversarial 48/48, soak 1,200 iterations /
+  0 duplicates / p95 210 ms.
+- **Awaiting the human's "continue".** Do not start Phase 9 before then.
+- **Phase 9 requires Sonnet** (with an **Opus** gate at 9.8). Run `/model sonnet` first.
+- Carried into Phase 9, from `docs/SECURITY_REVIEW.md` §8 — none of these are closed:
+  1. **F-1 (MEDIUM, open)** — no 24 h cooldown on recipient/policy changes. The largest named gap.
+     Spec it as a Policy Engine rule (R22), do not bolt it on.
+  2. **No real browser Smart Wallet has ever been click-tested here** (standing since Phase 0, V-10,
+     widened by the Phase 7 addendum). A human must confirm connect + companion address + a live
+     spend-permission signature + SameSite=strict across the wallet popup before any deployment
+     that holds value.
+  3. **Telegram never tested against a real bot** (`TELEGRAM_BOT_TOKEN` unset here).
+  4. **Audit tail truncation** (F-9) accepted for the MVP — the production checklist is a second DB
+     role plus the weekly `(rows, head)` anchor over the 8.6 report transport.
+  5. Phase 9's `scripts/demo/attack.ts` must feed the demo memo through `gather`'s `extraUntrusted`
+     seam (RR-16 / F-8), and should narrate the real payroll-before-yield order (RR-15).
+  6. The demo will hit the CDP faucet rate limit and the MockPriceFeed staleness (R12, 60 s) — both
+     already recorded under "Phase 6" and "Phase 5" in Known issues.
+- **8.8 (x402) was not built.** A SHOULD, gated on V-11; rules X01-X03 do not exist. Only revisit it
+  if the human asks, and only with every MUST still green.
 - Screenshots: `docs/design/shots/app/` now holds all 20 app screens at 390 and 1280 px in dark and
   light (80 files), including the 7.7 screens and the three S9 steps. Regenerate with
   `DEMO_MODE=true pnpm --filter @steward/web dev` then `node scripts/app-shots.mjs`.
