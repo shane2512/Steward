@@ -3,10 +3,10 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 7 complete + addendum** (7.10 skipped by human decision; companion-treasury addendum
-built and verified 2026-09-23), awaiting human "continue". Phase 8 requires Opus (Sonnet sub-tasks
-8.5, 8.6 per PHASES.md).
-Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8 — both done)
+Phase: **Phase 8 IN PROGRESS — part 1 done** (tasks 8.1-8.4, Opus, 2026-09-23). Phase 8 is NOT
+complete: 8.5/8.6 notifications (Sonnet) and 8.7/8.9 red-team + load/soak + `docs/SECURITY_REVIEW.md`
+(Opus) remain. Awaiting human "continue".
+Required model: Phase 8 = Opus (Sonnet sub-tasks 8.5, 8.6)
 Last updated: 2026-09-23
 
 **7.8 note:** the Opus agent's post-close-out visual QA/screenshot pass was cut short on the human's
@@ -1632,6 +1632,191 @@ true and in-scope for 7.9 regardless of how it was found. `pnpm test:e2e` remain
 **Phase 7 is now complete** (7.9 done, 7.10 skipped by human decision) — awaiting the human's
 "continue". Phase 8 requires Opus (Sonnet sub-tasks 8.5, 8.6 per PHASES.md).
 
+## Phase 8 part 1 — owner-path hardening, session, secrets, audit (Opus, tasks 8.1–8.4, 2026-09-23)
+
+Phase 8 is **NOT complete**. Parts 2/3 remain: 8.5/8.6 notifications (Sonnet), 8.7/8.9 red-team +
+load/soak, and the formal `docs/SECURITY_REVIEW.md` Opus gate.
+
+### What ALREADY EXISTED (re-verified, not rebuilt)
+
+Read this table first — most of 8.1 and 8.4 was built ahead of schedule in Phase 7.
+
+| Task asks for | Where it already lives | Verdict |
+|---|---|---|
+| `/api/freeze`, `/api/unfreeze`, `/api/sweep`, `/api/spend-permission/revoked` per SECURITY §4 | Phase 7.8 | Satisfied in letter and spirit. Untouched except the two 8.2 changes below |
+| "no reasoning imports; check:arch rule proves it" | `owner-path-no-reasoning` in `.dependency-cruiser.cjs` + 2 deliberate-violation fixtures (`sweepHome.ts`, `apps/web/app/api/freeze/route.ts`) | Still fires. NOT duplicated — the existing rule was **widened**, not replaced |
+| `GET /api/audit/verify` (recompute chain, name the broken row) | Phase 7.7 | Satisfied |
+| `GET /api/audit/export?format=csv\|json`, cursor-paginated | Phase 7.7 | Satisfied |
+| Secret `toString()`/`toJSON()`/inspect redaction; `parseEnv` wraps secrets | Phase 1 `packages/shared/src/env.ts` | Satisfied |
+| CDP-credential redaction + static "no `process.env[` in wallet" checks | Phase 2 `packages/wallet/test/secrets.test.ts` | Satisfied |
+| gitleaks in CI | Phase 1.10, `.github/workflows/ci.yml` — `gitleaks/gitleaks-action@v2`, already wired, not just planned | Satisfied |
+| Fresh server-issued single-use-nonce signatures on sensitive routes | Phase 7.6 (recipients, policy/activate, spend-permission, approvals) + 7.8 (freeze/unfreeze) | Satisfied for all but `/api/sweep` — see 8.2 |
+
+### What was actually BUILT
+
+**8.1 — automatic on-chain revoke detection** (the one genuinely missing piece)
+
+| File | What |
+|---|---|
+| `packages/wallet/src/revocation.ts` (new) | `recordRevocationIfRevoked` — the ONE implementation of "the chain says this permission is revoked": reads `isRevoked`, audits, marks the row revoked, freezes the wallet, cancels pending approvals. Returns `Result<RevocationOutcome, RevocationError>` with states `none` / `already-recorded` / `not-revoked` / `recorded` so an HTTP caller can map statuses |
+| `apps/web/app/api/spend-permission/revoked/route.ts` (rewritten as a shell) | Same route, same statuses, same behaviour — now delegates to the shared function, so an owner-reported revoke and one the scan discovers leave IDENTICAL rows |
+| `apps/worker/src/jobs/permissionScan.ts` (new) | `permission.scan`, cron `*/5 * * * *`. For every active wallet with a live permission it asks the chain and records an out-of-band revoke with **no user action at all**. `scanForRevocations` is exported so a test drives it without pg-boss |
+| `.dependency-cruiser.cjs` | `owner-path-no-reasoning` widened to cover `packages/wallet/src/revocation.ts` and `apps/worker/src/jobs/permissionScan.ts`. **No rule weakened** |
+| `scripts/fixtures/arch/apps/worker/src/jobs/permissionScan.ts` (new) | Deliberate violation proving the widened regex branch really fires (verified: the rule now reports 3 violations, one per fixture) |
+| `apps/worker/test/permissionScan.test.ts` (new, 6 tests) | Real Postgres, real audit chain, `@steward/reasoning` mocked to throw on import (I7 at runtime), `isRevoked` stubbed and **every other chain read rejects** so nothing else can sneak onto this path |
+
+Design notes:
+
+- **Why a separate queue, not a hitch-hike on `risk.scan`:** `risk.scan` `continue`s past any wallet
+  whose `gather` failed — and a revoked permission is exactly the kind of thing that makes `gather`
+  fail, so detection would be skipped precisely when it matters most.
+- **Why recording a revoke also freezes:** a revoked permission means the agent can no longer pull
+  funds, so freezing costs nothing operationally; in the §4 flow the wallet is already frozen (no-op),
+  and when the revoke came from the owner's own Coinbase wallet it is the only way the UI stops
+  claiming the agent is live. SECURITY §8 "Immediate revoke → Freeze flow §4".
+- **Fails closed (I5):** an unreadable chain leaves the permission ACTIVE, which keeps the executor's
+  own `isRevoked`/frozen guards in charge, rather than falsely claiming the revoke is done.
+- **Audit before state (I6)**, and idempotent across passes (a second scan records nothing, and a
+  frozen wallet drops out of `listActiveWalletIds` entirely).
+
+**8.2 — session hardening + rate limiting**
+
+| File | What |
+|---|---|
+| `apps/web/lib/session.ts` | `sameSite: 'lax'` to `'strict'`; TTL 7 days to 12 h (exported as `SESSION_TTL_SECONDS`); explicit `path: '/'` |
+| `packages/shared/src/signing.ts` | `FreezeAction` gains `'sweep'` |
+| `apps/web/app/api/freeze/prepare/route.ts` | mints a `sweep` confirmation too |
+| `apps/web/app/api/sweep/route.ts` | now requires a fresh owner signature (re-derived from the SESSION's action + nonce) **and** is rate limited |
+| `apps/web/components/freeze/FreezeFlow.tsx` | step 3 prepares then signs then posts, like steps 1 and 2 |
+| `apps/web/lib/rateLimit.ts` (new) | in-process fixed-window limiter, 6 buckets, `clientIp()`, `Retry-After` |
+| `apps/web/test/sessionHardening.test.ts` (new, 15 tests) | cookie attributes, TTL bound, limiter behaviour, `/api/auth/nonce` 429ing for real, `clientIp` edge cases |
+| `apps/web/test/ownerPathApi.test.ts` (+4 tests) | sweep with no signature / wrong signer / a freeze signature spent on sweep / a replayed sweep nonce |
+
+Fresh-signature audit — every route checked, and what it requires:
+
+| Route | Session | Fresh server-issued signature | Notes |
+|---|---|---|---|
+| `POST /api/freeze` | yes | yes (7.8) | nonce + action from session |
+| `POST /api/unfreeze` | yes | yes (7.8) | + rate limited (8.2) |
+| `POST /api/sweep` | yes | **added in 8.2** | was session-only |
+| `POST /api/approvals/:id/approve` | yes | yes (7.6) | approval message, SECURITY §5 |
+| `POST /api/spend-permission` | yes | yes (7.6) | owner-signed permission |
+| `POST /api/recipients` | yes | yes (7.6) | recipient nonce, 5 min |
+| `POST /api/policy/activate` | yes | yes (7.6) | policy hash signature |
+| `POST /api/spend-permission/revoked` | yes | **no, by design** | records only what the CHAIN says; a forged call cannot lie, and the outcome is strictly safer (frozen). Not rate limited either: the revoke UI polls it |
+| `POST /api/agent/run` | yes | no | enqueues a job; every decision still passes the Policy Engine. Rate limited |
+| `POST /api/mandate/compile` | yes | no | produces a DRAFT that grants nothing. Rate limited |
+| `POST /api/wallet/provision` | yes | no | creates the agent wallet; grants no authority (the spend permission does, and that IS signed) |
+| `POST /api/account/delete-personal-data` | yes | no | owner's own data, no funds |
+| `POST /api/auth/logout` | yes | no | harmless |
+| `*/prepare` routes | yes | no | they only mint a nonce into the session |
+
+Rate limits, and what is deliberately exempt:
+
+| Bucket | Limit | Identity | Why |
+|---|---|---|---|
+| `mandate.compile` | 10 / 10 min | userId | each call is a **paid SERV request** — the open risk flagged at the end of Phase 7 |
+| `auth.nonce` | 30 / 5 min | client IP | unauthenticated |
+| `auth.verify` | 20 / 5 min | client IP | unauthenticated; a smart-wallet signature check is an RPC call |
+| `agent.run` | 20 / 5 min | userId | one iteration = SERV + chain reads + simulation |
+| `sweep` | 10 / 10 min | userId | a real on-chain transaction |
+| `unfreeze` | 10 / 10 min | userId | the UNSAFE direction, so a limit costs no safety |
+| **`/api/freeze`, `/api/freeze/prepare`, `/api/spend-permission/revoked`** | **none, on purpose** | — | **I7: a limiter that can refuse a freeze turns a safety feature into denial of the one control that stops the agent.** A test asserts no such bucket exists |
+
+**8.3 — secret hygiene**
+
+| File | What |
+|---|---|
+| `packages/shared/src/logger.ts` | `REDACT_PATHS` rebuilt from a `SECRET_KEYS` list, each key emitted both bare and as `*.key` |
+| `packages/shared/test/redaction.test.ts` (new, 7 tests) | see below |
+| `.github/workflows/ci.yml` | added `pnpm test:adversarial` |
+
+Two real gaps found:
+
+1. **pino matches redact paths by EXACT key name**, so `*.secret` never covered `apiKeySecret` or
+   `walletSecret` — which is the literal shape of the AgentKit config object
+   (`{ apiKeyId, apiKeySecret, walletSecret }`). Added those plus `sessionSecret`, `mnemonic`,
+   `password`, `receiptKey` and `DATABASE_URL`/`databaseUrl` (whose userinfo carries the Postgres
+   password even though it is not a `Secret` — see D-103). `token` is deliberately left unredacted:
+   in Steward it means a public ERC-20 address and is the most useful field in an execution log.
+2. **`pnpm test:adversarial` was never in CI**, though it has been an exit gate since Phase 4.
+
+The new suite proves: every env secret comes back as a `Secret`; logging the whole parsed env leaks
+nothing; the raw strings are redacted **by key name even after `.reveal()`**; every single-key entry
+in `REDACT_PATHS` is probed with a canary so the list cannot lie about itself; and a static walk of
+`apps/` + `packages/` fails the build if any file reads a secret env var directly.
+
+**8.4 — audit routes**
+
+| File | What |
+|---|---|
+| `apps/web/app/api/audit/route.ts` (new) | `GET /api/audit?cursor=&limit=` — the plain paginated listing API.md specifies. Oldest first, `prevHash`/`rowHash` included so a caller can verify the chain themselves rather than trusting `/verify` |
+| `apps/web/app/api/export/route.ts` (new) | `GET /api/export?format=csv\|json&dataset=all\|ledger\|decisions` — ledger + decisions. Money emitted as decimal strings, never JS numbers (I12). CSV carries both datasets as two labelled sections |
+| `packages/db/src/executions.ts` | `listLedgerPage` (cursor by `createdAt`) |
+| `apps/web/lib/auditRows.ts` (new) | the audit row shape and CSV quoting, now shared by `/api/audit` and `/api/audit/export` so the two cannot drift |
+| `apps/web/test/auditRoutes.test.ts` (+9 tests) | pagination both directions, null cursor on the last page, 400 on nonsense limits, bigint-as-string, CSV quote escaping, `dataset=ledger` narrowing |
+
+### Secret-wrapper audit — grep evidence (8.3)
+
+`grep -rn 'CDP_API_KEY_SECRET|CDP_WALLET_SECRET|SERV_API_KEY|RECEIPT_HMAC_SECRET|SESSION_SECRET'`,
+excluding `docs/`. Every hit in **application** code goes through `getEnv()`'s `Secret`, with
+`.reveal()` only at the exact SDK boundary:
+
+```
+packages/shared/src/env.ts:40-46   SESSION_SECRET: secret(32) / RECEIPT_HMAC_SECRET: secret(32).optional()
+                                   CDP_API_KEY_SECRET: secret().optional() / CDP_WALLET_SECRET / SERV_API_KEY
+apps/web/lib/session.ts:29         password: getEnv().SESSION_SECRET.reveal()   <- iron-session needs the raw value
+apps/web/lib/wallet.ts:40-47       env.CDP_API_KEY_SECRET.reveal() / env.CDP_WALLET_SECRET.reveal()  <- CdpClient config
+apps/web/lib/wallet.ts:76-79       RECEIPT_HMAC_SECRET via getEnv(), "never logged, never stored (I9)"
+apps/web/app/api/mandate/compile/route.ts:73-75  new LiveServClient({ apiKey: env.SERV_API_KEY })  <- Secret passed AS a Secret
+apps/worker/src/runtime.ts:34-38   env.RECEIPT_HMAC_SECRET.reveal() -> bytes
+apps/worker/src/runtime.ts:44-49   new LiveServClient({ apiKey: env.SERV_API_KEY })  <- Secret passed AS a Secret
+apps/worker/src/runtime.ts:77-107  env.CDP_API_KEY_SECRET.reveal() / env.CDP_WALLET_SECRET.reveal()  <- CdpClient config
+```
+
+Raw `process.env` reads of a secret exist ONLY in `scripts/live/*` (`lib.ts:45-47`,
+`record-serv-fixtures.ts:91`, `executor-e2e.ts:90`) and in `spikes/` — manual, `STEWARD_LIVE`-gated
+developer scripts that are never built, never deployed and never log the value; each feeds its one
+credential straight into the SDK config that needs it. `scripts/live/env-check.ts` only lists names.
+Deliberately left alone (see D-106), and the new static test enforces the boundary for `apps/` and
+`packages/` so it cannot regress.
+
+### Gate results (after all four tasks)
+
+| Gate | Result |
+|---|---|
+| `pnpm typecheck` | 9/9 successful |
+| `pnpm lint` | clean (eslint + prettier) |
+| `pnpm check:arch` | 0 violations, **384 modules / 1015 dependencies**; all 4 fixture rules fire, `owner-path-no-reasoning` now on 3 fixtures |
+| `pnpm test` | **1072 passed**, 26 skipped, 67 files (was 1031) |
+| policy coverage | 344/344 tests, **100% statements / branches / functions / lines** |
+| `pnpm test:adversarial` | 60 cases, **GUARANTEE 48/48 (100%)**, benign false positives 0/12 |
+| secrets in git | none; `.env.local` never read or committed; `docs/design/Photos/` untouched |
+
+### Known issues carried into parts 2/3
+
+1. **Rate limiter is per-instance.** In-process counters: behind N web instances the effective limit
+   is N times what is written. Documented with a `ponytail:` comment and D-107; move to
+   Postgres/Redis before horizontal scaling. Matches ARCHITECTURE §7's existing single-instance
+   stance for the worker.
+2. **`permission.scan` only sees wallets with an ACTIVE POLICY** (`listActiveWalletIds` joins on it).
+   A wallet whose policy was never activated, or was deactivated, will not have an out-of-band revoke
+   detected — harmless, because such a wallet cannot act anyway, but worth stating.
+3. **`DATABASE_URL` is not a `Secret`.** Every `createDb` call needs the raw string, so it is a plain
+   `z.string().url()` and its password survives `JSON.stringify` of the env object. Mitigated at the
+   logger (D-103) and asserted by test; full wrapping is a ~10-call-site change, deferred.
+4. **Audit tail truncation is still undetectable** (the Phase 7.7 finding). Deleting the last N rows
+   with the trigger disabled by a superuser leaves a chain that verifies. The cheapest mitigation —
+   periodically persisting `(walletId, rows, head, at)` where the app role cannot rewrite it — needs a
+   second DB role, so it is infrastructure, not a route. **Deliberately not built here; belongs in the
+   8.7 red-team row for audit tampering.**
+5. **`/api/spend-permission/revoked` and the freeze path are unrate-limited** by I7 design. A
+   session-holding attacker can therefore poll them. Both only ever move state in the SAFE direction,
+   so this is accepted, not an open bug — recorded here so 8.7 does not "discover" it.
+6. **SameSite=strict is untested against the live Coinbase wallet popup.** The reasoning (the popup
+   returns to the same tab, so no cross-site navigation carries the cookie) is sound but was verified
+   by argument, not by a live sign-in. **Re-check during the 8.7 / Phase 9 live run.**
+
 ## Phase 7 ADDENDUM — companion treasury for EOA sign-in (Opus, 2026-09-22/23)
 
 > Phase 7's task checklist above stays complete and untouched. This is an additive change to
@@ -1768,6 +1953,12 @@ Full gate, run by the orchestrator after both fixes: `pnpm typecheck` 9/9, `pnpm
 | D-100 | 2026-09-23 | Ruled out Safe (Gnosis Safe) / WalletConnect as an alternative owner-wallet path for spend permissions, before writing any code | `github.com/coinbase/spend-permissions` confirms `SpendPermissionManager` requires Coinbase Smart Wallet V1's specific owner-management system; it "would not work with Gnosis Safe or generic ERC-4337 wallets without significant modifications" | Building a WalletConnect connector (rejected before implementation) |
 | D-101 | 2026-09-23 | An owner who signs in with a plain EOA gets a **derived companion Coinbase Smart Wallet V1** as their treasury (`toCoinbaseSmartAccount`, owner = that EOA, version `'1.1'`, nonce `0n`), chosen once at first sign-in and fixed forever after; the EOA remains the sign-in identity | Coinbase's hosted Smart Wallet popup has a live, external, unfixable-by-us bug (`ark.coinbase.com`/`keys.coinbase.com` postMessage mismatch, tied to their Sept 10 rebrand rollback); a real Smart Wallet contract does not require their popup to create, only their own `toCoinbaseSmartAccount` viem helper, already proven live three times in this project | Waiting for Coinbase to fix their popup (rejected: no ETA, blocks the demo); Safe/WalletConnect (rejected, D-100) |
 | D-102 | 2026-09-23 | The approvals treasury-binding check in `apps/web/app/api/approvals/[id]/approve/route.ts` and `apps/worker/src/approvals.ts` now compares `wallet.treasuryAddress` to `policy.data.treasuryAddress`, not the session owner's address to the policy treasury | D-101 makes owner ≠ treasury a legitimate case; the old check would reject every approval for a companion-treasury wallet. The actual signer-identity check (`verifyMessage`/`verifyApprovalSignature` against the owner's own address) is a separate line, unchanged, and re-reviewed by the orchestrator | Leaving the old check and special-casing companion wallets elsewhere (rejected: two sources of truth for the same fact) |
+| D-103 | 2026-09-23 | pino's `REDACT_PATHS` now lists secret-shaped keys **by exact name** (`apiKeySecret`, `walletSecret`, `sessionSecret`, `mnemonic`, `password`, `receiptKey`, `DATABASE_URL`) in addition to the `*.key` forms, and `token` is deliberately left unredacted | pino matches a redact path by exact key name, so `*.secret` never covered `apiKeySecret` — the literal shape of the AgentKit config object. `DATABASE_URL` carries the Postgres password in its userinfo but cannot be a `Secret` (every `createDb` call needs the raw string), so the logger is where it must be stopped. `token` in Steward means a public ERC-20 address and is the most useful field in an execution log line | Wrapping `DATABASE_URL` in `Secret` (deferred: ~10 call sites, and the leak path that matters is logging); redacting `token` too (rejected: destroys execution-log usefulness for no secrecy gain) |
+| D-104 | 2026-09-23 | Session TTL is **12 hours**, down from 7 days (`SESSION_TTL_SECONDS` in `apps/web/lib/session.ts`) | SECURITY names no number. 12 h is long enough to write a mandate, review a policy and sign it in one sitting, and short enough that a cookie lifted off a shared laptop is worthless by the next morning. The blast radius of a live session is already small: every money-moving route additionally needs a signature over a message the server issued seconds earlier | 24 h (rejected: no product benefit over 12); 1 h (rejected: would interrupt the onboarding flow, whose SERV compile step can take a while); keeping 7 days (rejected: 8.2 asks for a short TTL) |
+| D-105 | 2026-09-23 | CSRF is handled by `SameSite=strict` + the existing fresh-signature requirement; **no CSRF token was added** | Steward has no cross-site entry point that needs the cookie (no OAuth callback, no third-party redirect; the wallet popup returns to the SAME tab, which keeps its cookie), so `strict` costs nothing and a cross-site post arrives with no cookie at all, which `requireOwner()` 401s. On top of that, every state-changing route needs a signature over a server-issued, single-use message that a cross-site attacker cannot obtain. A token would be redundant belt on top of two braces | A double-submit CSRF token (rejected: no gap for it to close, and it adds a failure mode to every form); an Origin/Referer check (rejected: subsumed by SameSite) |
+| D-106 | 2026-09-23 | `scripts/live/*` may read a secret straight from `process.env`; `apps/` and `packages/` may not, and a test enforces that | Those scripts are manual, `STEWARD_LIVE`-gated and never built or deployed; each feeds its one credential directly into the SDK config that needs it and never logs it. Routing them through `getEnv()` would force the full env schema to validate for a script that wants one optional variable — churn with no security gain | Making them use `getEnv()` (rejected: see Why); leaving the boundary unenforced (rejected: it would regress silently) |
+| D-107 | 2026-09-23 | Rate limiting is an **in-process fixed-window counter** (`apps/web/lib/rateLimit.ts`), no new dependency, and `/api/freeze`, `/api/freeze/prepare` and `/api/spend-permission/revoked` are **exempt from it** | Single-instance is the stance ARCHITECTURE §7 already takes for the worker, and a Map plus a timestamp is a dozen lines against a Redis dependency or a new table. The exemptions are I7: a limiter that can refuse a freeze turns a safety feature into denial of the one control that stops the agent, and the revoke report only ever moves state toward frozen. A test asserts no bucket exists for those routes | Postgres-backed counters (deferred to horizontal scaling); `@upstash/ratelimit` or similar (rejected: a hosted dependency for a counter); limiting every route uniformly including freeze (rejected: violates I7) |
+| D-108 | 2026-09-23 | **No owner-path exception to I6 was added.** A failed audit write still refuses freeze/unfreeze/sweep (503 `audit_failed`) — the question Phase 1.9 raised for 8.1 is answered "no exception needed" | If the database is unreachable, the agent is ALREADY stopped: `frozen` lives in that database, the worker halts on a DB outage because it cannot audit (SECURITY §8), and every execution path writes audit before it acts. So a DB outage IS a freeze, and weakening I6 to write a freeze flag nobody can read would buy nothing while breaking append-only. The owner's real backstop in that scenario needs no Steward at all: revoke the spend permission directly from their own Coinbase wallet, which Phase 7.8 already surfaces as unsigned calldata and 8.1's `permission.scan` now reconciles automatically once the DB is back | Writing the frozen flag first and auditing best-effort (rejected: breaks I6 for no gain — an unreadable DB cannot serve the flag either); an in-memory freeze latch in the web process (rejected: the web process does not execute anything, and the worker is a separate process that would never see it) |
 | D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
 | D-2 | 2026-09-20 | APPROVED by human 2026-09-20: vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
 | D-3 | 2026-09-20 | APPROVED by human 2026-09-20: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
@@ -2013,10 +2204,10 @@ Full gate, run by the orchestrator after both fixes: `pnpm typecheck` 9/9, `pnpm
 - `simulateYield` needs the demo admin to hold USDC and to have approved MockVault; `simulateLoss` sends the slice back to the admin, so it can be re-donated. Phase 9's demo scripts must fund the admin from the faucet first.
 
 ### Audit log (1.9) limitations
-- **Tail truncation is undetectable.** Deleting the last N rows of a chain (with the trigger disabled by a superuser) leaves a chain that still verifies. Mitigation, deferred: `verifyChain` already returns `head` (last `row_hash`) and `rows`; periodically persist `(walletId, rows, head, at)` somewhere the app role cannot rewrite — an anchor row in a separate table owned by another role, a notification/Telegram message, or on-chain — and compare on verify. Cheapest version belongs with `/api/audit/verify` in Phase 8.4.
+- **Tail truncation is undetectable.** Deleting the last N rows of a chain (with the trigger disabled by a superuser) leaves a chain that still verifies. Mitigation, deferred: `verifyChain` already returns `head` (last `row_hash`) and `rows`; periodically persist `(walletId, rows, head, at)` somewhere the app role cannot rewrite — an anchor row in a separate table owned by another role, a notification/Telegram message, or on-chain — and compare on verify. Cheapest version needs a second DB role, so it is infrastructure rather than a route: **deliberately NOT built in 8.4; carried into the 8.7 red-team row for audit tampering.**
 - **The trigger only stops the app role, not the DB owner/superuser.** `ALTER TABLE audit_log DISABLE TRIGGER` defeats it (that is exactly how the tamper test works); the hash chain is the detection layer. Production setup (not applied in the migration because dev/test run as the owner): create a separate owner role, and `GRANT INSERT, SELECT ON audit_log TO <app_role>` only — no UPDATE/DELETE/TRUNCATE, no ownership.
 - No retention/rotation and no pagination in `verifyChain` (whole chain is loaded); fine at hackathon volume.
-- A failed audit write currently aborts the caller (I5). Phase 8.1 must decide the owner-path exception so a DB problem cannot block freeze/revoke/sweep (I7).
+- A failed audit write aborts the caller (I5). **Answered in Phase 8.1: no owner-path exception (D-108)** — a DB outage is already a freeze, and the owner's backstop is revoking the permission from their own wallet, which needs no Steward.
 - SIWE only tested with EOAs; ERC-1271/6492 path via publicClient.verifyMessage untested with a real Smart Wallet (V-10 partial, D-5 open).
 - `pnpm dev` runs `docker compose up -d --wait` then migrates; needs Docker Desktop running. First `docker pull postgres:16` was flaky (EOF), retried OK.
 - CI workflow (.github/workflows/ci.yml) written but not run remotely.
@@ -2026,18 +2217,25 @@ Full gate, run by the orchestrator after both fixes: `pnpm typecheck` 9/9, `pnpm
 - No `.env.local` present yet; credentials needed for spikes.
 
 ## Next step
-- **Phase 6 is complete and the Phase 7 *design pass v2* is done** (`docs/DESIGN.md` v2, the v2
-  tokens, the Figtree/Geist Mono swap, and the rebuilt static `/preview` page). Waiting for the
-  human to say "continue" before any screen is built.
-- **Phase 7 build: Sonnet for 7.1-7.5, 7.7, 7.9, 7.10 using `docs/DESIGN.md`; Opus for 7.6 and 7.8.**
-  Run `/model sonnet` for the Sonnet tasks. Every screen follows `docs/DESIGN.md` 11's handover
-  rules - tokens only, `<Money />` only, the approval message verbatim, and glass only where 6
-  allows it.
-- **7.6, 7.7 and 7.8 are done (2026-09-22).** Next is **7.9 (Sonnet)**: mobile responsiveness and
-  keyboard access for the approval and freeze flows (NFR-7), then **7.10** (Playwright e2e). See
-  "Known issues / notes for 7.9-7.10" under Phase 7 part 4 for what each one inherits.
-  **Phase 7 is NOT complete**: 7.9 and 7.10 remain, and Phase 8.1 still formally owns hardening the
-  owner-path routes 7.8 built (rate limiting, session hardening, CSRF, worker-side revoke detection).
+- **Phase 8 part 1 is done (tasks 8.1-8.4, 2026-09-23).** See "Phase 8 part 1" above for what was
+  built versus what Phase 7 had already shipped, the gate numbers, and the six carried-forward risks.
+  Full gate green: typecheck 9/9, lint clean, check:arch 0 (384 modules), 1072 tests, policy 100%
+  branches, adversarial 48/48.
+- **Phase 8 is NOT complete.** Remaining, in order:
+  - **8.5 / 8.6 (Sonnet)** — notifications (in-app centre + optional Telegram) and the weekly
+    treasury report. `insertNotification` and the `notifications` table already exist (Phase 6 writes
+    risk/execution/escalation rows into them); what is missing is the UI, the Telegram transport and
+    the weekly job. Run `/model sonnet`.
+  - **8.7 (Opus)** — red-team: execute every row of SECURITY §8 as a test or scripted check. Start
+    from the six carried-forward risks in "Phase 8 part 1"; three of them (audit tail truncation, the
+    I7 rate-limit exemptions, SameSite vs the live wallet popup) are already written up so 8.7 does
+    not rediscover them.
+  - **8.9 (Opus)** — load/soak: 10 wallets x 1 hour in DEMO_MODE on a fork; no duplicate executions,
+    record p95 iteration time.
+  - **Opus review gate** — `docs/SECURITY_REVIEW.md`: threat -> control -> test evidence for T1-T17.
+    Any open HIGH blocks the gate. The Phase 3 threat matrix in this file is the starting point.
+  - 8.8 (x402) is a SHOULD and only if V-11 is verified and every MUST is green.
+- Do not start 8.5 onward before the human says so.
 - Screenshots: `docs/design/shots/app/` now holds all 20 app screens at 390 and 1280 px in dark and
   light (80 files), including the 7.7 screens and the three S9 steps. Regenerate with
   `DEMO_MODE=true pnpm --filter @steward/web dev` then `node scripts/app-shots.mjs`.
