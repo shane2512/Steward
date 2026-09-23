@@ -1947,6 +1947,108 @@ Full gate, run by the orchestrator after both fixes: `pnpm typecheck` 9/9, `pnpm
   before any code was written, once `spend-permissions`' own repo confirmed it requires Coinbase Smart
   Wallet V1 specifically. No wasted implementation.
 
+## Phase 8 part 2 — notifications + weekly report (Sonnet, tasks 8.5–8.6, 2026-09-23)
+
+Phase 8 is **still NOT complete**. Part 3 remains: 8.7 red-team session, 8.9 load/soak, and the
+formal `docs/SECURITY_REVIEW.md` Opus gate.
+
+### What ALREADY EXISTED (Phase 6/7 built it ahead of schedule)
+
+Read this first — most of 8.5's in-app write side was already there, unused until now:
+
+| Piece | Where |
+|---|---|
+| `notifications` table, `notification_type`/`notification_channel` enums | `packages/db/src/schema.ts` (migration `0000`) |
+| `insertNotification`, `getUserIdForWallet`, `listNotifications` (unpaginated) | `packages/db/src/executions.ts` / `agent.ts` |
+| A local `notify()`/`notifyOwner()` helper writing at the SAME point as the audit row, for: DENY security-relevant (`blocked`), ESCALATE (`escalation`), execution confirmed/failed/timeout (`execution`/`risk`), breaker-open (`freeze`), risk trigger (`risk`), UNCERTAIN crash-window (`execution`) | `apps/worker/src/pipeline.ts`, `packages/wallet/src/confirmer.ts`, `apps/worker/src/jobs.ts` |
+
+The only write-side gap was the **owner-initiated freeze** (`POST /api/freeze`), which audited but
+never notified — added this session.
+
+### Built this session
+
+**8.5 — in-app notification center**
+- `packages/db/src/schema.ts`: `users.telegramChatId` (nullable text) + migration `0002`.
+- `packages/db/src/agent.ts`: `listNotifications` rewritten to paginate on `(createdAt, id)` — `id`
+  is a random UUID, not sortable, so the original `ORDER BY id DESC` was silently wrong (caught by
+  the route test, fixed before commit). Added `unreadNotificationCount`, `markNotificationRead`
+  (scoped to `userId`, returns `undefined` on a bad/foreign id), `markAllNotificationsRead`,
+  `latestNotificationOfType` (feeds 8.6's export).
+- `packages/db/src/repos.ts`: `setTelegramChatId`; `scrubUserPersonalData` now clears it too (S11).
+- `apps/web/app/api/notifications/route.ts` (`GET`, newest-first, keyset-paginated, `unreadCount`),
+  `.../[id]/read/route.ts` (`POST`), `.../read-all/route.ts` (`POST`) — all owner-scoped.
+- `apps/web/app/api/freeze/route.ts`: owner freeze now also writes a `freeze` notification (the one
+  gap found above).
+- `apps/web/components/shell/NotificationBell.tsx`: bell + unread badge (`aria-live` on the count),
+  a glass popover (DESIGN §5/§9 small-popover allowance) listing solid `Row`-styled rows (same
+  primitive as the Activity timeline), mark-read on click, "mark all read". Wired into
+  `AppHeader.tsx` next to the Freeze button.
+- `apps/web/components/settings/SettingsScreen.tsx`: the Phase 7.7 disabled "Coming soon" field is
+  now a real chat-id input + Save, gated by `GET /api/config`'s new `telegramEnabled` flag (shows a
+  plain "not configured on this deployment" message instead when the env var is unset, rather than
+  pretending it works). Seeds from `/api/me` once and stops re-seeding the moment the owner types,
+  so a slow `/api/me` response (or the refetch after Save) can never silently wipe an in-progress
+  edit — a real race the first version of this component had, caught by its own test.
+
+**Telegram (optional)**
+- `packages/db/src/telegram.ts`: `sendTelegramMessage` — plain `fetch` to
+  `api.telegram.org/bot<token>/sendMessage`, no new dependency. Own try/catch; logs and returns on
+  any failure, never throws.
+- Wired into `insertNotification` itself (`packages/db/src/executions.ts`), not into each of the ~6
+  call sites above — one already-shared choke point, so every existing notify() call gets Telegram
+  for free. No-ops (no `fetch` call) unless BOTH `TELEGRAM_BOT_TOKEN` is set AND the target user has
+  a linked `telegramChatId`. `getEnv()` is wrapped in try/catch here specifically, so a process
+  whose env is not fully valid (a `packages/db`-only unit test, say) degrades to "Telegram off"
+  instead of throwing out of a DB write.
+
+**8.6 — weekly treasury report**
+- `apps/worker/src/jobs/weeklyReport.ts`: `computeWeeklyReport(db, walletId, windowEnd)` — injected
+  `windowEnd` (same pattern as every other job), window is `[windowEnd - 7d, windowEnd)`. Yield:
+  no APY/rate source is wired yet (D-72), so there was no existing calc to reuse; reads the vault
+  snapshot at-or-before each window boundary and isolates the price-appreciation portion of the
+  END-of-week position — `yield = positionAssets_end - positionAssets_end * sharePrice_start /
+  sharePrice_end` (bigint, no scale constant needed — see the file's own comment for the algebra and
+  its known ceiling: it ignores deposit/withdrawal TIMING within the week). Payments: sum + count of
+  `ledger_entries` with `direction='out'` and a non-null `counterpartyLabel` in the window (the label
+  is what a recipient payment sets and a vault move/sweep never does — reuses an existing
+  discriminator instead of joining back to `executions.kind`). Blocked: count of `verdicts` rows
+  with `decision='DENY'` joined to `agent_decisions` in the window.
+- `registerWeeklyReportJob`: Monday 08:00 UTC cron, one `report.weekly` notification per active
+  wallet; a failure on one wallet is logged and skipped, never aborts the rest (best-effort, RULES).
+- Export: `GET /api/reports/weekly/export?format=csv|json` serves the payload of the newest `report`
+  notification back out, rather than a second table that could drift from what the notification
+  already says — same "one source of truth" reasoning `/api/audit/export` already uses for
+  `auditRowJson`.
+
+### Tests added
+- `packages/db/test/notifications.test.ts` (8): write/list/paginate/mark-read(-all), and the
+  Telegram send — configured/unconfigured/no-chat-id/failed-send-does-not-throw, mocked `fetch`.
+- `apps/web/test/notificationsRoutes.test.ts` (8): auth required, pagination, mark-read scoped to
+  the owning user (404 on someone else's row), mark-all.
+- `apps/worker/test/weeklyReport.test.ts` (5): yield from bracketing snapshots, out-of-window
+  snapshots/payments/denials excluded, a vault with no snapshot contributes zero rather than erroring,
+  all-zero for an idle wallet.
+- `apps/web/test/settingsScreen.test.tsx` and `api.test.ts`: updated for the real Telegram field and
+  the new `telegramEnabled` config flag (the old "disabled, Coming soon" assertions no longer apply).
+
+### Exit gate
+
+`pnpm typecheck` 9/9 · `pnpm lint` clean · `pnpm check:arch` 395 modules, 0 real violations (4
+fixtures still firing) · `pnpm test` 1094 passed, 0 failed, 26 skipped (pre-existing e2e/live
+skips) + policy 344/344, 100% branch coverage · `pnpm test:adversarial` 48/48 malicious cases still
+DENY/ESCALATE, 0 benign false positives.
+
+### Known issues / not done
+
+- **Telegram was never tested against a real bot.** `TELEGRAM_BOT_TOKEN` is unset in this
+  environment's `.env.local` (checked only via `getEnv()`'s presence boolean, never its value, per
+  the task's own instruction) — the send path is covered by a unit test with mocked `fetch` only.
+  A human should link a real bot before relying on it live.
+- The weekly-report yield figure has the documented per-transaction-timing ceiling above; upgrade
+  path is deriving shares from ledger deltas instead of snapshot deltas once that bookkeeping exists.
+- No new dependency was added (D-109 below is the only Decisions entry this part needed).
+- Phase 8 part 3 (8.7 red-team, 8.9 load/soak, `docs/SECURITY_REVIEW.md`) is untouched.
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
@@ -1959,6 +2061,7 @@ Full gate, run by the orchestrator after both fixes: `pnpm typecheck` 9/9, `pnpm
 | D-106 | 2026-09-23 | `scripts/live/*` may read a secret straight from `process.env`; `apps/` and `packages/` may not, and a test enforces that | Those scripts are manual, `STEWARD_LIVE`-gated and never built or deployed; each feeds its one credential directly into the SDK config that needs it and never logs it. Routing them through `getEnv()` would force the full env schema to validate for a script that wants one optional variable — churn with no security gain | Making them use `getEnv()` (rejected: see Why); leaving the boundary unenforced (rejected: it would regress silently) |
 | D-107 | 2026-09-23 | Rate limiting is an **in-process fixed-window counter** (`apps/web/lib/rateLimit.ts`), no new dependency, and `/api/freeze`, `/api/freeze/prepare` and `/api/spend-permission/revoked` are **exempt from it** | Single-instance is the stance ARCHITECTURE §7 already takes for the worker, and a Map plus a timestamp is a dozen lines against a Redis dependency or a new table. The exemptions are I7: a limiter that can refuse a freeze turns a safety feature into denial of the one control that stops the agent, and the revoke report only ever moves state toward frozen. A test asserts no bucket exists for those routes | Postgres-backed counters (deferred to horizontal scaling); `@upstash/ratelimit` or similar (rejected: a hosted dependency for a counter); limiting every route uniformly including freeze (rejected: violates I7) |
 | D-108 | 2026-09-23 | **No owner-path exception to I6 was added.** A failed audit write still refuses freeze/unfreeze/sweep (503 `audit_failed`) — the question Phase 1.9 raised for 8.1 is answered "no exception needed" | If the database is unreachable, the agent is ALREADY stopped: `frozen` lives in that database, the worker halts on a DB outage because it cannot audit (SECURITY §8), and every execution path writes audit before it acts. So a DB outage IS a freeze, and weakening I6 to write a freeze flag nobody can read would buy nothing while breaking append-only. The owner's real backstop in that scenario needs no Steward at all: revoke the spend permission directly from their own Coinbase wallet, which Phase 7.8 already surfaces as unsigned calldata and 8.1's `permission.scan` now reconciles automatically once the DB is back | Writing the frozen flag first and auditing best-effort (rejected: breaks I6 for no gain — an unreadable DB cannot serve the flag either); an in-memory freeze latch in the web process (rejected: the web process does not execute anything, and the worker is a separate process that would never see it) |
+| D-109 | 2026-09-23 | The Telegram best-effort send lives in ONE place — inside `insertNotification` (`packages/db/src/executions.ts`) — rather than threaded through the ~6 existing call sites that already write notifications (pipeline.ts, confirmer.ts, jobs.ts, the new freeze route). `getEnv()` is called there directly and wrapped in try/catch so a caller whose env is not fully valid degrades to "Telegram off" instead of throwing | Every one of those call sites already imports `insertNotification` from `@steward/db`; making each one ALSO import and call a `sendTelegramMessage` helper (and thread `Env`/`chatId` through call signatures that do not have them) is pure churn for identical behaviour at every site. `getEnv()` is a cached, process-wide singleton (D-106) reachable from anywhere in `packages/`/`apps/`, so no dependency injection is needed just to reach one optional env var | Threading `env` through `PipelineDeps`/`ConfirmDeps`/`JobDeps` to each call site (rejected: touches 6+ files for no behavioural difference); a separate outbox table polled by a new job (rejected: more moving parts than a fire-and-forget `fetch` needs) |
 | D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
 | D-2 | 2026-09-20 | APPROVED by human 2026-09-20: vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
 | D-3 | 2026-09-20 | APPROVED by human 2026-09-20: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
