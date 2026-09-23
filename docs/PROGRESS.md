@@ -3,10 +3,11 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 7 complete** (7.10 skipped by human decision), awaiting human "continue". Phase 8
-requires Opus (Sonnet sub-tasks 8.5, 8.6 per PHASES.md).
+Phase: **Phase 7 complete + addendum** (7.10 skipped by human decision; companion-treasury addendum
+built and verified 2026-09-23), awaiting human "continue". Phase 8 requires Opus (Sonnet sub-tasks
+8.5, 8.6 per PHASES.md).
 Required model: Phase 7 = Sonnet (Opus sub-tasks 7.6, 7.8 — both done)
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 **7.8 note:** the Opus agent's post-close-out visual QA/screenshot pass was cut short on the human's
 instruction (time/cost) after it had already fixed real bugs it found; two test files it left mid-edit
@@ -1631,9 +1632,142 @@ true and in-scope for 7.9 regardless of how it was found. `pnpm test:e2e` remain
 **Phase 7 is now complete** (7.9 done, 7.10 skipped by human decision) — awaiting the human's
 "continue". Phase 8 requires Opus (Sonnet sub-tasks 8.5, 8.6 per PHASES.md).
 
+## Phase 7 ADDENDUM — companion treasury for EOA sign-in (Opus, 2026-09-22/23)
+
+> Phase 7's task checklist above stays complete and untouched. This is an additive change to
+> onboarding identity/custody, built because the spec'd path cannot be exercised in this
+> environment. Verified by the orchestrator directly (Opus agent was interrupted twice by rate
+> limits mid-task and stopped by the human on the third resume; the orchestrator fixed the last two
+> issues and ran every gate itself).
+
+### Why
+
+Two facts already recorded earlier in this file:
+
+- **Spend Permissions need a genuine Coinbase Smart Wallet V1** (D-5). `SpendPermissionManager` is
+  added as an owner inside Smart Wallet V1's own owner-management system — confirmed directly against
+  `github.com/coinbase/spend-permissions`: *"requires Coinbase Smart Wallet V1 specifically... would
+  not work with Gnosis Safe or generic ERC-4337 wallets without significant modifications."* There is
+  no way around holding the treasury in that specific contract type; a Safe or WalletConnect
+  alternative was considered and ruled out on this basis before any code was written.
+- **Coinbase's hosted popup (keys.coinbase.com) cannot currently create one here** — an external,
+  live bug (`postMessage` origin mismatch to `ark.coinbase.com`, tied to Coinbase's Sept 10 2026 "Base
+  App → Coinbase Wallet" rebrand reversion) that is not ours to fix. Checked and ruled out on our
+  side: no `Cross-Origin-Opener-Policy` header is set by this app (verified via curl against the live
+  dev server), and `@base-org/account` is already at the latest published version (`2.5.10`, checked
+  against the npm registry) — the bug is inside a page Coinbase's own servers serve into the popup,
+  not in any client bundle we control.
+
+But the popup is not the contract. viem's `toCoinbaseSmartAccount()` builds the same account directly
+from any owner — proven live three times already in this project (the Phase 0/2 spike
+`spikes/spend-permission-sw.ts`, and the Phase 5 / 7.6 live executor and signing runs). So: when the
+owner signs in with a plain browser wallet, Steward derives the Coinbase Smart Wallet **that EOA
+already owns** and uses it as the treasury. The EOA stays the sign-in identity. The passkey Smart
+Wallet path (PRD FR-1, `SMART_WALLET_CONNECTOR_ID`) is untouched and still primary — for an owner who
+signs in with a real Smart Wallet, the treasury is, as before, the connected address directly.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `packages/wallet/src/companionTreasury.ts` | `deriveCompanionTreasury(client, ownerEoa)` — the counterfactual Coinbase Smart Wallet V1 address; version (`'1.1'`) and nonce (`0n`) pinned as exported constants |
+| `packages/wallet/src/spendPermission.ts` | `classifyOwnerAccount(client, {address, signature})` → `deployed-contract` / `counterfactual-6492` / `eoa`, extracted from the existing `assertSmartWalletAccount` (behaviour unchanged) |
+| `apps/web/lib/treasury.ts` | `resolveTreasuryAddress` — the server-side decision, taken once |
+| `apps/web/app/api/auth/verify/route.ts` | Chooses the treasury on the FIRST sign-in only, from the SIWE signature it just verified; fails closed (503) on any RPC error rather than guessing |
+| `apps/web/app/api/spend-permission/{prepare,}/route.ts` | `account`/`ownerAddress` now read from `wallet.treasuryAddress`, not the session address |
+| `apps/web/app/api/approvals/[id]/approve/route.ts`, `apps/worker/src/approvals.ts` | The treasury-binding check now compares the **policy's** treasury to the **wallet's** treasury (previously it compared the session owner to the policy treasury, which would have rejected every approval for a companion-treasury wallet, since owner ≠ treasury in that case). The actual signer-identity check — `verifyMessage`/`verifyApprovalSignature` against the owner's own address — is untouched; this was a second, independent binding check, corrected to compare the right two addresses |
+| `apps/web/lib/useSigner.ts` | An EOA with a derived companion is no longer hard-blocked; it reports `companion: {address, deployed}` instead. The `eoa` blocker is unchanged for every other case (wrong network, disconnected, no companion available) |
+| `apps/web/lib/useTypedDataSigner.ts` | Signs typed data AS the treasury: straight through wagmi when the treasury is the connected account (unchanged path); through a viem-built Coinbase Smart Wallet — owned by the connected EOA via a `toAccount` adapter that proxies `signTypedData` back through wagmi — when it is the companion |
+| `apps/web/components/sign/SignSurface.tsx` | `CompanionTreasuryNotice` — what the wallet is, why it exists, the full address, and whether it is on-chain yet (DESIGN.md copy voice, `aria-live`) |
+
+No new dependency. No schema change, no migration: `users.owner_address` was already the sign-in
+identity and `wallets.treasury_address` was already the treasury column — the two roles were
+separable without touching a table, they had simply always held the same value by convention.
+
+### The derivation, and why it is safe
+
+`toCoinbaseSmartAccount({ client, owners: [ownerAddress], version: '1.1', nonce: 0n })`, then
+`.getAddress()`. Verified against the installed viem (2.56.8), not from memory:
+
+- `owners` accepts a plain `Address` — derivation needs no key and no signing capability, so the
+  **server** computes and stores it from a public client alone; the browser is never asked to assert
+  an address.
+- `.getAddress()` is `CoinbaseSmartWalletFactory.getAddress([pad(owner)], nonce)` — a CREATE2 address
+  over exactly the owner bytes and the nonce. No salt, no randomness, no clock. Same owner in ⇒ same
+  address out, on every machine, forever — the whole safety argument, since a second answer on a
+  later sign-in would strand anything already sent to the first.
+- The treasury is chosen **once**, at first sign-in, and the `wallets` row is the record of truth
+  afterwards; re-derivation on later sign-ins is skipped entirely, so even a future viem upgrade that
+  changed the default factory could not move an existing owner's treasury.
+- Every RPC failure fails closed (I5): a sign-in is refused rather than guessed, because guessing
+  "EOA" strands nothing while guessing "smart wallet" strands everything.
+- I4 (exact checksummed equality) on the client side too: `useTypedDataSigner` locally re-derives the
+  companion and refuses to sign if it disagrees with the treasury address the server already stored.
+
+### Tests added
+
+- `packages/wallet/test/companionTreasury.test.ts` — the factory call asserted field by field (one
+  owner, left-padded, nonce 0, v1.1 factory address); a `fast-check` property asserting determinism
+  (same owner ⇒ same address, repeatedly) and injectivity (distinct owners ⇒ distinct addresses);
+  checksum normalization; fail-closed on RPC error.
+- `apps/web/test/treasury.test.ts` — the three-way decision: deployed contract ⇒ raw address,
+  ERC-6492 signature ⇒ raw address, plain ECDSA ⇒ derived companion; idempotent; fails closed.
+- `apps/web/test/authVerifyTreasury.test.ts` — the route, against a **real Postgres and a real SIWE
+  signature** from a local viem account: an EOA gets a treasury that is not itself; three further
+  sign-ins resolve to the same one; a contract signer keeps its raw address; the session identity
+  stays the EOA throughout.
+- `apps/web/test/companionTreasuryUi.test.tsx` — the copy and address render; an EOA with a companion
+  is not blocked; an EOA without one still hits the old hard block; and the signing flow: the
+  connected EOA is asked to sign a payload whose EIP-712 domain is `Coinbase Smart Wallet` bound to
+  the companion as `verifyingContract`, and what reaches `POST /api/spend-permission` is
+  ERC-6492-wrapped through the v1.1 factory. Also pins the client's copy of the version/nonce
+  constants against the server's, so they cannot drift apart.
+
+### Bugs found and fixed during orchestrator verification (not by the building agent)
+
+The building agent was interrupted by rate limits twice and stopped by the human on its third resume
+once only cleanup remained; the orchestrator finished and verified the work directly rather than
+re-launching a fourth attempt:
+
+- A forbidden non-null assertion (`unwrapped.address!`) in the new UI test — eslint caught it; fixed
+  to an explicit `toBeDefined()` check plus a type-narrowing cast.
+- Two pre-existing test files (`apps/web/test/signing.test.tsx`, `apps/web/test/onboardingUi.test.tsx`)
+  mocked `wagmi` without `usePublicClient`, which `useTypedDataSigner` now calls unconditionally on
+  render (even though it is only *dereferenced* on the companion-derivation branch, which neither test
+  exercises) — 8 tests failed with "No `usePublicClient` export is defined on the wagmi mock" until
+  both mocks were given `usePublicClient: () => undefined`.
+- Independently re-reviewed the approvals treasury-binding change (the one place this addendum edits
+  pre-existing, already-shipped security logic) line by line against both routes: the actual
+  signer-identity check (`verifyMessage`/`verifyApprovalSignature` against `owner.address`) is
+  untouched in both `apps/web/app/api/approvals/[id]/approve/route.ts` and
+  `apps/worker/src/approvals.ts`; only the separate wallet↔policy binding check was corrected.
+
+Full gate, run by the orchestrator after both fixes: `pnpm typecheck` 9/9, `pnpm lint` clean,
+`pnpm check:arch` 0 real violations (373 modules / 976 deps, all 5 fixtures firing),
+**`pnpm test` 1031 passed** (26 pre-existing skips, policy suite 344/344 at 100% branches),
+**`pnpm test:adversarial` 48/48 guarantee, 0/12 benign false positives**. No secrets in git history;
+`docs/design/Photos/` still never committed.
+
+### Known limitations
+
+- **Never provable end to end in this environment.** Everything above is proven with local viem
+  accounts, a real Postgres, and a real (non-browser) SIWE signature. Nobody has clicked through
+  onboarding with an actual browser extension wallet (MetaMask, the Coinbase extension, Rabby) in this
+  session — the human's own attempts to do so were what surfaced the underlying Coinbase-popup bug in
+  the first place. A human should confirm, with a real extension: the connect step still works, the
+  companion address `GET /api/wallet` returns matches what the notice shows, and a live spend-permission
+  signature completes against Base Sepolia. This is the same class of gap already open since Phase 0
+  (V-10) — not a new one, just now also covering the derived-companion path specifically.
+- The Safe/WalletConnect alternative discussed earlier in this session was **not** built — ruled out
+  before any code was written, once `spend-permissions`' own repo confirmed it requires Coinbase Smart
+  Wallet V1 specifically. No wasted implementation.
+
 ## Decisions (ADR-lite)
 | # | Date | Decision | Why | Alternatives |
 |---|---|---|---|---|
+| D-100 | 2026-09-23 | Ruled out Safe (Gnosis Safe) / WalletConnect as an alternative owner-wallet path for spend permissions, before writing any code | `github.com/coinbase/spend-permissions` confirms `SpendPermissionManager` requires Coinbase Smart Wallet V1's specific owner-management system; it "would not work with Gnosis Safe or generic ERC-4337 wallets without significant modifications" | Building a WalletConnect connector (rejected before implementation) |
+| D-101 | 2026-09-23 | An owner who signs in with a plain EOA gets a **derived companion Coinbase Smart Wallet V1** as their treasury (`toCoinbaseSmartAccount`, owner = that EOA, version `'1.1'`, nonce `0n`), chosen once at first sign-in and fixed forever after; the EOA remains the sign-in identity | Coinbase's hosted Smart Wallet popup has a live, external, unfixable-by-us bug (`ark.coinbase.com`/`keys.coinbase.com` postMessage mismatch, tied to their Sept 10 rebrand rollback); a real Smart Wallet contract does not require their popup to create, only their own `toCoinbaseSmartAccount` viem helper, already proven live three times in this project | Waiting for Coinbase to fix their popup (rejected: no ETA, blocks the demo); Safe/WalletConnect (rejected, D-100) |
+| D-102 | 2026-09-23 | The approvals treasury-binding check in `apps/web/app/api/approvals/[id]/approve/route.ts` and `apps/worker/src/approvals.ts` now compares `wallet.treasuryAddress` to `policy.data.treasuryAddress`, not the session owner's address to the policy treasury | D-101 makes owner ≠ treasury a legitimate case; the old check would reject every approval for a companion-treasury wallet. The actual signer-identity check (`verifyMessage`/`verifyApprovalSignature` against the owner's own address) is a separate line, unchanged, and re-reviewed by the orchestrator | Leaving the old check and special-casing companion wallets elsewhere (rejected: two sources of truth for the same fact) |
 | D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
 | D-2 | 2026-09-20 | APPROVED by human 2026-09-20: vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
 | D-3 | 2026-09-20 | APPROVED by human 2026-09-20: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
