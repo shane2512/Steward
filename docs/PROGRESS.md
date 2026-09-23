@@ -3,11 +3,10 @@
 > Claude updates this file at the end of every session. Human reviews it between phases.
 
 ## Current phase
-Phase: **Phase 8 complete** (parts 1-3, tasks 8.1-8.7 and 8.9, done 2026-09-23; 8.8 x402 stretch
-skipped — SHOULD-have, gated on an unverified fact, deprioritized given the deadline).
-`docs/SECURITY_REVIEW.md` gate PASSES: no open HIGH finding. Awaiting human "continue". Phase 9
-requires Sonnet (Opus gate 9.8).
-Required model: Phase 8 = Opus (Sonnet sub-tasks 8.5, 8.6 — both done)
+Phase: **Phase 9 part 1 in progress** (tasks 9.1, 9.2, 9.3, 9.5, 9.6 written part — done 2026-09-23).
+Phase 9 is NOT complete: 9.4 (deployment), 9.6 (actual video recording), 9.7 (submission) and 9.8
+(Opus release review) remain, and 9.4/9.6/9.7 are explicitly blocked on the human (see "Phase 9 part 1"
+below). Required model: Phase 9 = Sonnet (Opus gate 9.8).
 Last updated: 2026-09-23
 
 **7.8 note:** the Opus agent's post-close-out visual QA/screenshot pass was cut short on the human's
@@ -2194,6 +2193,7 @@ DENY/ESCALATE, 0 benign false positives.
 | D-111 | 2026-09-23 | **The worker gives the per-wallet advisory lock its own connection pool** (`apps/worker/src/index.ts`, 8.9 finding F-2) | `tryWalletLock` holds a connection for the whole iteration and everything inside that iteration needs one too; from one 10-connection pool they deadlock permanently the moment wallet concurrency reaches the pool size. Found by the soak, which hung for 70 minutes. Two lines against a hard ceiling on wallet concurrency | Raising `max` on the single pool (rejected: moves the ceiling, does not remove it); releasing the lock connection during the iteration (rejected: that is not what an advisory lock is) |
 | D-112 | 2026-09-23 | **Audit tail truncation is formally ACCEPTED as an MVP residual risk** (F-9), with a production checklist rather than code: a second DB role, plus the weekly `(rows, head)` pair sent over the 8.6 report transport | Deferred at 1.9 and again at 8.4; decided here rather than deferred a third time. The threat model is an attacker who already holds DB-owner rights, at which point `RECEIPT_HMAC_SECRET` is the bigger prize. The role change is a deployment change this repo cannot make without breaking every local run (dev/test run as the owner), and an external anchor is a new subsystem — a review gate is the worst moment to add one | Building the anchor table now (rejected: new subsystem at a gate); applying the GRANT in a migration (rejected: breaks local dev and test) |
 | D-113 | 2026-09-23 | **`POST /api/me/telegram` accepts numeric chat ids only** (8.7 finding RT-2) | Telegram also accepts `@publicchannel` as a `chat_id`, so an unconstrained string let a hijacked session redirect an owner's treasury notifications into a *public* channel. Every real private or group chat id is an integer, so a one-line regex removes that destination class at zero cost to the owner | Requiring a fresh owner signature on the route (rejected for now: it is a notification preference, and the residual — an attacker's own private chat — leaks nothing `/api/dashboard` does not already show that session, recorded as F-3) |
+| D-114 | 2026-09-23 | `scripts/demo/seed.ts`'s demo owner is derived from Foundry/Anvil's well-known default test account #0 private key (public, never holds real funds), and the seed script actually **signs** the policy-activation message with it and runs it through the real `activatePolicyVersion` — no bypass of the signature check the real `/api/policy/activate` route enforces | A hardcoded ADDRESS with a placeholder signature (the pattern `scripts/live/loop-e2e.ts` uses for speed) would mean the seeded "active" policy never went through real EIP-191 verification, which is exactly the kind of security-relevant shortcut CLAUDE.md §9 says never to take "for the demo". Having the actual key costs nothing extra here and keeps the seed on the same code path production uses | A random key per run (rejected: not deterministic/idempotent, and stranding demo state); reusing `scripts/live/loop-e2e.ts`'s session-secret-derived key (rejected: ties the demo seed to `SESSION_SECRET`, so it is not reproducible without a real `.env.local`) |
 | D-1 | 2026-09-20 | AgentKit fires an un-awaited telemetry POST (wallet address, network) to cca-lite.coinbase.com at wallet-provider init; a non-2xx becomes an unhandledRejection that crashes Node 22. Worker installs a process-level `unhandledRejection` logger; no opt-out flag exists in 0.10.4. Only public data is sent. | Crash found in spike | Patch package (rejected) |
 | D-2 | 2026-09-20 | APPROVED by human 2026-09-20: vault deposit/withdraw built as exact-bigint encoded ERC-4626 calls via `walletProvider.sendTransaction` in `actionRegistry.ts`, not AgentKit Morpho actions | Morpho actions take decimal strings and are Morpho-specific; MockVault is plain ERC-4626; I12 | Morpho action for real Morpho vaults later |
 | D-3 | 2026-09-20 | APPROVED by human 2026-09-20: `provisionAgentWallet` uses CDP client getOrCreate (named owner + named smart account keyed by userId), then passes `owner` into `CdpSmartWalletProvider` | Provider cannot create named wallets; idempotency | none |
@@ -2801,3 +2801,128 @@ Phase 5's `executor.ts` will be the **only** module allowed to send proposal cal
 `callsHash` against what the RiskGate simulated.
 - Audit writer API for later phases: `appendAudit(db, { walletId?, actor, event, entityType?, entityId?, payload, createdAt? }) => Promise<Result<AuditRow, AuditError>>` and `verifyChain(db, walletId | null) => Promise<Result<{rows, head}, {rowId, reason, expected, actual}>>`, exported from `@steward/db`. Never insert into `audit_log` directly. Payload must contain no secret-looking keys (D-16).
 - Hackathon deadline Sep 28 00:00 UTC (8 days): keep MUST scope tight.
+
+---
+
+## Phase 9 part 1 — demo seeding, demo/attack scripts, rehearsal mode, written docs (Sonnet, tasks 9.1/9.2/9.3/9.5/9.6-written, 2026-09-23)
+
+**Scope note:** Phase 9 is NOT complete. This session built the tasks that do not need a Vercel/
+Railway/Neon account, a real recorded video, or a real X post — everything else is listed as
+blocked-on-human below.
+
+### 9.1 — `pnpm db:seed:demo`
+`scripts/demo/seed.ts` replaces the `scripts/not-yet.mjs` stub. DB-only (no chain, no CDP): a
+deterministic demo owner derived from Foundry/Anvil's well-known test account #0 (D-114), Alex/Priya
+recipients (the same addresses `scripts/live/loop-e2e.ts` already uses, `0x1111…`/`0x2222…`, for one
+consistent cast across the demo tooling), an obligation due **today** for each, and the "Startup
+Operating" policy built through `packages/policy`'s existing `policyDraftFromTemplate` — no second
+policy-construction path. Activation reuses the exact body/hash/message shape
+`apps/web/lib/policyDraft.ts` computes for the real UI and `activatePolicyVersion` from `@steward/db`,
+signed for real with the demo owner's (public, test-only) key — the seed never bypasses the signature
+check the real route enforces (D-114). Idempotent: a second run leaves one wallet, one active policy,
+two obligations (refreshed, not duplicated) — asserted by `scripts/demo/test/seed.test.ts`. Refuses
+outside `DEMO_MODE=true` + chain 84532 via `getEnv()` (I11), also asserted.
+
+### 9.2 — demo/attack scripts
+- `scripts/demo/attack.ts` — runs one real `runIteration` (the actual decision loop, real gather/
+  screen/Policy-Engine/pipeline) against the seeded wallet with a malicious memo attached through
+  `GatherDeps.extraUntrusted` — the exact seam Phase 8 finding F-8 named, not a new injection path.
+  Asserts no execution was produced. The deterministic heuristics in `packages/reasoning`
+  (`screenItems`) flag the memo's address/urgency/authority/"send all"/"migrate" signals on their own,
+  with no SERV call required, so the block holds even SERV-degraded — R16 then denies (or the
+  proposer never even reaches a value-moving proposal). `STEWARD_LIVE=1`-gated; the memo-triggers-the-
+  real-heuristics property is covered by `scripts/demo/test/attack.test.ts` without needing a live
+  wallet (R16 itself already has full coverage in `packages/policy/test/rules.test.ts`).
+- `scripts/demo/drawdown.ts` — calls `MockVault.simulateLoss(300 bps)` as the demo-admin CDP account
+  (same account and pattern `scripts/live/deploy-contracts.ts` already uses — no second contract-
+  calling path). Does not reimplement risk detection: the already-running worker's `risk.scan` cron
+  (every 60 s) notices the drawdown and drives a real R20 risk-exit through the real loop.
+  `STEWARD_LIVE=1`-gated.
+- `scripts/demo/reset.ts` — clears the prior run's operational rows for the demo wallet (decisions,
+  verdicts, simulations, executions, approvals, ledger entries, receipt nonces, vault snapshots,
+  notifications), un-freezes and closes the breaker via the same `setWalletFrozen` the owner's real
+  unfreeze path uses, then re-seeds. `audit_log` is never touched — I6 stays append-only even for a
+  demo reset; the reset writes its own `DEMO_RESET` audit row like everything else. DB-only, no
+  manual DB edits needed between rehearsals (the Phase 9 Exit Gate's exact wording). Integration test
+  (`scripts/demo/test/reset.test.ts`): seed → simulate a run (decision/verdict/execution/freeze) →
+  reset → state matches a fresh seed, audit chain still append-only.
+
+### 9.3 — rehearsal mode
+Confirmed, did not rebuild: `apps/worker/src/jobs.ts`'s `loop.tick` already re-queues itself at a
+30 s half-step when `DEMO_MODE=true` (Phase 6, `DEMO_TICK_SECONDS`). Built `/demo`
+(`apps/web/app/demo/page.tsx` + `apps/web/components/demo/DemoChecklist.tsx`): a demo-only route,
+I11-gated (`notFound()` outside `DEMO_MODE`/chain 84532), deliberately **not** linked from
+`AppShell`/`TabBar`. It polls the same `/api/dashboard` the real dashboard already uses — no new
+demo-specific endpoint — and narrates each of `DEMO.md`'s 8 beats as pending/done against real rows
+(policy presence, spend-permission status, recent decisions/verdicts by kind, pending approvals,
+frozen state). Deliberate simplification, marked with a `ponytail:` comment in the component: only
+pending/done, not a 4-state pending/running/done/failed machine — the aggregate dashboard read has no
+reliable "running" signal to report honestly, and a per-beat event feed would be the honest way to
+add it later. Plain solid-surface list per the brief (function over form; DESIGN.md's glass policy
+still applies to the real product screens, not this internal page).
+
+### 9.5/9.6 (written part) — README.md and docs/PITCH.md
+`README.md` (repo root, replacing the Phase 0 stub — there wasn't one, the file didn't exist): pitch
++ thesis from CLAUDE.md §1, the ARCHITECTURE §1 diagram, a security-model summary that quotes
+`SECURITY_REVIEW.md`'s residual-risk statement verbatim rather than paraphrasing it stronger, how
+SERV/AgentKit are used with real SERV request ids and real Base Sepolia tx hashes cited from this
+file (Phase 2/4 close-outs) as evidence they actually ran, setup (env var **names** only, `.env.local`
+is git-ignored and never read by this agent), demo steps pointing at `DEMO.md` and `/demo`, and a
+known-limitations section pulled honestly from `SECURITY.md` §9 and `SECURITY_REVIEW.md` findings
+F-1/F-9/F-2's scale-out note — not oversold.
+
+`docs/PITCH.md`: a slide-by-slide 3-minute pitch **outline** (not a built deck), problem → demo →
+safety proof → business model → roadmap → close, using PRD.md §8 (monetization) and §9
+(judging-criteria mapping) as source material, citing the same real evidence (tx hashes, the 48/48
+adversarial guarantee, the live attack-blocked beat) rather than generic claims. States plainly that
+**recording the actual backup video is a human task** and was not attempted — 9.6's written part
+(this outline) is the script to record against.
+
+### Gate results (2026-09-23, this session)
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | ✅ 9/9 turbo tasks + `scripts/live` + `scripts/demo` tsconfigs |
+| `pnpm lint` | ✅ eslint 0 problems + prettier clean |
+| `pnpm check:arch` | ✅ 0 real violations (**400 modules, 1069 dependencies**); all four violation fixtures still fire |
+| `pnpm test` | ✅ **74 files / 1118 tests passed**, 4 files / 28 skipped (opt-in fork suites); `packages/policy` still **100% branches (411/411)**, new `scripts/demo/test/*` (4 tests: seed idempotency + I11 fencing, attack memo trips the real heuristics, reset matches a fresh seed) |
+| `pnpm test:adversarial` | ✅ **60 cases, guarantee 48/48 (100%)**, benign FP 0/12, screen recall 35/40 (87.5%), unchanged |
+| `docker ps` | Postgres healthy throughout (`steward-postgres-1`, port 5433) |
+
+No new dependency (D-114 above is a design decision, not a dependency). No invariant weakened; every
+demo script is `DEMO_MODE`+chain-84532 fenced (I11), the reset never touches `audit_log` (I6), and
+`attack.ts`/`drawdown.ts` need `STEWARD_LIVE=1` on top, same convention as `scripts/live/*`.
+
+### Not run live this session
+`attack.ts` and `drawdown.ts` were written and typechecked/linted but **not executed against real
+Base Sepolia** in this session (no live agent wallet was provisioned for a fresh demo wallet here,
+and running one costs real CDP/RPC calls this session did not have a reason to spend). Their
+chain-independent, load-bearing properties ARE proven (the memo tripping the real deterministic
+heuristics; R16's own full coverage in `packages/policy/test/rules.test.ts`). Whoever rehearses the
+live demo before judging should run both once for real and record the tx hash / DENY evidence here.
+
+### Known issues carried into part 2
+- `/demo`'s beat statuses were verified by typecheck/lint and design-token/contract-shape inspection
+  only — not click-tested in a running browser against a live dashboard in this session (no dev
+  server was started; see BLOCKED list below for why a full local rehearsal needs live CDP/SERV
+  credentials this session did not use).
+- F-1 (no 24 h recipient/policy-change cooldown, R22 not built) and F-9 (audit-tail truncation
+  accepted residual risk) are unchanged from Phase 8 — restated honestly in the new README, not
+  re-litigated here.
+
+### BLOCKED ON THE HUMAN (the rest of Phase 9)
+- **9.4 Deploy** (Vercel for web, Railway/Fly for the worker, Neon for Postgres): needs real
+  accounts and credentials only the human holds. Nothing in this session's code assumes a specific
+  host — `getEnv()` and the existing env var list are host-agnostic — but provisioning, DNS and the
+  actual `DEMO_MODE` env configuration on those hosts has to be done by the human.
+- **9.6 actual video recording**: `docs/PITCH.md` is the finished script; recording a screen capture
+  of a live/rehearsed `DEMO.md` run narrated against it is a human task (equipment, voice, judgment
+  about pacing) not attempted here.
+- **9.7 submission**: a public X post tagging @openservai plus the hackathon's submission form —
+  both require the human's own X/OpenServ accounts; this agent cannot and must not act as the human
+  on either.
+- **9.8 Opus release review**: re-run all gates, confirm I1–I12 by inspection, confirm the mainnet
+  guard — reserved for the orchestrator's separate Opus pass per CLAUDE.md §4, not attempted here.
+
+Phase 9 is **not** marked complete. Do not start 9.4/9.7/9.8 without the human's accounts/credentials
+in place, and do not sign off the mainnet gate (`MAINNET_GATE_SIGNED_OFF` stays `false`) — that is
+explicitly a human, written risk-acceptance decision per PHASES.md 9.8, not something any agent grants.
