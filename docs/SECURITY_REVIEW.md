@@ -253,3 +253,127 @@ ones; `packages/wallet/test/companionTreasury.test.ts`.
 
 **Summary: 5 attempted, 3 clean passes, 2 produced a fix (RT-2 narrowing, RT-4 nonce ordering), 0
 HIGH.**
+
+---
+
+## 5. Residual risks RR-1 … RR-17 — disposition
+
+Every `RR-` recorded in `PROGRESS.md` across Phases 3–7, decided now. "Closed" means a later phase
+built the control the risk was waiting for. "Accepted" means it was always a documented limitation
+and stays one. "Open" means it is still live and is carried in §6.
+
+| RR | Phase | What it said | Disposition |
+|---|---|---|---|
+| **RR-1** | 3 | The engine trusts that `ownerApproval.signer` was cryptographically verified; it cannot do I/O | **CLOSED.** Phase 6.4 and 7.6 verify the signature *before* building the `EvaluationInput` — `verifyApprovalSignature` in `apps/worker/src/approvals.ts` and the approve route, both with tests incl. "a verification that cannot be completed is NOT an approval (I5)". The engine's own checks (signer == `policy.signedBy`, hash binding, expiry) are a second layer, not the only one |
+| **RR-2** | 3 | Key material lives outside the engine; a compromised backend holding the HMAC receipt key can mint receipts for proposals the engine allowed | **ACCEPTED — this is the custody model.** Bounded by the on-chain Spend Permission (L2) and by freeze/revoke. The engine's contribution stands: a receipt is useless for a different proposal, policy version, wallet, call set or time window. See §8 |
+| **RR-3** | 3 | `proposal.source` is data, not proof | **CLOSED (bounded).** Phases 4/6 set `source` in code only — `propose` restamps its own output, the loop stamps `deterministic`/`serv`, and the owner path stamps `owner`. D-26 additionally refuses to exempt owner-sourced proposals from R02, so even a forged `source='owner'` escalates to a human instead of executing |
+| **RR-4** | 4 | The injection classifier is weak (87.5% heuristic recall) | **ACCEPTED, by design.** Layer 5 is explicitly never the last line: R16 turns a flag into a DENY, and every hard rule runs regardless of what the classifier thought. The adversarial corpus measures the *end-to-end* guarantee (48/48), not the classifier |
+| **RR-5** | 4 | Verifier collusion — same provider, same model family | **ACCEPTED.** Structural, not fixable inside this MVP. Mitigated by the verifier being independent of the proposer's chain of thought and by R15 being ESCALATE-on-UNSURE. A genuinely independent second provider is a production item |
+| **RR-6** | 4 | Prompts are shared with OpenServ (NFR-5); data collection is on | **ACCEPTED, disclosed.** No secret ever enters a prompt (`redaction.test.ts` asserts it), and the prompt-builder field allowlist is what makes that true rather than hopeful |
+| **RR-7** | 4 | `packages/context` does not decide what is untrusted — the gatherer must | **CLOSED for what exists; see RR-16.** `gather` fences every policy vault's on-chain `name` and accepts `extraUntrusted`. There is still no memo store, so the seam is half-used rather than half-built |
+| **RR-8** | 4 | `noop` is the safe failure and also a denial of service | **ACCEPTED.** Correct by I5. The UI surfaces it (`paused`/`parked`/`degraded` on the dashboard) so a quiet agent is visible rather than mistaken for a working one |
+| **RR-9** | 4 | Prompt/fixture drift — fixtures keyed by request hash | **OPEN (LOW).** Unchanged: editing a prompt silently invalidates fixtures and the golden tests skip rather than fail. Carried as **F-7** |
+| **RR-10** | 5 | An ambiguous timeout inside `send` | **CLOSED.** The crash-window path resolves it: a hashless row is FAILED if the chain shows no agent activity, and **UNCERTAIN — never resent** if it does (`confirmer.test.ts` ×2) |
+| **RR-11** | 5 | The ledger values USDC at $1.00 | **ACCEPTED.** Reporting-only; no rule reads `ledger_entries.usd_micro`. R12 still denies on a real depeg |
+| **RR-12** | 5 | The breaker counted confirmer failures only | **CLOSED.** `tripBreaker` is now called on an R14 breach inside `runPipeline` too, and the soak (§7) fired it 1,000 times under load |
+| **RR-13** | 6 | PreChecks size proposals at the $1 parity when there is no quote | **ACCEPTED.** Sizing-only heuristic; the engine redoes the conversion and R08/R06/R10/R12 deny if it was wrong. It can produce a proposal the engine refuses, never one it wrongly permits |
+| **RR-14** | 6 | R17 and the deterministic path interact: a stuck obligation parks the wallet | **CLOSED (with a known consequence).** PreChecks take `recentProposalHashes` and go quiet; the `NOOP` audit row carries the reason and the dashboard shows `parked`. The soak deliberately varies its funding so this does *not* mask the load |
+| **RR-15** | 6 | Payroll-before-yield differs from DEMO.md's narration | **ACCEPTED (not a security risk).** A Phase 9 scripting item |
+| **RR-16** | 6 | `untrusted` is only vault names plus what the caller injects | **OPEN (LOW).** Unchanged. The screen is only as wide as what the gatherer fences, and Phase 9's attack script must supply the demo memo through `extraUntrusted`. Carried as **F-8** |
+| **RR-17** | 6 | Quiescence is pinned by tests, not emergent: a quiet tick is an audit row, not a decision row | **CLOSED.** Phase 7's dashboard reads the `NOOP` audit events for liveness (`paused` after 10 minutes with no agent audit row) |
+
+---
+
+## 6. Findings
+
+| ID | Severity | Finding | Recommendation | Blocks gate? |
+|---|---|---|---|---|
+| **F-1** | **MEDIUM** | **No 24 h cooldown on recipient / policy changes.** `SECURITY` §8 row 3 lists it for the "owner wallet compromised" case. The signature half is built; the cooldown is not. An attacker holding the owner's wallet can add a recipient and have it paid in the same hour, bounded only by the per-tx / daily caps and the remaining allowance | Not attempted here: it needs a new Policy Engine rule and a schema column, and `POLICY_ENGINE.md` does not define one. Rushing a rule into a 100%-branch-covered engine at a review gate is the wrong trade. Spec it as R22 (`recipient.addedAt + 24 h > now ⇒ ESCALATE` for `pay_recipient`) and build it with the rest of the catalogue | **No** — the spec itself labels it `should-have`, and the primary control (owner signature) is in place. It is the single largest gap in this document |
+| **F-2** | **MEDIUM → FIXED** | **The worker's advisory lock and its query traffic shared one 10-connection pool.** The lock holds a connection for the whole iteration; every query inside that iteration needs one too. At wallet-level concurrency ≥ the pool size the worker deadlocks permanently. Found by the 8.9 soak, which hung for 70 minutes before this was understood | **Fixed** in `apps/worker/src/index.ts`: a separate pool for the locks. Latent rather than live in the MVP (the `loop.run` handler concurrency is 1), fatal on scale-out | **No** — fixed |
+| **F-3** | LOW | `POST /api/me/telegram` needs no fresh signature, so a hijacked session can point notifications at an attacker's own chat | Narrowed in this review (numeric ids only, so no public channel). Leaks nothing that session cannot already read from `/api/dashboard`; moves no funds. Add a signature if notifications ever carry anything `/api/dashboard` does not | No |
+| **F-4** | LOW | The two unauthenticated rate-limit buckets key on `x-forwarded-for`, which is forgeable unless exactly one trusted proxy sets it | Treat `auth.nonce` / `auth.verify` limits as cost controls. If Steward is ever served without such a proxy, key them on something else or add a global ceiling. Pinned by a test so it is written down | No |
+| **F-5** | LOW | A third-party page can still induce a user to sign *something else*; Steward cannot see that | Accepted and structural. Steward never asks for an opaque signature, and the Spend Permission caps what any signature can be worth. Wallet-UX territory | No |
+| **F-6** | LOW | iron-session is a stateless cookie, so two genuinely concurrent requests each hold their own copy of the single-use freeze nonce and it can be spent twice inside its 2-minute TTL | Accepted: every outcome on this path is idempotent and in the safe direction (proven by RT-4's replay test). A server-side nonce store would close it if the owner path ever gains a non-idempotent action | No |
+| **F-7** | LOW | SERV golden fixtures are keyed by request hash and the golden tests **skip** when a fixture is missing, so a prompt edit silently removes coverage (RR-9) | Add a CI flag that fails instead of skipping when `SERV_FIXTURES` is expected to be present | No |
+| **F-8** | LOW | `ContextInput.untrusted` currently carries only vault names plus whatever the caller injects (RR-16) | Phase 9's attack script must supply the demo memo through `extraUntrusted`; a memo store would widen it properly | No |
+| **F-9** | LOW | **Audit tail truncation is undetectable** — deleting the last N rows (with the trigger disabled by a superuser) leaves a chain that still verifies. Deferred from 1.9, again from 8.4, decided here | **Decision: formally accepted as a residual risk for the MVP, with a production plan.** See §6.1 | No |
+
+### 6.1 The audit-tail-truncation decision (deferred since Phase 1.9)
+
+The hash chain detects *edits* and *insertions*; it cannot detect a truncation of the tail, because
+a shorter chain is still internally consistent. The attacker needs DB-owner rights (the trigger
+blocks the app role, and that is exactly how the tamper test disables it).
+
+Two mitigations were considered:
+
+1. **A second DB role.** `GRANT INSERT, SELECT ON audit_log TO <app_role>` with ownership elsewhere
+   makes the truncation need credentials the app does not have. This is the right production answer
+   and it is *infrastructure*, not code: dev and test run as the owner, so the migration cannot
+   apply it without breaking every local run.
+2. **An external anchor.** `verifyChain` already returns `(rows, head)`. Periodically persisting
+   `(walletId, rows, head, at)` somewhere the app role cannot rewrite — a Telegram message, an
+   export, or on-chain — makes truncation detectable by comparison.
+
+**Decision: accept for the MVP; do not build either here.** Reasons, in order: (a) the threat model
+for T14 is an attacker who has already reached DB-owner rights, at which point the far bigger prize
+is `RECEIPT_HMAC_SECRET`, not the log; (b) option 1 is a deployment change that this repo cannot
+make correctly without also owning the deployment; (c) option 2 is a genuinely new subsystem, and a
+review gate is the worst moment to add one. **Production checklist item, recorded here and in
+`PROGRESS.md`:** apply option 1 before any deployment that holds real value, and, if notifications
+are configured, send the weekly `(rows, head)` pair with the 8.6 report — that is the cheapest
+version of option 2 and it reuses a transport that already exists.
+
+---
+
+## 7. Task 8.9 — load / soak
+
+**Setup.** 10 wallets, each with its own user, policy, vault row and **its own agent address**, all
+against one anvil fork of Base Sepolia (the real MockVault, the real Circle testnet USDC) and one
+real Postgres. 120 rounds; each round fires **3 concurrent triggers per wallet** (30 in flight) so
+the per-wallet advisory lock is genuinely contended, then drains the confirmer.
+
+**What was compressed, and what was not.** Wall-clock only. The loop's clock is injected, so a round
+advances `now` by the 30-second DEMO cadence rather than sleeping for it — 120 rounds is one
+simulated hour per wallet. The iteration count, the concurrency, the chain work, the Policy Engine
+evaluation, the `eth_simulateV1` risk gate, the executor, the confirmer and the rolling R07/R14
+windows are all real and unmodified. The bugs a soak exists to catch — a second send for one
+proposal hash, a lock that lets two iterations overlap, a rolling window computed off the wrong
+clock, a pool that starves itself — are functions of iteration count and concurrency, not of
+waiting. (F-2 is the proof that this is not a weakened test: it found a deadlock that ten minutes of
+real-time single-wallet running would never have surfaced.)
+
+**Result** — `STEWARD_FORK=1 STEWARD_SOAK_ROUNDS=120 npx vitest run apps/worker/test/fork/soak.fork.test.ts`:
+
+| Metric | Value |
+|---|---|
+| Wallets | 10 |
+| Simulated window | 60 min (120 rounds × 30 s) |
+| Triggers fired | 3,600 |
+| **Iterations run** | **1,200** (one per wallet per round; 2,400 refused by the advisory lock, as intended) |
+| Outcomes | 200 executed, 1,000 denied, 0 skipped, 0 failed |
+| Executions written | 200 · submitted 200 · `TxSender.send` calls **200** |
+| **Duplicate executions** | **0** |
+| Circuit-breaker trips | 1,000 (every R14 breach; the harness unfreezes like an owner would, see below) |
+| **p50 / p95 / p99 / max iteration** | **119 ms / 210 ms / 270 ms / 404 ms** |
+| NFR-2 target (< 20 s, excluding chain confirmation) | **met, by two orders of magnitude** |
+| Audit chain | verifies for all 10 wallets after the run |
+| Errors | none |
+
+**Reading the numbers honestly.** 200 executions is exactly 20 per wallet, which is
+`SYSTEM_CEILINGS.MAX_ACTIONS_PER_HOUR`. The run therefore demonstrates the execution-loop guard
+doing its job: once a wallet has spent its hourly budget every further proposal is **denied**, and
+the R14 breach trips the circuit breaker, which freezes the wallet (SECURITY §8 row 13). A frozen
+wallet skips every later iteration, so the harness unfreezes breaker-frozen wallets between rounds —
+what a live owner would do — and counts it; otherwise the "hour" would really have been ten minutes
+of load. The 1,000 DENY iterations are full iterations (gather → pre-checks → context → simulate →
+evaluate), not cheap early exits, which is why the p50 is 119 ms rather than single digits.
+
+Second test in the same suite: **three *unlocked* concurrent iterations for one wallet** — the lock
+removed on purpose — still produce one row per proposal hash and at most one send, proving the
+executor's own idempotency (proposal hash + single-use receipt nonce) is what stops a double send,
+not merely the fact that the loop is serialised.
+
+**Not covered by this run:** paymaster-sponsored user operations (the fork harness sends
+sequentially, per the Phase 5 limitation), the live Base Sepolia path, and SERV (every wallet runs
+`degraded`, i.e. the deterministic path — which is the only path that produces executions, so it is
+the only one that can produce a duplicate).
