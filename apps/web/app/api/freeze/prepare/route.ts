@@ -1,6 +1,7 @@
-// POST /api/freeze/prepare — the literal message the owner signs to freeze OR unfreeze (task 7.8).
+// POST /api/freeze/prepare — the literal message the owner signs for a freeze, an unfreeze or a
+// sweep (task 7.8; `sweep` added in 8.2).
 //
-// One route for both actions because they are one code path with one nonce: the action is stored in
+// One route for all three actions because they are one code path with one nonce: the action is stored in
 // the session next to the nonce, and the confirming route re-derives the message from THAT, so the
 // browser cannot turn an unfreeze confirmation into a freeze (or the reverse).
 //
@@ -12,7 +13,7 @@ import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
-const body = z.object({ action: z.enum(['freeze', 'unfreeze']) }).strict();
+const body = z.object({ action: z.enum(['freeze', 'unfreeze', 'sweep']) }).strict();
 
 export async function POST(req: Request) {
   const owner = await requireOwner();
@@ -21,7 +22,8 @@ export async function POST(req: Request) {
   if (isResponse(wallet)) return wallet;
 
   const parsed = body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return apiError(400, 'bad_request', 'action must be freeze or unfreeze');
+  if (!parsed.success)
+    return apiError(400, 'bad_request', 'action must be freeze, unfreeze or sweep');
 
   return Response.json(await issueFreezeMessage(parsed.data.action, wallet.id));
 }

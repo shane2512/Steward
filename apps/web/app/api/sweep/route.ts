@@ -1,5 +1,6 @@
 // GET  /api/sweep — the current state of the sweep step (for progress and for resuming).
-// POST /api/sweep — **sensitive**: bring everything home (SECURITY §4 step 4, Phase 5.8).
+// POST /api/sweep — **sensitive**: bring everything home (SECURITY §4 step 4, Phase 5.8). Since 8.2
+// it needs a fresh owner signature over a server-issued message, exactly like freeze/unfreeze.
 //
 // This route calls `sweepHome` from `@steward/wallet` directly rather than enqueueing a job: I7
 // says the owner path works when the WORKER is down too, and a sweep that waited for a dead queue
@@ -13,11 +14,13 @@
 // Idempotency is the executor's (I10): the proposal hash keys the `executions` row, so a repeated
 // POST for an unchanged position finds the same slot instead of sending twice. A retry after a
 // FAILED sweep re-reads balances first, so it is a fresh decision, never a blind resend.
+import { z } from 'zod';
 import { insertAgentDecision } from '@steward/db';
-import { getEnv, hashCanonical } from '@steward/shared';
+import { getEnv, hashCanonical, zHex } from '@steward/shared';
 import { sweepHome } from '@steward/wallet';
 import { getAddress } from 'viem';
-import { ownerPathStatus } from '@/lib/ownerPath';
+import { ownerPathStatus, verifyFreezeSignature } from '@/lib/ownerPath';
+import { rateLimit } from '@/lib/rateLimit';
 import { apiError, getDb, getPublicClient } from '@/lib/server';
 import { getAgentSender, isResponse, receiptKey, requireOwner, requireWallet } from '@/lib/wallet';
 
@@ -32,11 +35,30 @@ export async function GET() {
   return Response.json(status.sweep);
 }
 
-export async function POST() {
+const body = z.object({ signature: zHex }).strict();
+
+export async function POST(req: Request) {
   const owner = await requireOwner();
   if (isResponse(owner)) return owner;
   const wallet = await requireWallet(owner);
   if (isResponse(wallet)) return wallet;
+
+  // 8.2 — a real on-chain transaction, so it is rate limited (freeze itself is not: I7).
+  const limited = rateLimit('sweep', owner.userId);
+  if (limited) return limited;
+
+  // 8.2 — a fresh owner signature, like freeze and unfreeze. The nonce and the ACTION come from the
+  // session (`/api/freeze/prepare` with `action: 'sweep'`), so a captured freeze signature cannot be
+  // spent here and a captured sweep signature cannot be replayed at all.
+  const parsed = body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return apiError(400, 'bad_request', 'signature is required');
+  const refusal = await verifyFreezeSignature({
+    owner,
+    walletId: wallet.id,
+    action: 'sweep',
+    signature: parsed.data.signature,
+  });
+  if (refusal) return refusal;
 
   if (!wallet.frozen)
     return apiError(

@@ -19,6 +19,7 @@ import { getAddress } from 'viem';
 import type { CompileResponse } from '@/lib/contracts';
 import { compilerUnavailable, issuesForUi, zCompileBody } from '@/lib/mandateApi';
 import { recipientBindings } from '@/lib/policyDraft';
+import { rateLimit } from '@/lib/rateLimit';
 import { apiError } from '@/lib/server';
 import { isResponse, requireOwner, requireProvisioned, requireWallet } from '@/lib/wallet';
 
@@ -31,6 +32,10 @@ export async function POST(req: Request) {
   if (isResponse(wallet)) return wallet;
   const agent = requireProvisioned(wallet);
   if (isResponse(agent)) return agent;
+
+  // 8.2 — each compile is a paid SERV request. Per owner, so one owner cannot burn the budget.
+  const limited = rateLimit('mandate.compile', owner.userId);
+  if (limited) return limited;
 
   const body = zCompileBody.safeParse(await req.json().catch(() => null));
   if (!body.success)

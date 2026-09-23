@@ -4,6 +4,7 @@ import { getEnv, zHex, type Address } from '@steward/shared';
 import { resolveTreasuryAddress } from '@/lib/treasury';
 import { verifySiwe } from '@/lib/siwe';
 import { getSession } from '@/lib/session';
+import { clientIp, rateLimit } from '@/lib/rateLimit';
 import { apiError, getDb, getPublicClient } from '@/lib/server';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,10 @@ export const dynamic = 'force-dynamic';
 const body = z.object({ message: z.string().min(1).max(4096), signature: zHex });
 
 export async function POST(req: Request) {
+  // 8.2 — unauthenticated, and a smart-wallet signature check is an RPC call. Per client IP.
+  const limited = rateLimit('auth.verify', clientIp(req));
+  if (limited) return limited;
+
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return apiError(400, 'bad_request', 'message and signature are required');
   const session = await getSession();

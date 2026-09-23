@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { appendAudit, setWalletFrozen } from '@steward/db';
 import { zHex } from '@steward/shared';
 import { ownerPathStatus, verifyFreezeSignature } from '@/lib/ownerPath';
+import { rateLimit } from '@/lib/rateLimit';
 import { apiError } from '@/lib/server';
 import { isResponse, requireOwner, requireWallet } from '@/lib/wallet';
 
@@ -26,6 +27,11 @@ export async function POST(req: Request) {
   if (isResponse(owner)) return owner;
   const wallet = await requireWallet(owner);
   if (isResponse(wallet)) return wallet;
+
+  // 8.2 — unfreezing is the UNSAFE direction, so a limit here costs no safety. Freezing itself is
+  // deliberately NOT limited (I7: the owner's stop button always works).
+  const limited = rateLimit('unfreeze', owner.userId);
+  if (limited) return limited;
 
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return apiError(400, 'bad_request', 'signature is required');

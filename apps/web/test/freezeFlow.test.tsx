@@ -41,6 +41,8 @@ import type { OwnerPath } from '../lib/contracts';
 const MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad';
 const REVOKE_DATA = `0x${'cd'.repeat(80)}`;
 const FREEZE_MESSAGE = 'Steward freeze\nWallet: w1\nNonce: abc\nExpires: 2026-01-01T00:00:00.000Z';
+/** 8.2 — the sweep gets its own server-issued message, with its own action on the first line. */
+const SWEEP_MESSAGE = 'Steward sweep\nWallet: w1\nNonce: def\nExpires: 2026-01-01T00:00:00.000Z';
 
 const status = (over: Partial<OwnerPath> = {}): OwnerPath => ({
   frozen: false,
@@ -215,12 +217,30 @@ describe('step 3 — sweep', () => {
       .mockResolvedValueOnce(status({ frozen: true }))
       .mockResolvedValueOnce(status({ frozen: true }))
       .mockResolvedValue(status({ frozen: true, sweep: { state: 'confirmed', txHash: '0xabc' } }));
-    mocks.apiPost.mockResolvedValue({ state: 'submitted', txHash: '0xabc', verdict: 'ALLOW' });
+    // 8.2: the sweep asks for its own server-issued message and signs it before posting.
+    mocks.apiPost.mockImplementation((path: string) =>
+      path === '/api/freeze/prepare'
+        ? Promise.resolve({ message: SWEEP_MESSAGE, expiresAt: 'later' })
+        : Promise.resolve({ state: 'submitted', txHash: '0xabc', verdict: 'ALLOW' }),
+    );
+    mocks.signMessageAsync.mockResolvedValue('0xsweepsig');
     render(<FreezeFlow frozen onDone={() => {}} onClose={() => {}} pollMs={1} />);
 
     fireEvent.click(await screen.findByTestId('sweep-now'));
     await waitFor(() =>
-      expect(mocks.apiPost).toHaveBeenCalledWith('/api/sweep', expect.anything()),
+      expect(mocks.apiPost).toHaveBeenCalledWith('/api/freeze/prepare', expect.anything(), {
+        action: 'sweep',
+      }),
+    );
+    await waitFor(() =>
+      expect(mocks.signMessageAsync).toHaveBeenCalledWith({
+        message: SWEEP_MESSAGE,
+      }),
+    );
+    await waitFor(() =>
+      expect(mocks.apiPost).toHaveBeenCalledWith('/api/sweep', expect.anything(), {
+        signature: '0xsweepsig',
+      }),
     );
     await waitFor(() => expect(screen.getByTestId('freeze-step-3').dataset['state']).toBe('done'));
   });

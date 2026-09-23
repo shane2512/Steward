@@ -54,13 +54,18 @@ export function recipientAddMessage(input: RecipientMessageInput): string {
   ].join('\n');
 }
 
-/** Freeze / unfreeze confirmations are single-use and short-lived, like recipient adds. */
+/** Owner-path confirmations (freeze / unfreeze / sweep) are single-use and short-lived. */
 export const FREEZE_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 
-export type FreezeAction = 'freeze' | 'unfreeze';
+/**
+ * 8.2 added `sweep`: a sweep is a real on-chain transaction that closes yield positions and burns
+ * gas, so a stolen session must not be able to force one either — even though its destination is
+ * fixed to the owner's own treasury by the signed policy.
+ */
+export type FreezeAction = 'freeze' | 'unfreeze' | 'sweep';
 
 /**
- * `Steward freeze` / `Steward unfreeze` + wallet + nonce + expiry (task 7.8).
+ * `Steward freeze` / `Steward unfreeze` / `Steward sweep` + wallet + nonce + expiry (7.8, 8.2).
  *
  * SECURITY §5 fixes only the approval format, so this follows the same shape as the recipient
  * message (D-80): one labelled fact per line, nothing owner-supplied in it, server-issued nonce.

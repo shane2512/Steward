@@ -132,7 +132,7 @@ const signedIn = () => {
 
 /** Ask for the real message, sign it with `account`, and submit it to `route`. */
 async function signAndSubmit(
-  action: 'freeze' | 'unfreeze',
+  action: 'freeze' | 'unfreeze' | 'sweep',
   account: typeof owner,
   route: { POST: (r: Request) => Promise<Response> },
   path: string,
@@ -153,7 +153,7 @@ describe('the owner path refuses anonymous callers', () => {
       401,
     );
     expect((await routes.sweep.GET()).status).toBe(401);
-    expect((await routes.sweep.POST()).status).toBe(401);
+    expect((await routes.sweep.POST(post('/api/sweep', { signature: '0x00' }))).status).toBe(401);
     expect(
       (await routes.revoked.POST(post('/api/spend-permission/revoked', { txHash: '0xab' }))).status,
     ).toBe(401);
@@ -277,9 +277,48 @@ describe('POST /api/unfreeze', () => {
 describe('the sweep is the only action allowed while frozen', () => {
   it('refuses on a running wallet', async () => {
     signedIn();
-    const res = await routes.sweep.POST();
+    // 8.2: the signature is checked FIRST, so this needs a real one to reach the frozen check.
+    const res = await signAndSubmit('sweep', owner, routes.sweep, '/api/sweep');
     expect(res.status).toBe(409);
     expect((await json(res))['error']).toMatchObject({ code: 'not_frozen' });
+  });
+
+  // 8.2 — the sweep is a real on-chain transaction, so a session alone must not be able to start one.
+  it('refuses without a signature at all', async () => {
+    signedIn();
+    expect((await routes.sweep.POST(post('/api/sweep'))).status).toBe(400);
+  });
+
+  it('refuses a signature from someone other than the owner', async () => {
+    signedIn();
+    const res = await signAndSubmit('sweep', other, routes.sweep, '/api/sweep');
+    expect(res.status).toBe(401);
+    expect((await json(res))['error']).toMatchObject({ code: 'bad_signature' });
+  });
+
+  it('refuses a FREEZE signature spent on the sweep route', async () => {
+    signedIn();
+    // The nonce was minted for `freeze`; the sweep route re-derives from the SESSION's action, so it
+    // sees the mismatch and refuses without even looking at the signature.
+    const prepared = await json(
+      await routes.prepare.POST(post('/api/freeze/prepare', { action: 'freeze' })),
+    );
+    const signature = await owner.signMessage({ message: prepared['message'] as string });
+    const res = await routes.sweep.POST(post('/api/sweep', { signature }));
+    expect(res.status).toBe(400);
+    expect((await json(res))['error']).toMatchObject({ code: 'nonce_expired' });
+  });
+
+  it('refuses a replayed sweep signature (the nonce is single-use)', async () => {
+    signedIn();
+    const prepared = await json(
+      await routes.prepare.POST(post('/api/freeze/prepare', { action: 'sweep' })),
+    );
+    const signature = await owner.signMessage({ message: prepared['message'] as string });
+    expect((await routes.sweep.POST(post('/api/sweep', { signature }))).status).toBe(409);
+    const replay = await routes.sweep.POST(post('/api/sweep', { signature }));
+    expect(replay.status).toBe(400);
+    expect((await json(replay))['error']).toMatchObject({ code: 'nonce_expired' });
   });
 
   it('reports no sweep before one has been attempted', async () => {

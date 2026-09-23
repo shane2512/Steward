@@ -156,7 +156,12 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
     try {
       const fresh = await read();
       if (fresh.sweep.state === 'confirmed') return;
-      const started = await apiPost('/api/sweep', zSweepResult);
+      // 8.2 — the sweep now needs its own fresh signature, over a message the server mints for
+      // `action: 'sweep'`. Same prepare route as freeze/unfreeze; the action lives in the session,
+      // so this signature cannot be spent on anything else.
+      const prepared = await apiPost('/api/freeze/prepare', zFreezePrepare, { action: 'sweep' });
+      const signature = await signMessageAsync({ message: prepared.message });
+      const started = await apiPost('/api/sweep', zSweepResult, { signature });
       if (started.nothingToSweep) {
         await read();
         return;
@@ -171,7 +176,7 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
     } finally {
       setBusy(null);
     }
-  }, [pollMs, read]);
+  }, [pollMs, read, signMessageAsync]);
 
   if (loadError && status === null)
     return (
