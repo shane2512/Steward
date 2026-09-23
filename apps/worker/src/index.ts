@@ -37,6 +37,15 @@ await boss.send('health'); // one immediately, then every minute (cron minimum g
 await boss.schedule('health', '* * * * *');
 
 const { db, pool } = createDb(env.DATABASE_URL);
+// 8.9 (load/soak finding F-2) — the per-wallet advisory lock holds a connection for the WHOLE
+// iteration, and everything that iteration does needs a connection of its own. Taking both from
+// one 10-connection pool deadlocks as soon as wallet-level concurrency reaches the pool size: the
+// locks hold every connection and the queries inside them wait forever. A separate, small pool for
+// the locks costs two lines and removes the ceiling entirely. `lockPool` is only ever used for
+// `pg_try_advisory_lock` / `pg_advisory_unlock`, never for query traffic.
+// ponytail: separate pool, sized to wallet concurrency — raise `max` if a worker ever runs more
+// than 20 wallets at once.
+const { pool: lockPool } = createDb(env.DATABASE_URL);
 const publicClient = publicClientFor(env);
 
 // 6.6 — close the crash window first. An execution that reached the chain goes back to the
@@ -49,7 +58,7 @@ if (recovered.resumed + recovered.uncertain + recovered.neverSent > 0)
 await registerJobs({
   boss,
   db,
-  pool,
+  pool: lockPool,
   env,
   publicClient,
   senderFor: senderFactory(env),
@@ -64,6 +73,7 @@ log.info({ chainId: env.CHAIN_ID, demoMode: env.DEMO_MODE }, 'worker started');
 const stop = async () => {
   await boss.stop();
   await pool.end();
+  await lockPool.end();
   process.exit(0);
 };
 process.on('SIGINT', stop);
