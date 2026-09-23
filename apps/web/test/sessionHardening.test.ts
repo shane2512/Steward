@@ -128,7 +128,8 @@ describe('the rate limiter', () => {
     // handshake limit is a cost control, never a security control. Nothing behind it moves funds:
     // /api/auth/nonce writes a cookie, /api/auth/verify does one ecrecover or eth_call.
     const { limit } = RATE_LIMITS['auth.nonce'];
-    for (let i = 0; i < limit; i += 1) expect(rateLimit('auth.nonce', '198.51.100.1', 1000)).toBeNull();
+    for (let i = 0; i < limit; i += 1)
+      expect(rateLimit('auth.nonce', '198.51.100.1', 1000)).toBeNull();
     expect(rateLimit('auth.nonce', '198.51.100.1', 1000)).not.toBeNull();
     // Rotating the claimed address gets a fresh window. This test exists to record that fact.
     expect(rateLimit('auth.nonce', '198.51.100.2', 1000)).toBeNull();
