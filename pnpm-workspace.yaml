@@ -7,6 +7,12 @@ packages:
 # collecting page data). Force one version everywhere.
 overrides:
   viem: 2.56.8
+  # jose v6 dropped CommonJS support entirely (ESM-only). @coinbase/cdp-sdk's JWT auth code is CJS
+  # and require()s it; on Vercel's Node 24 build machines (not reproduced locally on Node 22) that
+  # races jose's own async ESM init (ERR_REQUIRE_ESM_RACE_CONDITION) during Next's build-time page-
+  # data collection, which does a raw require() regardless of serverExternalPackages. jose 5.x still
+  # ships a real dual CJS+ESM build with no such race; its JWT/JWK APIs are unchanged from v6.
+  jose: '5'
 allowBuilds:
   esbuild: true
   sharp: true
