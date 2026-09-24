@@ -25,7 +25,11 @@ export async function POST(req: Request) {
     signature: parsed.data.signature,
     expectedNonce: session.nonce,
     nonceIssuedAt: session.nonceIssuedAt,
-    domain: new URL(req.url).host,
+    // The `Host` header is what the browser actually sent (and what `window.location.host` signed
+    // client-side matches) — behind a reverse proxy (Render, or any non-Vercel host), reconstructing
+    // it from req.url instead is not guaranteed to agree, and did not here (SIWE domain mismatch,
+    // 401 on every sign-in on Render even though the same code worked unmodified on Vercel).
+    domain: req.headers.get('host') ?? new URL(req.url).host,
     chainId: getEnv().CHAIN_ID,
     now: new Date(),
     verify: (a) => client.verifyMessage(a),
