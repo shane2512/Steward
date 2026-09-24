@@ -59,14 +59,11 @@ type BannerInput = {
 /** Which banners the shell shows, in order. Copy follows UX_FLOWS "Global states". */
 export function banners(i: BannerInput): Banner[] {
   const out: Banner[] = [];
-  if (i.demoMode)
-    out.push({
-      id: 'demo',
-      tone: 'warn',
-      title: 'Demo data',
-      body: 'Mocked prices and rates, Base Sepolia only.',
-      live: 'polite',
-    });
+  // D-115: the "Demo data" banner (I11) was removed from the UI by explicit owner request
+  // (2026-09-23) — see docs/PROGRESS.md Decisions. DEMO_MODE itself is off in .env.local for
+  // normal use; re-enabling it for the hackathon demo (per docs/DEMO.md) will mock prices with
+  // no on-screen disclosure. `i.demoMode` is kept on BannerInput rather than deleted so this is
+  // a one-line revert if that turns out to matter live.
   if (i.data?.wallet.frozen)
     out.push({
       id: 'frozen',

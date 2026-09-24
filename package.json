@@ -19,6 +19,8 @@
     "db:migrate": "pnpm --filter @steward/db migrate",
     "db:generate": "pnpm --filter @steward/db generate",
     "db:seed:demo": "tsx scripts/demo/seed.ts",
+    "demo:provision-owner": "tsx scripts/demo/provision-owner.ts",
+    "demo:fund-owner": "tsx scripts/demo/fund-owner.ts",
     "demo:attack": "tsx scripts/demo/attack.ts",
     "demo:drawdown": "tsx scripts/demo/drawdown.ts",
     "demo:reset": "tsx scripts/demo/reset.ts",

@@ -1,15 +1,14 @@
 import type { ReactNode } from 'react';
-import { Figtree, Geist_Mono } from 'next/font/google';
+import { Geist_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import { Providers } from '@/components/Providers';
 import './globals.css';
 
-// docs/DESIGN.md §3 — Figtree (OFL, variable) for everything a human wrote:
-// single-storey g, tall x-height, geometric-humanist grotesk. Geist Mono (OFL)
-// for machine data only (addresses, hashes, tx ids, eyebrow micro-labels).
-const figtree = Figtree({
+// Matches generated/landing.html's body font exactly (OFL, variable). Geist
+// Mono (OFL) for machine data only (addresses, hashes, tx ids, eyebrow labels).
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
   display: 'swap',
-  variable: '--font-figtree',
+  variable: '--font-jakarta',
 });
 
 const geistMono = Geist_Mono({
@@ -25,7 +24,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${figtree.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${plusJakartaSans.variable} ${geistMono.variable}`}>
       <body className="min-h-dvh bg-ground font-sans text-body text-ink antialiased">
         <a
           href="#main"

@@ -12,22 +12,64 @@ import { useApi } from '@/lib/useApi';
 import { SignStepSlot } from './SignStepSlot';
 import { MandateStep, MeetStep, StepHeading, WalletStep } from './steps';
 
-export function StepProgress({ current }: { current: number }) {
+const TOTAL_STEPS = 5;
+
+/** Dot-and-bar progress (multistep-form pattern, dependency-free): a dot per step, ringed when
+ * current, a thin bar filling to the current step underneath. Past dots jump back via `onStepClick`
+ * — the same "only completed steps are reachable" rule the onboarding wizard already enforces. */
+export function StepProgress({
+  current,
+  onStepClick,
+}: {
+  current: number;
+  onStepClick?: (step: number) => void;
+}) {
   return (
-    <div
-      className="flex gap-1 px-4 pt-3"
-      role="progressbar"
-      aria-label="Onboarding progress"
-      aria-valuemin={1}
-      aria-valuemax={5}
-      aria-valuenow={current}
-    >
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className={`h-[3px] flex-1 rounded-full ${i <= current ? 'bg-ink' : 'bg-surface-3'}`}
+    <div className="px-4 pt-3">
+      <div
+        className="flex items-center justify-between"
+        role="progressbar"
+        aria-label="Onboarding progress"
+        aria-valuemin={1}
+        aria-valuemax={TOTAL_STEPS}
+        aria-valuenow={current}
+      >
+        {Array.from({ length: TOTAL_STEPS }, (_, idx) => idx + 1).map((i) => {
+          const reached = i <= current;
+          const clickable = reached && i !== current && onStepClick;
+          const dot = (
+            <span
+              className={`block size-2.5 rounded-full transition-all duration-200 ${
+                reached ? 'bg-ink' : 'bg-surface-3'
+              } ${i === current ? 'ring-2 ring-ink/20 ring-offset-2 ring-offset-ground' : ''} ${
+                clickable ? 'hover:scale-125' : ''
+              }`}
+              aria-hidden="true"
+            />
+          );
+          return clickable ? (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onStepClick(i)}
+              aria-label={`Go back to step ${i}`}
+              className="flex size-6 items-center justify-center"
+            >
+              {dot}
+            </button>
+          ) : (
+            <span key={i} className="flex size-6 items-center justify-center">
+              {dot}
+            </span>
+          );
+        })}
+      </div>
+      <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-surface-3">
+        <div
+          className="h-full rounded-full bg-ink transition-[width] duration-300 ease-out"
+          style={{ width: `${((current - 1) / (TOTAL_STEPS - 1)) * 100}%` }}
         />
-      ))}
+      </div>
     </div>
   );
 }
@@ -76,7 +118,7 @@ export function OnboardingFlow() {
 
   return (
     <div data-step={current}>
-      <StepProgress current={current} />
+      <StepProgress current={current} onStepClick={go} />
       <div className="flex h-14 items-center gap-3 px-2">
         {current > 1 ? (
           <button

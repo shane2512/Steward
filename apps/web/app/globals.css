@@ -1,154 +1,158 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Steward design tokens v2 — see docs/DESIGN.md
-   Dark is the default (the reference frames are dark-first). Light is the
-   alternate. Values are indirected through --st-* so that a `data-theme`
-   attribute on <html> OR on any wrapper element swaps the whole theme, while
-   `prefers-color-scheme` remains the default.
+   Steward design tokens v5 — matched to the landing page (generated/landing.html):
+   black + white + one yellow accent (#FCE300, the landing page's brand.yellow),
+   Plus Jakarta Sans body font. Neutrals stay black/white; yellow is used only
+   for FILLED interactive surfaces (buttons, badges, the meter fill, active-tab
+   indicators) — never as text color on the white canvas, because yellow-on-white
+   text is illegible. This mirrors the landing page's own actual behaviour: it
+   never sets yellow text on its white hero section either, only on black
+   sections (nav links hover white→yellow) or as a button fill. Text links use
+   black in light mode for the same reason, yellow in dark mode where it reads.
 
-   The accent is ONE light green, used in exactly the eight roles listed in
-   DESIGN.md §2. It is never a status. Verdict colours live on a different hue
-   family (§4) and always ship with a glyph and a word.
+   Verdict colours (allow/escalate/deny) are the one deliberate exception to
+   "single accent": they are a safety signal, not brand chrome (DESIGN.md v2
+   §4 — "a different hue family, to avoid ambiguity with the accent"). They
+   stay, always with an icon and a word, never colour alone — removing them
+   would blunt the live "Blocked" moment the security demo depends on.
    =========================================================================== */
 
-/* --- dark, the default ---------------------------------------------------- */
+/* --- light, the default: white background, black ink, on every page except
+   the landing page's own deliberately black nav/footer bands. --- */
 :root {
-  --st-ground: #090c11;
-  --st-surface: #111419;
-  --st-surface-2: #1b1e23;
-  --st-surface-3: #24272f;
-  --st-line: #2a2d31;
-  --st-line-strong: #5a616b;
-  --st-ink: #ffffff;
-  --st-muted: #b3b6be;
-  --st-faint: #7e838d;
-  --st-minor: #626974;
-  --st-escalate-tint: #33260c;
-  --st-deny-tint: #2e1210;
-
-  --st-accent: #aef07a;
-  --st-accent-press: #98de5f;
-  --st-on-accent: #0b120b;
-  /* accent-coloured TEXT. In dark the accent itself is legible (14.5:1);
-     in light it is not, so this token diverges. Components use it for text
-     and --st-accent for fills, always. */
-  --st-accent-ink: #aef07a;
-
-  --st-allow: #2fd9a6;
-  --st-escalate: #ffb020;
-  --st-deny: #ff6a5e;
-  --st-deny-fill: #d92d1e;
-  --st-on-deny-fill: #ffffff;
-  --st-info: #7c8cff;
-
-  --st-shadow-e1: 0 0 0 0 transparent;
-  --st-shadow-e2: 0 -24px 48px -12px rgb(0 0 0 / 0.55);
-  --st-glass-mix: 72%;
-  --st-glass-edge: rgb(255 255 255 / 0.06);
-  color-scheme: dark;
-}
-
-/* --- light, the alternate ------------------------------------------------- */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    --st-ground: #f4f6fa;
-    --st-surface: #ffffff;
-    --st-surface-2: #eef1f6;
-    --st-surface-3: #e4e8ef;
-    --st-line: #d6dbe4;
-    --st-line-strong: #5a6270;
-    --st-ink: #0b0f16;
-    --st-muted: #525a68;
-    --st-faint: #6e7684;
-    --st-minor: #858d9b;
-    --st-escalate-tint: #fdf0dc;
-    --st-deny-tint: #fdeae7;
-
-    --st-accent: #aef07a;
-    --st-accent-press: #98de5f;
-    --st-on-accent: #0b120b;
-    --st-accent-ink: #3f6b1a;
-
-    --st-allow: #067a59;
-    --st-escalate: #8a5300;
-    --st-deny: #c42a1b;
-    --st-deny-fill: #c42a1b;
-    --st-on-deny-fill: #ffffff;
-    --st-info: #3b45c9;
-
-    --st-shadow-e1: 0 1px 2px rgb(11 15 22 / 0.06);
-    --st-shadow-e2: 0 -24px 48px -12px rgb(11 15 22 / 0.18);
-    --st-glass-mix: 76%;
-    --st-glass-edge: rgb(255 255 255 / 0.7);
-    color-scheme: light;
-  }
-}
-
-/* explicit override, on <html> or on any subtree (the preview uses wrappers) */
-[data-theme='light'] {
-  --st-ground: #f4f6fa;
-  --st-surface: #ffffff;
-  --st-surface-2: #eef1f6;
-  --st-surface-3: #e4e8ef;
-  --st-line: #d6dbe4;
-  --st-line-strong: #5a6270;
-  --st-ink: #0b0f16;
-  --st-muted: #525a68;
-  --st-faint: #6e7684;
-  --st-minor: #858d9b;
+  --st-ground: #ffffff;
+  --st-surface: #e8e8ea;
+  --st-surface-2: #dddde1;
+  --st-surface-3: #d0d0d5;
+  --st-line: rgb(0 0 0 / 0.1);
+  --st-line-strong: rgb(0 0 0 / 0.2);
+  --st-ink: #0a0a0a;
+  --st-muted: rgb(60 60 67 / 0.6);
+  --st-faint: rgb(60 60 67 / 0.3);
+  --st-minor: rgb(60 60 67 / 0.18);
   --st-escalate-tint: #fdf0dc;
   --st-deny-tint: #fdeae7;
 
-  --st-accent: #aef07a;
-  --st-accent-press: #98de5f;
-  --st-on-accent: #0b120b;
-  --st-accent-ink: #3f6b1a;
+  --st-accent: #fce300;
+  --st-accent-press: #e5ce00;
+  --st-on-accent: #0a0a0a;
+  --st-accent-ink: #0a0a0a;
 
   --st-allow: #067a59;
   --st-escalate: #8a5300;
   --st-deny: #c42a1b;
   --st-deny-fill: #c42a1b;
   --st-on-deny-fill: #ffffff;
-  --st-info: #3b45c9;
+  --st-info: #0a0a0a;
 
-  --st-shadow-e1: 0 1px 2px rgb(11 15 22 / 0.06);
-  --st-shadow-e2: 0 -24px 48px -12px rgb(11 15 22 / 0.18);
-  --st-glass-mix: 76%;
-  --st-glass-edge: rgb(255 255 255 / 0.7);
+  --st-shadow-e1: 0 1px 2px rgb(0 0 0 / 0.05), 0 1px 1px rgb(0 0 0 / 0.04);
+  --st-shadow-e2: 0 -8px 32px -8px rgb(0 0 0 / 0.14);
+  --st-glass-mix: 78%;
+  --st-glass-edge: rgb(255 255 255 / 0.6);
+  color-scheme: light;
+}
+
+/* --- dark, the alternate (Apple Black canvas, elevated dark surfaces) ----- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --st-ground: #000000;
+    --st-surface: #1c1c1e;
+    --st-surface-2: #2c2c2e;
+    --st-surface-3: #3a3a3c;
+    --st-line: rgb(255 255 255 / 0.15);
+    --st-line-strong: rgb(255 255 255 / 0.28);
+    --st-ink: #ffffff;
+    --st-muted: rgb(235 235 245 / 0.6);
+    --st-faint: rgb(235 235 245 / 0.3);
+    --st-minor: rgb(235 235 245 / 0.18);
+    --st-escalate-tint: #33260c;
+    --st-deny-tint: #2e1210;
+
+    --st-accent: #fce300;
+    --st-accent-press: #e5ce00;
+    --st-on-accent: #0a0a0a;
+    --st-accent-ink: #fce300;
+
+    --st-allow: #2fd9a6;
+    --st-escalate: #ffb020;
+    --st-deny: #ff6a5e;
+    --st-deny-fill: #d92d1e;
+    --st-on-deny-fill: #ffffff;
+    --st-info: #fce300;
+
+    --st-shadow-e1: 0 0 0 0 transparent;
+    --st-shadow-e2: 0 -24px 48px -12px rgb(0 0 0 / 0.55);
+    --st-glass-mix: 68%;
+    --st-glass-edge: rgb(255 255 255 / 0.08);
+    color-scheme: dark;
+  }
+}
+
+/* explicit override, on <html> or on any subtree (the preview uses wrappers) */
+[data-theme='light'] {
+  --st-ground: #ffffff;
+  --st-surface: #e8e8ea;
+  --st-surface-2: #dddde1;
+  --st-surface-3: #d0d0d5;
+  --st-line: rgb(0 0 0 / 0.1);
+  --st-line-strong: rgb(0 0 0 / 0.2);
+  --st-ink: #0a0a0a;
+  --st-muted: rgb(60 60 67 / 0.6);
+  --st-faint: rgb(60 60 67 / 0.3);
+  --st-minor: rgb(60 60 67 / 0.18);
+  --st-escalate-tint: #fdf0dc;
+  --st-deny-tint: #fdeae7;
+
+  --st-accent: #fce300;
+  --st-accent-press: #e5ce00;
+  --st-on-accent: #0a0a0a;
+  --st-accent-ink: #0a0a0a;
+
+  --st-allow: #067a59;
+  --st-escalate: #8a5300;
+  --st-deny: #c42a1b;
+  --st-deny-fill: #c42a1b;
+  --st-on-deny-fill: #ffffff;
+  --st-info: #0a0a0a;
+
+  --st-shadow-e1: 0 1px 2px rgb(0 0 0 / 0.05), 0 1px 1px rgb(0 0 0 / 0.04);
+  --st-shadow-e2: 0 -8px 32px -8px rgb(0 0 0 / 0.14);
+  --st-glass-mix: 78%;
+  --st-glass-edge: rgb(255 255 255 / 0.6);
   color-scheme: light;
 }
 
 [data-theme='dark'] {
-  --st-ground: #090c11;
-  --st-surface: #111419;
-  --st-surface-2: #1b1e23;
-  --st-surface-3: #24272f;
-  --st-line: #2a2d31;
-  --st-line-strong: #5a616b;
+  --st-ground: #000000;
+  --st-surface: #1c1c1e;
+  --st-surface-2: #2c2c2e;
+  --st-surface-3: #3a3a3c;
+  --st-line: rgb(255 255 255 / 0.15);
+  --st-line-strong: rgb(255 255 255 / 0.28);
   --st-ink: #ffffff;
-  --st-muted: #b3b6be;
-  --st-faint: #7e838d;
-  --st-minor: #626974;
+  --st-muted: rgb(235 235 245 / 0.6);
+  --st-faint: rgb(235 235 245 / 0.3);
+  --st-minor: rgb(235 235 245 / 0.18);
   --st-escalate-tint: #33260c;
   --st-deny-tint: #2e1210;
 
-  --st-accent: #aef07a;
-  --st-accent-press: #98de5f;
-  --st-on-accent: #0b120b;
-  --st-accent-ink: #aef07a;
+  --st-accent: #fce300;
+  --st-accent-press: #e5ce00;
+  --st-on-accent: #0a0a0a;
+  --st-accent-ink: #fce300;
 
   --st-allow: #2fd9a6;
   --st-escalate: #ffb020;
   --st-deny: #ff6a5e;
   --st-deny-fill: #d92d1e;
   --st-on-deny-fill: #ffffff;
-  --st-info: #7c8cff;
+  --st-info: #fce300;
 
   --st-shadow-e1: 0 0 0 0 transparent;
   --st-shadow-e2: 0 -24px 48px -12px rgb(0 0 0 / 0.55);
-  --st-glass-mix: 72%;
-  --st-glass-edge: rgb(255 255 255 / 0.06);
+  --st-glass-mix: 68%;
+  --st-glass-edge: rgb(255 255 255 / 0.08);
   color-scheme: dark;
 }
 
@@ -178,7 +182,36 @@
   --color-on-deny-fill: var(--st-on-deny-fill);
   --color-info: var(--st-info);
 
-  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  /* shadcn/ui token bridge: every shadcn component (Button, Card, Select, Checkbox,
+     RadioGroup, Calendar, ...) reads these standard names. Aliasing them to our own
+     --st-* palette means adopted components render in our Apple/System-Blue system
+     automatically, instead of shadcn's own default gray/zinc theme. */
+  --color-background: var(--st-ground);
+  --color-foreground: var(--st-ink);
+  --color-card: var(--st-surface);
+  --color-card-foreground: var(--st-ink);
+  --color-popover: var(--st-surface);
+  --color-popover-foreground: var(--st-ink);
+  --color-primary: var(--st-accent);
+  --color-primary-foreground: var(--st-on-accent);
+  --color-secondary: var(--st-surface-2);
+  --color-secondary-foreground: var(--st-ink);
+  --color-muted-foreground: var(--st-muted);
+  --color-accent-foreground: var(--st-on-accent);
+  --color-destructive: var(--st-deny-fill);
+  --color-destructive-foreground: var(--st-on-deny-fill);
+  --color-border: var(--st-line);
+  --color-input: var(--st-line-strong);
+  /* accent-ink, not accent: a yellow ring is illegible/low-visibility on the
+     white canvas (same reasoning as text links below), so focus rings use the
+     legible accent-ink token instead — black in light mode, yellow in dark. */
+  --color-ring: var(--st-accent-ink);
+  --color-success: var(--st-allow);
+  --color-warning: var(--st-escalate);
+
+  /* matches generated/landing.html's own font-family declaration exactly, so
+     the app and the landing page read as one product. */
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* type scale (docs/DESIGN.md §3) */
@@ -239,7 +272,9 @@
 }
 
 @layer components {
-  /* §8 — glass is solid by default, opts in, then opts back out */
+  /* §8 — liquid glass: frosted, saturated, with a bright top edge catching
+     light (docs/apple-design materials guidance). Solid by default, opts in,
+     then opts back out for reduced-transparency / forced-colors. */
   .glass {
     background-color: var(--st-surface);
   }
@@ -247,7 +282,7 @@
   @supports (backdrop-filter: blur(1px)) {
     .glass {
       background-color: color-mix(in srgb, var(--st-surface) var(--st-glass-mix), transparent);
-      backdrop-filter: blur(20px) saturate(160%);
+      backdrop-filter: blur(24px) saturate(180%);
       box-shadow: inset 0 1px 0 var(--st-glass-edge);
     }
     .glass-sheet {
@@ -256,7 +291,7 @@
         var(--st-surface) calc(var(--st-glass-mix) + 4%),
         transparent
       );
-      backdrop-filter: blur(28px) saturate(160%);
+      backdrop-filter: blur(32px) saturate(180%);
       box-shadow:
         inset 0 1px 0 var(--st-glass-edge),
         var(--st-shadow-e2);

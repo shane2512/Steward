@@ -17,10 +17,10 @@ import {
   type IconComponent,
 } from '@/components/icons';
 import { CopyAddress } from '@/components/ui/CopyAddress';
+import ProgressMetricCard, { type SeriesPoint } from '@/components/ui/progress-metric-card';
 import { Sheet } from '@/components/ui/Sheet';
 import {
   AllowanceMeter,
-  Balance,
   Chip,
   Eyebrow,
   Money,
@@ -30,10 +30,19 @@ import {
 } from '@/components/ui/primitives';
 import type { Dashboard } from '@/lib/contracts';
 import { allowanceView, clockTime, dueLabel, runwayView, totalManaged } from '@/lib/dashboardModel';
-import { formatAgo, formatToken, toBig } from '@/lib/format';
+import { formatAgo, formatToken, splitBalance, toBig } from '@/lib/format';
 import { isStale } from '@/lib/status';
 
 /* ---------------------------------------------------------------- balance */
+
+/** bigint -> plain number, for chart Y-axis position ONLY. This is the one place per screen where
+ * money crosses into JS `number` (I12 governs money math and comparisons, not a pixel coordinate);
+ * the source of truth stays the bigint from `totalManaged`, and this value is never compared,
+ * summed, or stored. Safe in practice: treasury balances stay far under Number.MAX_SAFE_INTEGER at
+ * 6-decimal micro-USD scale. */
+function microUsdToChartNumber(microUsd: bigint): number {
+  return Number(microUsd) / 1_000_000;
+}
 
 export function BalanceCard({
   d,
@@ -49,46 +58,57 @@ export function BalanceCard({
   const a = allowanceView(d);
   const stale = isStale(updatedAt, now);
   const apy = d.vault?.apyPct;
+  const balance = totalManaged(d);
+  const { whole, minor } = splitBalance(balance);
+
+  // Honest flat series: today's real balance repeated, not an invented trend. This app has no
+  // balance-history table (only vault-position snapshots exist, and only for wallets with an open
+  // vault position), so there is no real second point to plot. A flat line correctly reads as
+  // "no observed change" rather than fabricating movement that was never measured.
+  const point = microUsdToChartNumber(balance);
+  const series: SeriesPoint[] = [
+    { value: point, date: 'Yesterday' },
+    { value: point, date: 'Today' },
+  ];
+
+  const footer = apy
+    ? { delta: `${apy}%`, deltaLabel: 'APY in vaults' }
+    : d.vault
+      ? { delta: '—', deltaLabel: 'vault rate not reported yet' }
+      : { delta: '—', deltaLabel: 'nothing earning yet' };
+
   return (
-    <div className={`glass rounded-lg p-5 ${d.wallet.frozen ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between">
-        <p className="font-mono text-label font-semibold tracking-[0.12em] text-muted uppercase">
-          Treasury
-        </p>
-        {updatedAt !== undefined ? (
-          <span className="flex items-center gap-1 font-mono text-label text-muted">
-            <span data-testid="as-of">
-              {stale ? 'as of ' : 'updated '}
-              {clockTime(updatedAt)}
-            </span>
-            {stale ? (
-              <button
-                type="button"
-                onClick={onRefresh}
-                aria-label="Refresh now"
-                className="flex size-11 items-center justify-center text-ink"
-              >
-                <IconRefresh className="size-4" />
-              </button>
-            ) : null}
+    <div className={d.wallet.frozen ? 'opacity-60' : stale ? 'opacity-70' : ''}>
+      {updatedAt !== undefined ? (
+        <div className="flex items-center justify-end gap-1 pb-2 font-mono text-label text-muted">
+          <span data-testid="as-of">
+            {stale ? 'as of ' : 'updated '}
+            {clockTime(updatedAt)}
           </span>
-        ) : null}
-      </div>
-      <p className={`pt-1 ${stale ? 'opacity-70' : ''}`}>
-        <Balance base={totalManaged(d)} />
-      </p>
-      <p className="pt-1.5 text-small text-muted">
-        {apy ? (
-          <>
-            <span className="tabular">{apy}%</span> APY in vaults
-          </>
-        ) : d.vault ? (
-          'Vault rate not reported yet'
-        ) : (
-          'Nothing earning yet'
-        )}
-      </p>
-      <div className="pt-5">
+          {stale ? (
+            <button
+              type="button"
+              onClick={onRefresh}
+              aria-label="Refresh now"
+              className="flex size-11 items-center justify-center text-ink"
+            >
+              <IconRefresh className="size-4" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <ProgressMetricCard
+        title="Treasury"
+        total={`$${whole}${minor}`}
+        delta={footer.delta}
+        deltaLabel={footer.deltaLabel}
+        data={series}
+        size="sm"
+        showStats={false}
+      />
+
+      <div className="pt-4">
         {a.kind === 'active' ? (
           <AllowanceMeter usedPct={a.usedPct} capPct={a.capPct} tone={a.tone} caption={a.caption} />
         ) : (

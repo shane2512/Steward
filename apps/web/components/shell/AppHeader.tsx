@@ -59,9 +59,9 @@ export function AppHeader({
             <Link
               href="/app"
               aria-label="Back to home"
-              className="-ml-2 flex size-11 items-center justify-center text-ink"
+              className="group -ml-2 flex size-11 items-center justify-center text-ink"
             >
-              <IconBack className="size-6" />
+              <IconBack className="size-6 transition-transform duration-300 ease-out group-hover:-translate-x-0.5 motion-reduce:transition-none" />
             </Link>
             <span className="min-w-0 flex-1 truncate text-h3 font-semibold text-ink">{title}</span>
           </>

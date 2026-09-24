@@ -2,6 +2,7 @@
 // 8.5 — the notification center: a bell in the header, a badge for unread count, and a glass sheet
 // listing recent notifications (the sheet frame matches FreezeModal — DESIGN §5/§9 glass allowance
 // for a small popover; the rows inside are solid per the Row primitive, same as Activity/S5).
+import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { z } from 'zod';
 import { IconBell, IconClose } from '@/components/icons';
@@ -21,6 +22,18 @@ const TITLES: Record<NotificationItem['type'], string> = {
   risk: 'Risk',
   freeze: 'Freeze',
   report: 'Weekly report',
+};
+
+/** One glance icon per notification kind (21st.dev "notifications-5" pattern, adapted to our own
+ * verdict colours rather than shadcn's success/warning tokens): colour is never the only channel,
+ * the icon shape and the TITLES word above both carry the same meaning. */
+const NOTIF_ICON: Record<NotificationItem['type'], { Icon: typeof CircleCheck; tone: string }> = {
+  execution: { Icon: CircleCheck, tone: 'text-allow' },
+  escalation: { Icon: TriangleAlert, tone: 'text-escalate' },
+  blocked: { Icon: CircleAlert, tone: 'text-deny' },
+  risk: { Icon: TriangleAlert, tone: 'text-escalate' },
+  freeze: { Icon: CircleAlert, tone: 'text-deny' },
+  report: { Icon: Info, tone: 'text-muted' },
 };
 
 export function NotificationBell() {
@@ -119,31 +132,43 @@ export function NotificationBell() {
                   body="Steward will notify you here as things happen."
                 />
               ) : (
-                list.data?.rows.map((n) => (
-                  <Row
-                    key={n.id}
-                    title={
-                      <span className={n.read ? 'font-normal' : ''}>
-                        {n.read ? null : (
-                          <span
-                            aria-hidden="true"
-                            className="mr-2 inline-block size-2 rounded-full bg-accent align-middle"
-                          />
-                        )}
-                        {TITLES[n.type]}: {n.title}
-                      </span>
-                    }
-                    sub={
-                      <>
-                        <span className="line-clamp-2 block">{n.body}</span>
-                        <span className="block font-mono text-label text-faint">
-                          {formatAgo(n.createdAt)}
+                list.data?.rows.map((n) => {
+                  const { Icon, tone } = NOTIF_ICON[n.type];
+                  return (
+                    <Row
+                      key={n.id}
+                      icon={({ className }) => <Icon className={`${className} ${tone}`} />}
+                      title={
+                        <span className={n.read ? 'font-normal' : ''}>
+                          {TITLES[n.type]}: {n.title}
                         </span>
-                      </>
-                    }
-                    onClick={n.read ? undefined : () => void markRead(n.id)}
-                  />
-                ))
+                      }
+                      sub={
+                        <>
+                          <span className="line-clamp-2 block">{n.body}</span>
+                          <span className="block font-mono text-label text-faint">
+                            {formatAgo(n.createdAt)}
+                          </span>
+                        </>
+                      }
+                      right={
+                        n.read ? null : (
+                          <button
+                            type="button"
+                            aria-label="Mark as read"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void markRead(n.id);
+                            }}
+                            className="flex size-8 items-center justify-center text-faint transition-colors hover:text-ink"
+                          >
+                            <X className="size-4" aria-hidden="true" />
+                          </button>
+                        )
+                      }
+                    />
+                  );
+                })
               )}
             </div>
           </div>

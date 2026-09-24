@@ -7,6 +7,20 @@
 // froze and closed the modal still has two steps to finish.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createPublicClient,
+  custom,
+  decodeFunctionData,
+  getAddress,
+  keccak256,
+  parseAbi,
+  type Hex,
+  type PublicClient,
+} from 'viem';
+import { baseSepolia } from 'viem/chains';
+import { privateKeyToAccount } from 'viem/accounts';
+// The module, not the barrel: the barrel pulls AgentKit, which refuses to load in jsdom.
+import { deriveCompanionTreasury } from '../../../packages/wallet/src/companionTreasury';
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -14,6 +28,10 @@ const mocks = vi.hoisted(() => ({
   signMessageAsync: vi.fn(),
   sendTransactionAsync: vi.fn(),
   switchChain: vi.fn(),
+  connectorId: 'coinbaseWalletSDK',
+  bytecode: '0x60006000' as string | undefined,
+  address: '0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C',
+  publicClient: undefined as unknown,
 }));
 
 vi.mock('../lib/api', async (orig) => ({
@@ -23,18 +41,21 @@ vi.mock('../lib/api', async (orig) => ({
 }));
 vi.mock('wagmi', () => ({
   useAccount: () => ({
-    address: '0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C',
+    address: mocks.address,
     chainId: 84532,
-    connector: { id: 'coinbaseWalletSDK' },
+    connector: { id: mocks.connectorId },
     isConnected: true,
   }),
-  useBytecode: () => ({ data: '0x60006000', isSuccess: true }),
+  useBytecode: () => ({ data: mocks.bytecode, isSuccess: true }),
   useSwitchChain: () => ({ switchChain: mocks.switchChain, isPending: false }),
   useSignMessage: () => ({ signMessageAsync: mocks.signMessageAsync }),
   useSendTransaction: () => ({ sendTransactionAsync: mocks.sendTransactionAsync }),
+  useSignTypedData: () => ({ signTypedDataAsync: vi.fn() }),
+  usePublicClient: () => mocks.publicClient,
 }));
 
 import { FreezeFlow, stepStates } from '../components/freeze/FreezeFlow';
+import { UnfreezeSlot } from '../components/freeze/UnfreezeSlot';
 import { FreezeButton } from '../components/shell/AppHeader';
 import type { OwnerPath } from '../lib/contracts';
 
@@ -53,13 +74,25 @@ const status = (over: Partial<OwnerPath> = {}): OwnerPath => ({
   ...over,
 });
 
-const todoRevoke = { state: 'todo', to: MANAGER, data: REVOKE_DATA, permissionId: 'p1' } as const;
+const OWNER = '0x7a4b704703A90D6e7bc7c89AD166Da405Ced3C8C';
+/** The spec'd path: the connected Smart Wallet IS the permission's account (the treasury). */
+const todoRevoke = {
+  state: 'todo',
+  account: OWNER,
+  to: MANAGER,
+  data: REVOKE_DATA,
+  permissionId: 'p1',
+} as const;
 
 beforeEach(() => {
   mocks.apiGet.mockReset();
   mocks.apiPost.mockReset();
   mocks.signMessageAsync.mockReset();
   mocks.sendTransactionAsync.mockReset();
+  mocks.connectorId = 'coinbaseWalletSDK';
+  mocks.bytecode = '0x60006000';
+  mocks.address = OWNER;
+  mocks.publicClient = undefined;
 });
 afterEach(cleanup);
 
@@ -69,6 +102,28 @@ const flow = (over: Partial<OwnerPath> = {}) => {
     <FreezeFlow frozen={over.frozen ?? false} onDone={() => {}} onClose={() => {}} pollMs={1} />,
   );
 };
+
+// I7: the owner's stop control is a message signature any wallet can make — a plain zero-code EOA
+// must never be told it "cannot give Steward a spending limit" here.
+describe('a plain EOA owner', () => {
+  const EOA_BLOCKER = 'This wallet cannot give Steward a spending limit';
+  beforeEach(() => {
+    mocks.connectorId = 'injected';
+    mocks.bytecode = undefined;
+  });
+
+  it('can freeze', async () => {
+    flow();
+    await waitFor(() => expect(mocks.apiGet).toHaveBeenCalled());
+    expect(screen.queryByText(EOA_BLOCKER)).toBeNull();
+  });
+
+  it('can unfreeze', () => {
+    render(<UnfreezeSlot frozen onUnfrozen={() => {}} />);
+    expect(screen.queryByText(EOA_BLOCKER)).toBeNull();
+    expect(screen.getByTestId('unfreeze')).toBeTruthy();
+  });
+});
 
 describe('stepStates', () => {
   it('starts on step 1 when nothing has happened', () => {
@@ -208,6 +263,133 @@ describe('step 2 — revoke', () => {
       expect(screen.getByTestId('revoke-now').textContent).toContain('Try again'),
     );
     expect(screen.getByRole('alert').textContent).toBeTruthy();
+  });
+});
+
+// Phase 7 addendum: the permission's account is a companion smart wallet the connected EOA owns.
+// The manager reverts `InvalidSender(eoa, companion)` for a plain tx from the EOA (reproduced
+// against Base Sepolia for wallet 6ffa9f11…), so the revoke must reach the manager FROM the
+// companion: the EOA calls the wallet's own `execute`, deploying it first if it is counterfactual.
+describe('step 2 — revoke, companion treasury', () => {
+  const eoa = privateKeyToAccount(`0x${'5a'.repeat(32)}` as Hex);
+  const FACTORY = getAddress('0xba5ed110efdba3d005bfc882d75358acbbb85842');
+  const CSW = parseAbi([
+    'function execute(address target, uint256 value, bytes data)',
+    'function createAccount(bytes[] owners, uint256 nonce)',
+  ]);
+  const DEPLOY_TX = `0x${'d1'.repeat(32)}`;
+  const EXEC_TX = `0x${'e1'.repeat(32)}`;
+
+  /** Deterministic chain: eth_call answers as in the derivation tests; code and receipts on demand. */
+  const chain = (opts: { deployed: boolean; deployStatus?: '0x1' | '0x0' }) =>
+    createPublicClient({
+      chain: baseSepolia,
+      transport: custom({
+        request: async ({ method, params }) => {
+          if (method === 'eth_getCode') return opts.deployed ? '0x6000' : '0x';
+          if (method === 'eth_call') return keccak256((params as [{ data: Hex }])[0].data);
+          if (method === 'eth_blockNumber') return '0x10';
+          if (method === 'eth_getTransactionReceipt')
+            return {
+              transactionHash: (params as [Hex])[0],
+              status: opts.deployStatus ?? '0x1',
+              blockNumber: '0x10',
+              blockHash: `0x${'00'.repeat(32)}`,
+              transactionIndex: '0x0',
+              from: eoa.address,
+              to: FACTORY,
+              cumulativeGasUsed: '0x1',
+              gasUsed: '0x1',
+              effectiveGasPrice: '0x1',
+              logs: [],
+              logsBloom: `0x${'00'.repeat(256)}`,
+              type: '0x2',
+              contractAddress: null,
+            };
+          throw new Error(`unexpected RPC: ${method}`);
+        },
+      }),
+    }) as unknown as PublicClient;
+
+  const companionFor = async () => {
+    const d = await deriveCompanionTreasury(chain({ deployed: false }), eoa.address);
+    if (!d.ok) throw new Error(d.error);
+    return d.value;
+  };
+
+  const expectExecuteOfRevoke = (call: unknown, companion: string) => {
+    const { to, data } = call as { to: string; data: Hex };
+    expect(getAddress(to)).toBe(companion);
+    const decoded = decodeFunctionData({ abi: CSW, data });
+    expect(decoded.functionName).toBe('execute');
+    expect(decoded.args).toEqual([MANAGER, 0n, REVOKE_DATA]);
+  };
+
+  it('deploys a counterfactual companion, then revokes through its execute', async () => {
+    const companion = await companionFor();
+    const revoke = { ...todoRevoke, account: companion };
+    mocks.address = eoa.address;
+    mocks.publicClient = chain({ deployed: false });
+    mocks.sendTransactionAsync.mockResolvedValueOnce(DEPLOY_TX).mockResolvedValueOnce(EXEC_TX);
+    mocks.apiPost.mockResolvedValue({ revoked: true, alreadyRevoked: false });
+    flow({ frozen: true, revoke });
+
+    fireEvent.click(await screen.findByTestId('revoke-now'));
+    await waitFor(() => expect(mocks.apiPost).toHaveBeenCalled());
+
+    expect(mocks.sendTransactionAsync).toHaveBeenCalledTimes(2);
+    const deploy = mocks.sendTransactionAsync.mock.calls[0]?.[0] as { to: string; data: Hex };
+    expect(getAddress(deploy.to)).toBe(FACTORY);
+    expect(decodeFunctionData({ abi: CSW, data: deploy.data }).functionName).toBe('createAccount');
+    expectExecuteOfRevoke(mocks.sendTransactionAsync.mock.calls[1]?.[0], companion);
+    // The server is still the judge: it gets the execute tx and reads `isRevoked` itself.
+    expect(mocks.apiPost).toHaveBeenCalledWith('/api/spend-permission/revoked', expect.anything(), {
+      txHash: EXEC_TX,
+    });
+  });
+
+  it('an already-deployed companion is not deployed again', async () => {
+    const companion = await companionFor();
+    mocks.address = eoa.address;
+    mocks.publicClient = chain({ deployed: true });
+    mocks.sendTransactionAsync.mockResolvedValue(EXEC_TX);
+    mocks.apiPost.mockResolvedValue({ revoked: true, alreadyRevoked: false });
+    flow({ frozen: true, revoke: { ...todoRevoke, account: companion } });
+
+    fireEvent.click(await screen.findByTestId('revoke-now'));
+    await waitFor(() => expect(mocks.apiPost).toHaveBeenCalled());
+    expect(mocks.sendTransactionAsync).toHaveBeenCalledOnce();
+    expectExecuteOfRevoke(mocks.sendTransactionAsync.mock.calls[0]?.[0], companion);
+  });
+
+  it('a failed deployment stops before the revoke and says so', async () => {
+    const companion = await companionFor();
+    mocks.address = eoa.address;
+    mocks.publicClient = chain({ deployed: false, deployStatus: '0x0' });
+    mocks.sendTransactionAsync.mockResolvedValue(DEPLOY_TX);
+    flow({ frozen: true, revoke: { ...todoRevoke, account: companion } });
+
+    fireEvent.click(await screen.findByTestId('revoke-now'));
+    await waitFor(() =>
+      expect(screen.getByTestId('revoke-now').textContent).toContain('Try again'),
+    );
+    expect(mocks.sendTransactionAsync).toHaveBeenCalledOnce(); // the deploy only
+    expect(mocks.apiPost).not.toHaveBeenCalled();
+  });
+
+  it('refuses to act for an account the connected EOA does not own (I4)', async () => {
+    mocks.address = eoa.address;
+    mocks.publicClient = chain({ deployed: true });
+    flow({
+      frozen: true,
+      revoke: { ...todoRevoke, account: '0x9999999999999999999999999999999999999999' },
+    });
+
+    fireEvent.click(await screen.findByTestId('revoke-now'));
+    await waitFor(() =>
+      expect(screen.getByTestId('revoke-now').textContent).toContain('Try again'),
+    );
+    expect(mocks.sendTransactionAsync).not.toHaveBeenCalled();
   });
 });
 

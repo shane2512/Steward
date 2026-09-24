@@ -100,13 +100,27 @@ describe('classifyConnectError', () => {
   });
 });
 
+const CONNECTORS = [
+  { id: 'coinbaseWalletSDK', name: 'Coinbase Smart Wallet' },
+  { id: 'injected', name: 'MetaMask' },
+];
+
 describe('ConnectView', () => {
-  it('idle: one primary action, testnet chip, no status message', () => {
+  it('idle: one button per connector, testnet chip, no status message', () => {
     const connect = vi.fn();
-    render(<ConnectView state={initialConnectState} onConnect={connect} onRetry={() => {}} />);
+    render(
+      <ConnectView
+        state={initialConnectState}
+        connectors={CONNECTORS}
+        onConnect={connect}
+        onRetry={() => {}}
+      />,
+    );
     expect(screen.getByText('Testnet')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect wallet' }));
-    expect(connect).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Connect with Coinbase Smart Wallet' }));
+    expect(connect).toHaveBeenCalledWith('coinbaseWalletSDK');
+    fireEvent.click(screen.getByRole('button', { name: 'Connect with MetaMask' }));
+    expect(connect).toHaveBeenCalledWith('injected');
   });
 
   it('every non-idle state renders its own copy', () => {
@@ -121,31 +135,54 @@ describe('ConnectView', () => {
       { step: 'error', message: 'It broke. Nothing moved.' },
     ];
     for (const s of states) {
-      const { unmount } = render(<ConnectView state={s} onConnect={() => {}} onRetry={() => {}} />);
+      const { unmount } = render(
+        <ConnectView state={s} connectors={CONNECTORS} onConnect={() => {}} onRetry={() => {}} />,
+      );
       expect(screen.getByText(connectCopy(s)?.title ?? 'missing')).toBeTruthy();
       unmount();
     }
   });
 
   it('busy states disable the button (no double connect)', () => {
-    render(<ConnectView state={{ step: 'connecting' }} onConnect={() => {}} onRetry={() => {}} />);
-    expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+    render(
+      <ConnectView
+        state={{ step: 'connecting' }}
+        connectors={CONNECTORS}
+        onConnect={() => {}}
+        onRetry={() => {}}
+      />,
+    );
+    for (const btn of screen.getAllByRole('button')) {
+      expect((btn as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   it('rejected: says nothing moved and offers Try again', () => {
     const retry = vi.fn();
     render(
-      <ConnectView state={{ step: 'rejected', at: 'sign' }} onConnect={() => {}} onRetry={retry} />,
+      <ConnectView
+        state={{ step: 'rejected', at: 'sign' }}
+        connectors={CONNECTORS}
+        onConnect={() => {}}
+        onRetry={retry}
+      />,
     );
     expect(screen.getByText(/Nothing was signed and nothing moved/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  it('unsupported: explains why in plain words (D-5) and is announced as an alert', () => {
-    render(<ConnectView state={{ step: 'unsupported' }} onConnect={() => {}} onRetry={() => {}} />);
+  it('unsupported: explains why in plain words and is announced as an alert', () => {
+    render(
+      <ConnectView
+        state={{ step: 'unsupported' }}
+        connectors={CONNECTORS}
+        onConnect={() => {}}
+        onRetry={() => {}}
+      />,
+    );
     const alert = screen.getByRole('alert');
-    expect(alert.textContent).toMatch(/Coinbase Smart Wallet/);
-    expect(alert.textContent).toMatch(/cannot grant the capped spend permission/);
+    expect(alert.textContent).toMatch(/No wallet found/);
+    expect(alert.textContent).toMatch(/MetaMask/);
   });
 });

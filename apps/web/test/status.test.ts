@@ -58,10 +58,10 @@ describe('banners', () => {
   it('shows nothing for a healthy, fresh, non-demo app', () =>
     expect(banners({ demoMode: false, data: base, updatedAt: NOW - 1000, now: NOW })).toEqual([]));
 
-  it('DEMO DATA is shown whenever demo mode is on, even before data loads (I11)', () =>
+  it('D-124: the demo-data banner is not shown even when demo mode is on (owner-requested removal)', () =>
     expect(
       ids(banners({ demoMode: true, data: undefined, updatedAt: undefined, now: NOW })),
-    ).toEqual(['demo']));
+    ).toEqual([]));
 
   it('safe mode names what still works', () => {
     const b = banners({

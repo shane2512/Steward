@@ -456,6 +456,7 @@ export function fixtureOwnerPath(scenario: FixtureScenario): OwnerPath {
       ? { state: 'revoked', at: ago(2) }
       : {
           state: 'todo',
+          account: TREASURY,
           to: '0xf85210B21cC50302F477BA56686d2019dC9b67Ad',
           data: `0x1a5d1d40${'0'.repeat(128)}`,
           permissionId: 'fx-permission',

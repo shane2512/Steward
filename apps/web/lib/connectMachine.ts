@@ -130,8 +130,8 @@ export function connectCopy(s: ConnectState): { title: string; body: string } | 
       };
     case 'unsupported':
       return {
-        title: 'This wallet cannot be used with Steward',
-        body: 'Steward needs a Coinbase Smart Wallet. A regular browser wallet cannot grant the capped spend permission that keeps Steward inside your limits, so connecting it would not be safe. Nothing moved. Create a Smart Wallet with a passkey and try again.',
+        title: 'No wallet found',
+        body: 'Steward could not find a Coinbase Smart Wallet or a browser wallet extension like MetaMask. Install one, or create a Smart Wallet with a passkey, then try again. Nothing moved.',
       };
     case 'error':
       return { title: 'Could not sign you in', body: s.message };

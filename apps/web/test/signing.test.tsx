@@ -211,6 +211,15 @@ describe('(a) spend permission signing', () => {
     expect(screen.queryByRole('button', { name: /sign/i })).toBeNull();
   });
 
+  it('an EIP-7702-delegated browser wallet (0xef0100 code) is NOT called an EOA', () => {
+    // Real Base Sepolia code of a MetaMask account upgraded to a 7702 smart account.
+    mocks.account = { ...mocks.account, connector: { id: 'injected' } };
+    mocks.bytecode = { data: '0xef010063c0c19a282a1b52b07dd5a65b58948a07dae32b', isSuccess: true };
+    render(<SpendLimitSign wallet={wallet} onSigned={vi.fn()} />);
+    expect(screen.queryByText('This wallet cannot give Steward a spending limit')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Review the limit' })).toBeTruthy();
+  });
+
   it('a counterfactual smart wallet with no bytecode is NOT called an EOA', () => {
     mocks.bytecode = { data: undefined, isSuccess: true };
     render(<SpendLimitSign wallet={wallet} onSigned={vi.fn()} />);
@@ -228,6 +237,45 @@ describe('(a) spend permission signing', () => {
   it('maxAtRisk is the sum SECURITY §3 L1 defines, in bigint', () => {
     expect(maxAtRisk({ agentUsdc: 1n, vaultAssets: 2n, allowance: 3n })).toBe(6n);
     expect(ALLOWANCE_STEPS[0]).toBe(1_000_000_000n);
+  });
+});
+
+// ─────────────────────────────── plain EOA: only the spend-permission grant is blocked (D-5)
+
+describe('a plain zero-code EOA owner', () => {
+  const EOA_BLOCKER = 'This wallet cannot give Steward a spending limit';
+  beforeEach(() => {
+    mocks.account = { ...mocks.account, connector: { id: 'injected' } };
+    mocks.bytecode = { data: undefined, isSuccess: true };
+  });
+
+  it('is still blocked from granting a spend permission when no companion exists', () => {
+    render(<SpendLimitSign wallet={wallet} onSigned={vi.fn()} />);
+    expect(screen.getByText(EOA_BLOCKER)).toBeTruthy();
+  });
+
+  // Each of these is EIP-191 verified server-side against the SIWE owner, which an EOA can sign.
+  it('can sign a policy', () => {
+    render(<PolicySign onActivated={vi.fn()} />);
+    expect(screen.queryByText(EOA_BLOCKER)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Review your policy' })).toBeTruthy();
+  });
+
+  it('can add a recipient', () => {
+    render(<AddRecipientSign existing={existing} onAdded={vi.fn()} />);
+    expect(screen.queryByText(EOA_BLOCKER)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Check this address' })).toBeTruthy();
+  });
+
+  it('can approve', () => {
+    render(<ApprovalSign approval={approval} onDecided={vi.fn()} />);
+    expect(screen.queryByText(EOA_BLOCKER)).toBeNull();
+  });
+
+  it('still sees the wrong-network blocker on message flows', () => {
+    mocks.account = { ...mocks.account, chainId: 1 };
+    render(<PolicySign onActivated={vi.fn()} />);
+    expect(screen.getByText('Wrong network')).toBeTruthy();
   });
 });
 

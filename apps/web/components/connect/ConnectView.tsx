@@ -6,6 +6,8 @@ import { IconClose, IconLock, IconShield, VerdictGlyph } from '@/components/icon
 import { Button, Chip, Row } from '@/components/ui/primitives';
 import { connectCopy, type ConnectState } from '@/lib/connectMachine';
 
+type ConnectorLike = { id: string; name: string };
+
 const BUSY = new Set<ConnectState['step']>([
   'connecting',
   'switching',
@@ -17,11 +19,13 @@ const BUSY = new Set<ConnectState['step']>([
 
 export function ConnectView({
   state,
+  connectors,
   onConnect,
   onRetry,
 }: {
   state: ConnectState;
-  onConnect: () => void;
+  connectors: readonly ConnectorLike[];
+  onConnect: (connectorId: string) => void;
   onRetry: () => void;
 }) {
   const copy = connectCopy(state);
@@ -79,11 +83,19 @@ export function ConnectView({
 
       <footer className="px-4 pt-6 pb-6">
         {state.step === 'unsupported' ? (
-          <Button onClick={onRetry}>Try a Smart Wallet</Button>
-        ) : (
-          <Button onClick={retryable ? onRetry : onConnect} loading={busy}>
-            {busy ? 'Connecting' : retryable ? 'Try again' : 'Connect wallet'}
+          <Button onClick={onRetry}>Try again</Button>
+        ) : retryable ? (
+          <Button onClick={onRetry} loading={busy}>
+            Try again
           </Button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {connectors.map((c) => (
+              <Button key={c.id} onClick={() => onConnect(c.id)} loading={busy}>
+                {busy ? 'Connecting' : `Connect with ${c.name}`}
+              </Button>
+            ))}
+          </div>
         )}
         <p className="pt-3 text-center text-small text-faint">
           By connecting you agree to the Terms.

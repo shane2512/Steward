@@ -27,7 +27,7 @@ export function TabBar({ pending }: { pending: number }) {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-30 flex bg-surface pb-[env(safe-area-inset-bottom)] lg:inset-y-0 lg:right-auto lg:w-20 lg:flex-col lg:justify-start lg:gap-1 lg:pt-16 lg:pb-0"
+      className="glass fixed inset-x-0 bottom-0 z-30 flex border-t border-line pb-[env(safe-area-inset-bottom)] lg:inset-y-0 lg:right-auto lg:w-20 lg:flex-col lg:justify-start lg:gap-1 lg:border-t-0 lg:border-r lg:pt-16 lg:pb-0"
     >
       {TABS.map(({ href, label, icon: Icon }) => {
         const on = isActiveTab(pathname, href);

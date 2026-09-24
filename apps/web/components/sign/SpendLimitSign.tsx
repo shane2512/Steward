@@ -73,9 +73,9 @@ export function SpendLimitSign({
   const [end, setEnd] = useState(() => addDays(30));
   // The treasury the server stored. When it is not the connected account it is the companion smart
   // wallet derived at sign-in, and the signature has to be produced AS that wallet.
-  const { blocker, companion, switchNetwork, switching } = useSigner(
-    wallet?.wallet.treasuryAddress,
-  );
+  const { blocker, companion, switchNetwork, switching } = useSigner({
+    treasuryAddress: wallet?.wallet.treasuryAddress,
+  });
   const signTypedData = useTypedDataSigner(wallet?.wallet.treasuryAddress);
 
   const flow = useSignFlow<SpendPermissionPrepare>({

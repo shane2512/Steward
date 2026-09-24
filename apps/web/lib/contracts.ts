@@ -380,6 +380,8 @@ export const zRevokeStep = z.discriminatedUnion('state', [
   z.object({ state: z.literal('revoked'), at: iso.nullable() }),
   z.object({
     state: z.literal('todo'),
+    /** Who must send it: the permission's account (the treasury), see lib/ownerPath.ts. */
+    account: z.string(),
     to: z.string(),
     data: z.string().regex(/^0x[0-9a-fA-F]*$/),
     permissionId: z.string(),

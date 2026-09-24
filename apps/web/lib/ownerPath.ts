@@ -110,8 +110,13 @@ export type RevokeStep =
   /** Nothing to revoke: the owner never granted one, or it is already gone. */
   | { state: 'none' }
   | { state: 'revoked'; at: string | null }
-  /** The transaction the OWNER's own wallet sends. Steward never broadcasts this one. */
-  | { state: 'todo'; to: string; data: Hex; permissionId: string };
+  /**
+   * The transaction the OWNER's own wallet sends. Steward never broadcasts this one. `account` is
+   * the permission's account — the address the manager requires as `msg.sender` (it reverts
+   * `InvalidSender` otherwise). It is the treasury, which is a companion smart wallet, not the
+   * connected EOA, for an owner who signed in with a plain browser wallet.
+   */
+  | { state: 'todo'; account: string; to: string; data: Hex; permissionId: string };
 
 export type SweepStep = { state: 'none' } | { state: ExecutionStatus; txHash: string | null };
 
@@ -155,6 +160,7 @@ async function revokeStep(db: Db, walletId: string): Promise<RevokeStep> {
   // (the manager treats a second revoke as a no-op), whereas claiming it is done would not be.
   return {
     state: 'todo',
+    account: getAddress(parsed.value.account),
     to: manager,
     data: encodeRevoke(parsed.value),
     permissionId: active.id,

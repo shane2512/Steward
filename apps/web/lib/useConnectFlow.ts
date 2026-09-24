@@ -3,7 +3,7 @@
 // Wallet (none was available in this project): the wiring follows the wagmi docs and is covered by the
 // reducer tests; see PROGRESS.md.
 import { useRouter } from 'next/navigation';
-import { useCallback, useReducer } from 'react';
+import { useCallback, useReducer, useRef } from 'react';
 import { createSiweMessage } from 'viem/siwe';
 import { getAddress } from 'viem';
 import { useAccount, useConnect, useSignMessage, useSwitchChain } from 'wagmi';
@@ -27,6 +27,9 @@ export function useConnectFlow() {
   const { switchChainAsync } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
   const account = useAccount();
+  // Remembers which connector the owner actually picked (MetaMask vs. Coinbase Smart Wallet), so
+  // `retry()` reopens the same wallet instead of always falling back to connectors[0].
+  const lastConnectorId = useRef<string | undefined>(undefined);
 
   const signIn = useCallback(
     async (address: string) => {
@@ -69,24 +72,29 @@ export function useConnectFlow() {
     [signIn, switchChainAsync],
   );
 
-  const connect = useCallback(async () => {
-    const connector = connectors[0];
-    if (!connector) {
-      dispatch({ type: 'fail', reason: 'unsupported', at: 'connect' });
-      return;
-    }
-    dispatch({ type: 'connect' });
-    try {
-      const res = await connectAsync({ connector });
-      const address = res.accounts[0];
-      if (!address) throw new Error('no account');
-      dispatch({ type: 'connected', chainId: res.chainId });
-      if (res.chainId === TARGET_CHAIN_ID) await signIn(address);
-      else await trySwitch(address);
-    } catch (e) {
-      dispatch({ type: 'fail', reason: classifyConnectError(e), at: 'connect' });
-    }
-  }, [connectAsync, connectors, signIn, trySwitch]);
+  const connect = useCallback(
+    async (connectorId?: string) => {
+      const id = connectorId ?? lastConnectorId.current;
+      const connector = id ? connectors.find((c) => c.id === id) : connectors[0];
+      if (!connector) {
+        dispatch({ type: 'fail', reason: 'unsupported', at: 'connect' });
+        return;
+      }
+      lastConnectorId.current = connector.id;
+      dispatch({ type: 'connect' });
+      try {
+        const res = await connectAsync({ connector });
+        const address = res.accounts[0];
+        if (!address) throw new Error('no account');
+        dispatch({ type: 'connected', chainId: res.chainId });
+        if (res.chainId === TARGET_CHAIN_ID) await signIn(address);
+        else await trySwitch(address);
+      } catch (e) {
+        dispatch({ type: 'fail', reason: classifyConnectError(e), at: 'connect' });
+      }
+    },
+    [connectAsync, connectors, signIn, trySwitch],
+  );
 
   /** Retry from whichever step was cancelled, without asking the wallet to reconnect needlessly. */
   const retry = useCallback(() => {
@@ -101,5 +109,5 @@ export function useConnectFlow() {
     }
   }, [account.address, connect, signIn, state, trySwitch]);
 
-  return { state, connect, retry };
+  return { state, connectors, connect, retry };
 }

@@ -15,6 +15,8 @@ vi.mock('wagmi', () => ({
   useSwitchChain: () => ({ switchChain: vi.fn(), isPending: false }),
   useSignMessage: () => ({ signMessageAsync: vi.fn() }),
   useSendTransaction: () => ({ sendTransactionAsync: vi.fn() }),
+  useSignTypedData: () => ({ signTypedDataAsync: vi.fn() }),
+  usePublicClient: () => undefined,
 }));
 
 import { FreezeModal } from '../components/freeze/FreezeModal';

@@ -23,6 +23,13 @@ const config: NextConfig = {
   webpack: (cfg, { isServer }) => {
     if (isServer)
       cfg.externals = [...(cfg.externals ?? []), '@coinbase/cdp-sdk', /^@x402\//, /^@solana/];
+    // wagmi/connectors pulls in @metamask/sdk (for its metaMask() connector, which we don't use —
+    // wagmi.ts only wires coinbaseWallet/injected). @metamask/sdk's web bundle still references this
+    // React-Native-only optional dep without a bundler guard, breaking the client build.
+    cfg.resolve.fallback = {
+      ...cfg.resolve.fallback,
+      '@react-native-async-storage/async-storage': false,
+    };
     return cfg;
   },
 };

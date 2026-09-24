@@ -20,7 +20,6 @@
 // I7 — nothing on this path touches reasoning, the queue or the worker (check:arch keeps
 // `components/freeze/` out of `packages/reasoning`). Step 1 works with everything else dead.
 import { useCallback, useEffect, useState } from 'react';
-import { useSendTransaction } from 'wagmi';
 import {
   BlockerPanel,
   LiteralPayload,
@@ -41,6 +40,7 @@ import {
 import { signErrorCopy, type SignError } from '@/lib/signCopy';
 import { useSignFlow } from '@/lib/useSignFlow';
 import { useSigner } from '@/lib/useSigner';
+import { useTreasuryTransaction } from '@/lib/useTypedDataSigner';
 import { useSignMessage } from 'wagmi';
 
 export type FreezeFlowProps = {
@@ -76,7 +76,9 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }: FreezeFlowProps) {
   const { blocker, switchNetwork, switching } = useSigner();
   const { signMessageAsync } = useSignMessage();
-  const { sendTransactionAsync } = useSendTransaction();
+  // Sent AS the permission's account: directly when that is the connected wallet, through the
+  // companion smart wallet's own `execute` when the owner connected a plain EOA (Phase 7 addendum).
+  const sendAsTreasury = useTreasuryTransaction();
 
   const [status, setStatus] = useState<OwnerPath | null>(null);
   const [loadError, setLoadError] = useState<SignError | null>(null);
@@ -120,7 +122,7 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
       const fresh = await read();
       // Already done (in another tab, or straight from the owner's own wallet app): nothing to send.
       if (fresh.revoke.state !== 'todo') return;
-      const txHash = await sendTransactionAsync({
+      const txHash = await sendAsTreasury(fresh.revoke.account, {
         to: fresh.revoke.to as `0x${string}`,
         data: fresh.revoke.data as `0x${string}`,
       });
@@ -148,7 +150,7 @@ export function FreezeFlow({ frozen, onDone, onClose, pollMs = DEFAULT_POLL_MS }
     } finally {
       setBusy(null);
     }
-  }, [pollMs, read, sendTransactionAsync]);
+  }, [pollMs, read, sendAsTreasury]);
 
   const sweep = useCallback(async () => {
     setStepError((s) => ({ ...s, sweep: null }));

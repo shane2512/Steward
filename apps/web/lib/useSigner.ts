@@ -4,7 +4,8 @@
 // Two blockers, both explained up front rather than discovered as a confusing chain error:
 //
 //  - wrong network: Steward runs on Base Sepolia only (I8). Offer the switch.
-//  - plain EOA: a regular externally-owned account cannot grant a Coinbase Spend Permission (D-5).
+//  - plain EOA (spend-permission grant ONLY — callers opt in): a regular externally-owned account
+//    cannot grant a Coinbase Spend Permission (D-5). Message signatures are unaffected.
 //    The server refuses one anyway (`assertSmartWalletAccount`); this is only so the owner reads an
 //    explanation instead of watching their wallet reject a request they did not understand.
 //
@@ -35,8 +36,13 @@ export type SignerBlocker =
 export type CompanionTreasury = { address: `0x${string}`; deployed: boolean };
 
 export function useSigner(
-  /** The treasury the SERVER stored for this owner (GET /api/wallet). Omit where it is irrelevant. */
-  treasuryAddress?: string | undefined,
+  /**
+   * Pass ONLY on the spend-permission grant (D-5): that is the one act a plain EOA cannot perform.
+   * Every other owner signature (policy, recipient, approval, freeze/unfreeze) is EIP-191 verified
+   * against the SIWE owner, which any wallet — EOA included — can produce, so omitting this turns
+   * the `eoa` blocker off. `treasuryAddress` is the treasury the SERVER stored (GET /api/wallet).
+   */
+  spendPermission?: { treasuryAddress: string | undefined },
 ): {
   address: `0x${string}` | undefined;
   blocker: SignerBlocker;
@@ -47,10 +53,12 @@ export function useSigner(
   const { address, chainId, connector, isConnected } = useAccount();
   const { switchChain, isPending } = useSwitchChain();
   const onTarget = chainId === TARGET_CHAIN_ID;
+  const grantsSpendPermission = spendPermission !== undefined;
+  const treasuryAddress = spendPermission?.treasuryAddress;
   const code = useBytecode({
     address,
     chainId: TARGET_CHAIN_ID,
-    query: { enabled: isConnected && address !== undefined && onTarget },
+    query: { enabled: grantsSpendPermission && isConnected && address !== undefined && onTarget },
   });
 
   // A treasury that is not the connected account is the derived companion wallet. Comparison is
@@ -69,7 +77,13 @@ export function useSigner(
   let blocker: SignerBlocker = null;
   if (!isConnected || !address) blocker = { kind: 'disconnected' };
   else if (!onTarget) blocker = { kind: 'wrong-network', chainId };
-  else if (code.isSuccess && !looksDeployedContract && !isSmartWalletConnector && !isCompanion)
+  else if (
+    grantsSpendPermission &&
+    code.isSuccess &&
+    !looksDeployedContract &&
+    !isSmartWalletConnector &&
+    !isCompanion
+  )
     blocker = { kind: 'eoa' };
 
   return {

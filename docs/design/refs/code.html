@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Solflare — Hold Strong with the Most Powerful Wallet on Solana</title>
+<!-- Tailwind CSS CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: UnifrakturMaguntia / Pirata One for Gothic Emblem & Plus Jakarta Sans / Inter for UI -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&amp;family=Pirata+One&amp;family=UnifrakturCook:wght@700&amp;display=swap" rel="stylesheet"/>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              yellow: '#FCE300',
+              yellowHover: '#E5CE00',
+              dark: '#0A0A0A',
+              cardDark: '#121212',
+              slate: '#1A1A1A',
+              softPink: '#FFAAC9',
+              skyBlue: '#659BFF',
+              vibrantOrange: '#FF8833',
+              lavender: '#4C4AD4',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            gothic: ['"UnifrakturCook"', '"Pirata One"', 'cursive', 'serif'],
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-typography">
+    .font-brand-blackletter {
+      font-family: 'UnifrakturCook', 'Pirata One', serif;
+      letter-spacing: -0.02em;
+    }
+    .custom-phone-shadow {
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 10px #1e1e1e, 0 0 0 12px #2f2f2f;
+    }
+    .inner-border-grid {
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+    /* Hide scrollbars for slick sliders/cards */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Scroll reveal base styles */
+    .reveal-fade-up {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: opacity, transform;
+    }
+    .reveal-scale {
+      opacity: 0;
+      transform: scale(0.92) translateY(24px);
+      transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: opacity, transform;
+    }
+    .reveal-fade-up.is-visible,
+    .reveal-scale.is-visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    /* Staggered delay helpers */
+    .delay-100 { transition-delay: 100ms; }
+    .delay-150 { transition-delay: 150ms; }
+    .delay-200 { transition-delay: 200ms; }
+    .delay-250 { transition-delay: 250ms; }
+    .delay-300 { transition-delay: 300ms; }
+    .delay-400 { transition-delay: 400ms; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .reveal-fade-up,
+      .reveal-scale {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-black text-white font-sans antialiased selection:bg-brand-yellow selection:text-black min-h-screen">
+<!-- BEGIN: MainHeader -->
+<header class="w-full bg-[#111111] border-b border-neutral-900 sticky top-0 z-50 px-4 py-3" data-purpose="top-navigation">
+<div class="max-w-6xl mx-auto flex items-center justify-between">
+<!-- Logo & Brand Badge -->
+<a class="flex items-center space-x-3 group" href="#">
+<div class="w-9 h-9 bg-brand-yellow text-black flex items-center justify-center rounded-lg shadow-sm font-brand-blackletter text-2xl font-bold group-hover:scale-105 transition-transform duration-200">
+          S
+        </div>
+</a>
+<!-- Navigation Links -->
+<nav class="hidden md:flex items-center space-x-8 text-sm font-medium text-neutral-300">
+<a class="hover:text-brand-yellow transition-colors duration-200" href="#product">Product</a>
+<a class="hover:text-brand-yellow transition-colors duration-200" href="#about">About</a>
+<a class="hover:text-brand-yellow transition-colors duration-200" href="#careers">Careers</a>
+</nav>
+<!-- CTA Button -->
+<div>
+<a class="inline-flex items-center justify-center bg-brand-yellow text-black text-xs sm:text-sm font-bold px-5 py-2.5 rounded-full hover:bg-brand-yellowHover hover:brightness-105 hover:shadow-[0_6px_20px_rgba(254,222,0,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out cursor-pointer" href="#download">
+          Download Now
+        </a>
+</div>
+</div>
+</header>
+<!-- END: MainHeader -->
+<!-- BEGIN: HeroSection -->
+<section class="relative bg-white text-black pt-16 pb-0 overflow-hidden" data-purpose="hero-banner">
+<div class="max-w-4xl mx-auto px-4 text-center">
+<!-- Gothic Wordmark -->
+<h1 class="font-brand-blackletter text-7xl sm:text-8xl md:text-9xl tracking-tight leading-none text-black select-none reveal-fade-up">
+        Solflare
+      </h1>
+<!-- Slogan -->
+<p class="mt-4 text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-neutral-950 max-w-xl mx-auto reveal-fade-up delay-100">
+        Hold strong with the most powerful wallet on Solana
+      </p>
+<!-- Download CTA -->
+<div class="mt-6 mb-12 reveal-fade-up delay-150">
+<a class="inline-block bg-black text-white hover:bg-neutral-800 text-xs sm:text-sm font-bold uppercase tracking-wider px-7 py-3 rounded-full transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 hover:shadow-lg cursor-pointer" href="#download">
+          Download Now
+        </a>
+</div>
+<!-- Realistic Smartphone Mockup -->
+<div class="relative max-w-[340px] sm:max-w-[370px] mx-auto z-10 -mb-20 reveal-scale delay-200">
+<div class="bg-black text-white rounded-[44px] custom-phone-shadow p-4 pt-3 border-4 border-neutral-800 text-left">
+<!-- Phone Speaker & Notch -->
+<div class="w-full flex justify-between items-center text-[10px] text-neutral-400 px-3 pb-2 pt-1 font-semibold">
+<span>9:41</span>
+<div class="w-20 h-4 bg-black rounded-full mx-auto -mt-1 flex items-center justify-center">
+<div class="w-2.5 h-2.5 bg-neutral-900 rounded-full border border-neutral-700"></div>
+</div>
+<div class="flex items-center space-x-1">
+<i class="w-3 h-3" data-lucide="signal"></i>
+<i class="w-3 h-3" data-lucide="wifi"></i>
+<i class="w-3 h-3" data-lucide="battery-medium"></i>
+</div>
+</div>
+<!-- In-App Header -->
+<div class="flex items-center justify-between mt-2 px-2">
+<div class="flex items-center space-x-2 bg-neutral-900/90 py-1 px-3 rounded-full border border-neutral-800">
+<div class="w-5 h-5 bg-brand-yellow text-black text-[11px] font-bold rounded-full flex items-center justify-center font-brand-blackletter">S</div>
+<span class="text-xs font-semibold text-neutral-200">Main Wallet</span>
+<i class="w-3.5 h-3.5 text-neutral-400" data-lucide="chevron-down"></i>
+</div>
+<button class="text-neutral-400 hover:text-white p-1 transition-colors duration-200">
+<i class="w-5 h-5" data-lucide="more-horizontal"></i>
+</button>
+</div>
+<!-- Balance Area -->
+<div class="px-3 mt-6 text-center">
+<span class="text-[11px] tracking-wide text-neutral-400 uppercase font-medium">Balance</span>
+<div class="text-3xl font-extrabold tracking-tight mt-1 flex items-baseline justify-center">
+<span>$6,956</span><span class="text-neutral-400 text-xl font-bold">.90</span>
+</div>
+<div class="inline-flex items-center space-x-1 mt-1 text-emerald-400 text-xs font-semibold">
+<i class="w-3 h-3" data-lucide="trending-up"></i>
+<span>+$365.17 +5.24%</span>
+</div>
+</div>
+<!-- Quick Action Buttons -->
+<div class="grid grid-cols-5 gap-1.5 mt-6 px-1">
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-2xl bg-neutral-900 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 hover:scale-105 active:scale-95 transition-all duration-200 border border-neutral-800 cursor-pointer">
+<i class="w-4 h-4" data-lucide="arrow-down-left"></i>
+</div>
+<span class="text-[10px] mt-1.5 text-neutral-400 font-medium">Receive</span>
+</div>
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-2xl bg-neutral-900 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 hover:scale-105 active:scale-95 transition-all duration-200 border border-neutral-800 cursor-pointer">
+<i class="w-4 h-4" data-lucide="credit-card"></i>
+</div>
+<span class="text-[10px] mt-1.5 text-neutral-400 font-medium">Buy</span>
+</div>
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-2xl bg-neutral-900 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 hover:scale-105 active:scale-95 transition-all duration-200 border border-neutral-800 cursor-pointer">
+<i class="w-4 h-4" data-lucide="arrow-left-right"></i>
+</div>
+<span class="text-[10px] mt-1.5 text-neutral-400 font-medium">Swap</span>
+</div>
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-2xl bg-neutral-900 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 hover:scale-105 active:scale-95 transition-all duration-200 border border-neutral-800 cursor-pointer">
+<i class="w-4 h-4" data-lucide="layers"></i>
+</div>
+<span class="text-[10px] mt-1.5 text-neutral-400 font-medium">Stake</span>
+</div>
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-2xl bg-neutral-900 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 hover:scale-105 active:scale-95 transition-all duration-200 border border-neutral-800 cursor-pointer">
+<i class="w-4 h-4" data-lucide="send"></i>
+</div>
+<span class="text-[10px] mt-1.5 text-neutral-400 font-medium">Send</span>
+</div>
+</div>
+<!-- Tokens List -->
+<div class="mt-6 bg-[#161616] rounded-2xl p-3 border border-neutral-800/80 mb-2">
+<div class="flex justify-between items-center text-xs font-semibold text-neutral-400 mb-2 px-1">
+<span>Tokens <span class="text-neutral-500 font-normal">$6,750.00</span></span>
+<a class="text-brand-yellow text-[11px] hover:underline flex items-center transition-colors duration-200" href="#">View all <i class="w-3 h-3 ml-0.5" data-lucide="chevron-right"></i></a>
+</div>
+<!-- Token item -->
+<div class="flex items-center justify-between py-1.5 px-1 rounded-lg hover:bg-neutral-900/60 transition-colors duration-200 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<div class="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-600 to-teal-400 flex items-center justify-center text-[10px] font-black">◎</div>
+<div>
+<div class="text-xs font-bold text-white">Solana</div>
+<div class="text-[10px] text-neutral-400">$250.32 <span class="text-emerald-400 font-medium">+6.02%</span></div>
+</div>
+</div>
+<div class="text-right">
+<div class="text-xs font-bold text-white">$6,750.00</div>
+<div class="text-[10px] text-neutral-400">27.02 SOL</div>
+</div>
+</div>
+</div>
+<!-- Home indicator bar -->
+<div class="w-28 h-1 bg-neutral-700 rounded-full mx-auto mt-2 mb-1"></div>
+</div>
+</div>
+</div>
+<!-- Stats Yellow Ticker Banner -->
+<div class="bg-brand-yellow text-black pt-28 pb-8 px-4" data-purpose="metrics-ticker">
+<div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 text-center font-bold items-center divide-y md:divide-y-0 md:divide-x divide-black/20">
+<div class="flex flex-col items-center justify-center pt-2 md:pt-0 group cursor-default reveal-fade-up delay-100">
+<div class="text-3xl sm:text-4xl font-extrabold flex items-center tracking-tight group-hover:scale-105 transition-transform duration-200">
+<span class="text-xl mr-1">★</span> 4.84
+          </div>
+<span class="text-[11px] sm:text-xs uppercase tracking-wider mt-1 font-semibold text-neutral-900">Best rated on app store</span>
+</div>
+<div class="flex flex-col items-center justify-center pt-4 md:pt-0 group cursor-default reveal-fade-up delay-200">
+<div class="text-3xl sm:text-4xl font-extrabold tracking-tight group-hover:scale-105 transition-transform duration-200">
+            $10,091,194,499
+          </div>
+<span class="text-[11px] sm:text-xs uppercase tracking-wider mt-1 font-semibold text-neutral-900">Fund managed with solflare</span>
+</div>
+<div class="flex flex-col items-center justify-center pt-4 md:pt-0 group cursor-default reveal-fade-up delay-300">
+<div class="text-3xl sm:text-4xl font-extrabold tracking-tight group-hover:scale-105 transition-transform duration-200">
+            3M+
+          </div>
+<span class="text-[11px] sm:text-xs uppercase tracking-wider mt-1 font-semibold text-neutral-900">Active users</span>
+</div>
+</div>
+</div>
+</section>
+<!-- END: HeroSection -->
+<!-- BEGIN: RevolutionGridSection -->
+<section class="bg-black py-24 px-4" data-purpose="manifesto-grid">
+<div class="max-w-4xl mx-auto">
+<!-- Section Header -->
+<div class="text-center mb-14 reveal-fade-up">
+<span class="text-neutral-400 text-[11px] sm:text-xs font-bold uppercase tracking-[0.25em]">Independence in your hand</span>
+<h2 class="text-3xl sm:text-5xl font-extrabold text-white mt-3 tracking-tight">
+          A Revolution in<br class="hidden sm:inline"/> Financial Freedom
+        </h2>
+</div>
+<!-- 2x2 Bento Box Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 rounded-3xl overflow-hidden border-2 border-black shadow-2xl">
+<!-- Tile 1: White Info Card -->
+<div class="group bg-white text-black p-8 sm:p-12 flex flex-col justify-between border-b md:border-b-0 md:border-r border-neutral-300 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl relative z-0 hover:z-10 reveal-fade-up delay-100">
+<div>
+<span class="text-xs font-semibold uppercase tracking-wider text-neutral-600 block mb-4 transition-colors duration-200 group-hover:text-black">Founding the new world</span>
+<p class="text-base sm:text-lg font-bold leading-relaxed text-neutral-900">
+              Solana is the fastest-growing blockchain ecosystem in DeFi and Web3, with SOL as its currency. Famed for its speed, near-zero fees, and memecoins, it's also home to a digital community building a more secure, lucrative, and fun new world.
+            </p>
+</div>
+</div>
+<!-- Tile 2: Yellow 3D Solflare Crest -->
+<div class="group bg-brand-yellow p-8 sm:p-12 flex items-center justify-center min-h-[260px] border-b border-black md:border-b-0 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl relative z-0 hover:z-10 cursor-pointer reveal-fade-up delay-200">
+<div class="relative w-44 h-44 rounded-3xl bg-gradient-to-br from-[#FFEC42] to-[#D6BD00] border-4 border-yellow-600/30 flex items-center justify-center shadow-2xl transform rotate-2 group-hover:rotate-0 group-hover:scale-105 transition-all duration-300">
+<!-- Inner Bevel Crest -->
+<div class="w-36 h-36 border-2 border-dashed border-black/30 rounded-2xl flex items-center justify-center bg-brand-yellow/60 group-hover:bg-brand-yellow/80 transition-colors duration-300">
+<span class="font-brand-blackletter text-7xl font-bold text-black drop-shadow-md group-hover:scale-105 transition-transform duration-300">S</span>
+</div>
+</div>
+</div>
+<!-- Tile 3: Yellow Graphic Keychain Card -->
+<div class="group bg-brand-yellow p-8 sm:p-12 flex items-center justify-center min-h-[260px] border-b md:border-b-0 md:border-r border-black transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl relative z-0 hover:z-10 cursor-pointer reveal-fade-up delay-150">
+<div class="relative flex items-center justify-center space-x-2 group-hover:scale-105 transition-transform duration-300">
+<!-- Keychain Ring -->
+<div class="w-20 h-20 rounded-full border-4 border-black flex items-center justify-center transition-transform duration-300 group-hover:-rotate-6">
+<div class="w-14 h-14 rounded-full border-2 border-black"></div>
+</div>
+<!-- Key fob -->
+<div class="w-10 h-28 bg-black rounded-lg transform -rotate-12 group-hover:-rotate-6 flex flex-col items-center justify-between p-2 text-brand-yellow shadow-lg transition-transform duration-300">
+<div class="w-3 h-3 rounded-full bg-brand-yellow"></div>
+<span class="font-brand-blackletter text-xl font-bold">S</span>
+<div class="w-4 h-1 bg-brand-yellow rounded-full"></div>
+</div>
+<!-- Vintage Key -->
+<div class="w-8 h-28 flex flex-col items-center transform rotate-12 group-hover:rotate-6 transition-transform duration-300">
+<div class="w-7 h-7 rounded-full border-4 border-black"></div>
+<div class="w-2 h-16 bg-black"></div>
+<div class="w-5 h-2 bg-black self-end -mr-1"></div>
+<div class="w-4 h-2 bg-black self-end -mr-1 mt-1"></div>
+</div>
+</div>
+</div>
+<!-- Tile 4: White Keys Info Card -->
+<div class="group bg-white text-black p-8 sm:p-12 flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl relative z-0 hover:z-10 reveal-fade-up delay-250">
+<div>
+<span class="text-xs font-semibold uppercase tracking-wider text-neutral-600 block mb-4 transition-colors duration-200 group-hover:text-black">Keys to the new world</span>
+<p class="text-base sm:text-lg font-bold leading-relaxed text-neutral-900">
+              Your Solflare wallet is your all-access pass to Solana. It's a secure way to trade coins, stake SOL, and explore a whole new world of Solana-based apps. The power is in your hands.
+            </p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: RevolutionGridSection -->
+<!-- BEGIN: SwordAndShieldSection -->
+<section class="bg-black py-20 px-4" data-purpose="sword-and-shield-features">
+<div class="max-w-4xl mx-auto">
+<!-- Section Title -->
+<div class="text-center mb-14 reveal-fade-up">
+<span class="text-neutral-400 text-[11px] sm:text-xs font-bold uppercase tracking-[0.25em]">The power in your hands</span>
+<h2 class="text-3xl sm:text-5xl font-extrabold text-white mt-3 tracking-tight">
+          Solflare is your<br class="hidden sm:inline"/> sword and shield
+        </h2>
+</div>
+<!-- Feature Card 1: Liberate Your Finances (Lavender split card) -->
+<div class="bg-white rounded-3xl overflow-hidden grid grid-cols-1 md:grid-cols-2 text-black mb-8 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl reveal-fade-up delay-100">
+<!-- Text side -->
+<div class="p-8 sm:p-12 flex flex-col justify-between">
+<div>
+<h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight mb-4">Liberate your finances</h3>
+<p class="text-neutral-600 text-sm sm:text-base leading-relaxed font-semibold">
+              From live market updates to trend detection, Solflare has all the tools you need to trade and stake successfully.
+            </p>
+</div>
+<div class="flex flex-wrap gap-3 mt-8">
+<button class="bg-brand-yellow text-black font-bold text-xs uppercase px-5 py-2.5 rounded-full hover:bg-brand-yellowHover hover:brightness-105 hover:shadow-[0_6px_20px_rgba(254,222,0,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out cursor-pointer">
+              Master Your Trade
+            </button>
+<button class="border border-neutral-300 text-neutral-800 font-bold text-xs uppercase px-5 py-2.5 rounded-full hover:bg-neutral-100 hover:border-neutral-400 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out cursor-pointer">
+              Stake your claim
+            </button>
+</div>
+</div>
+<!-- Periwinkle / Purple phone demo side -->
+<div class="bg-[#5B5CE2] p-8 flex items-center justify-center relative overflow-hidden min-h-[300px]">
+<div class="w-56 bg-black text-white rounded-3xl p-3.5 border-2 border-neutral-800 shadow-2xl transition-transform duration-300 hover:scale-[1.02]">
+<div class="flex justify-between items-center text-[10px] text-neutral-400 mb-2">
+<span class="font-bold">Trade SOL</span>
+<i class="w-3 h-3 hover:text-white cursor-pointer transition-colors duration-200" data-lucide="sliders-horizontal"></i>
+</div>
+<!-- Input Swap -->
+<div class="bg-neutral-900 p-2.5 rounded-xl border border-neutral-800 mb-2">
+<div class="text-[10px] text-neutral-400">You pay</div>
+<div class="flex justify-between items-center mt-1">
+<span class="text-sm font-bold">100</span>
+<span class="text-[11px] bg-neutral-800 px-2 py-0.5 rounded font-bold">USDC</span>
+</div>
+</div>
+<!-- Arrow -->
+<div class="flex justify-center -my-1 relative z-10">
+<div class="w-5 h-5 bg-neutral-800 rounded-full flex items-center justify-center text-[10px] hover:bg-neutral-700 transition-colors duration-200 cursor-pointer">↓</div>
+</div>
+<!-- Output Swap -->
+<div class="bg-neutral-900 p-2.5 rounded-xl border border-neutral-800">
+<div class="text-[10px] text-neutral-400">You receive</div>
+<div class="flex justify-between items-center mt-1">
+<span class="text-sm font-bold">0.39</span>
+<span class="text-[11px] bg-brand-yellow text-black px-2 py-0.5 rounded font-bold">SOL</span>
+</div>
+</div>
+<button class="w-full mt-3 bg-brand-yellow text-black text-xs font-bold py-2 rounded-xl hover:bg-brand-yellowHover hover:brightness-105 active:scale-95 transition-all duration-200">Swap</button>
+</div>
+</div>
+</div>
+<!-- Feature Card 2: Keep Your Valuables Safe (Pink/White split card) -->
+<div class="bg-white rounded-3xl overflow-hidden grid grid-cols-1 md:grid-cols-2 text-black shadow-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl reveal-fade-up delay-200">
+<!-- Phone Mockup Side (Dark/Crimson gradient background) -->
+<div class="bg-gradient-to-br from-[#800C36] to-[#40061B] p-8 flex items-center justify-center order-2 md:order-1 min-h-[300px]">
+<div class="w-56 bg-black text-white rounded-3xl p-3.5 border-2 border-neutral-800 shadow-2xl transition-transform duration-300 hover:scale-[1.02]">
+<div class="text-center py-2">
+<div class="text-[10px] text-neutral-400 uppercase tracking-wider">Vault Total</div>
+<div class="text-lg font-extrabold text-white mt-0.5">$6,969.00</div>
+</div>
+<div class="mt-2 space-y-1.5">
+<div class="bg-neutral-900/90 p-2 rounded-lg flex items-center justify-between text-xs border border-neutral-800 hover:border-neutral-700 transition-colors duration-200">
+<div class="flex items-center space-x-2">
+<div class="w-4 h-4 bg-brand-yellow rounded-full"></div>
+<span class="font-bold">Solana NFT</span>
+</div>
+<span class="text-neutral-400 font-mono text-[10px]">#4290</span>
+</div>
+<div class="bg-neutral-900/90 p-2 rounded-lg flex items-center justify-between text-xs border border-neutral-800 hover:border-neutral-700 transition-colors duration-200">
+<div class="flex items-center space-x-2">
+<div class="w-4 h-4 bg-purple-500 rounded-full"></div>
+<span class="font-bold">Bonk Coin</span>
+</div>
+<span class="text-neutral-400 font-mono text-[10px]">10.4M</span>
+</div>
+</div>
+<div class="mt-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] py-1 text-center rounded-lg font-bold flex items-center justify-center space-x-1">
+<i class="w-3 h-3" data-lucide="shield-check"></i>
+<span>Hardware Protected</span>
+</div>
+</div>
+</div>
+<!-- Text side -->
+<div class="p-8 sm:p-12 flex flex-col justify-between order-1 md:order-2">
+<div>
+<h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight mb-4">Keep your valuables safe</h3>
+<p class="text-neutral-600 text-sm sm:text-base leading-relaxed font-semibold">
+              Putting your coins and NFTs in Solflare means securing them in the safest crypto Stronghold. Your security is our sacred principle.
+            </p>
+</div>
+<div class="mt-8">
+<button class="bg-brand-yellow text-black font-bold text-xs uppercase px-6 py-2.5 rounded-full hover:bg-brand-yellowHover hover:brightness-105 hover:shadow-[0_6px_20px_rgba(254,222,0,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out cursor-pointer">
+              Enter stronghold
+            </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: SwordAndShieldSection -->
+<!-- BEGIN: ThreePillarFeaturesSection -->
+<section class="bg-white text-black py-20 px-4" data-purpose="three-pillars">
+<div class="max-w-4xl mx-auto">
+<!-- Pill Badge -->
+<div class="text-left mb-6 reveal-fade-up">
+<span class="border border-neutral-300 text-neutral-800 text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-full inline-block hover:border-neutral-500 transition-colors duration-200 cursor-default">
+          Features
+        </span>
+</div>
+<!-- Main Headline -->
+<h2 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-center mb-14 reveal-fade-up delay-100">
+        Make every<br/>asset an asset
+      </h2>
+<!-- 3 Feature Columns -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+<!-- Card 1: Pink Quick Transfer -->
+<div class="group flex flex-col text-center p-3 rounded-3xl transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl cursor-pointer reveal-fade-up delay-100">
+<div class="bg-brand-softPink rounded-2xl h-48 flex items-center justify-center shadow-sm">
+<div class="w-20 h-20 bg-black rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6 group-hover:rotate-0 group-hover:scale-110 transition-transform duration-300">
+<i class="w-9 h-9 text-brand-softPink fill-brand-softPink transition-transform duration-300 group-hover:scale-105" data-lucide="send"></i>
+</div>
+</div>
+<div class="mt-4">
+<span class="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Quick Transfer</span>
+<h3 class="text-base font-extrabold mt-1">Send &amp; receive<br/>Solana assets</h3>
+</div>
+</div>
+<!-- Card 2: Blue Buy Crypto -->
+<div class="group flex flex-col text-center p-3 rounded-3xl transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl cursor-pointer reveal-fade-up delay-200">
+<div class="bg-brand-skyBlue rounded-2xl h-48 flex items-center justify-center shadow-sm">
+<div class="w-20 h-20 bg-black rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+<div class="w-9 h-9 bg-brand-skyBlue rounded-lg rotate-45 flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+<div class="w-4 h-4 bg-black rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="mt-4">
+<span class="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Get coins</span>
+<h3 class="text-base font-extrabold mt-1">Buy crypto<br/>within wallet</h3>
+</div>
+</div>
+<!-- Card 3: Orange Secure Web -->
+<div class="group flex flex-col text-center p-3 rounded-3xl transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl cursor-pointer reveal-fade-up delay-300">
+<div class="bg-brand-vibrantOrange rounded-2xl h-48 flex items-center justify-center shadow-sm">
+<div class="w-20 h-20 bg-black rounded-2xl flex items-center justify-center shadow-lg transform rotate-6 group-hover:rotate-0 group-hover:scale-110 transition-transform duration-300">
+<i class="w-9 h-9 text-brand-vibrantOrange transition-transform duration-300 group-hover:scale-105" data-lucide="globe"></i>
+</div>
+</div>
+<div class="mt-4">
+<span class="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">DeFi, Games, Exchanges</span>
+<h3 class="text-base font-extrabold mt-1">Explore Solana<br/>securely</h3>
+</div>
+</div>
+</div>
+<!-- Micro Carousel Dots Indicator & CTA -->
+<div class="mt-12 text-center flex flex-col items-center reveal-fade-up delay-150">
+<div class="flex items-center space-x-1.5 mb-6">
+<div class="w-2 h-2 rounded-full bg-brand-softPink hover:scale-125 transition-transform duration-200 cursor-pointer"></div>
+<div class="w-2 h-2 rounded-full bg-brand-skyBlue hover:scale-125 transition-transform duration-200 cursor-pointer"></div>
+<div class="w-4 h-2 rounded-full bg-brand-yellow hover:scale-110 transition-transform duration-200 cursor-pointer"></div>
+<div class="w-2 h-2 rounded-full bg-brand-vibrantOrange hover:scale-125 transition-transform duration-200 cursor-pointer"></div>
+</div>
+<a class="bg-black text-white hover:bg-neutral-800 text-xs uppercase font-extrabold tracking-wider px-8 py-3 rounded-full hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out shadow-md hover:shadow-lg cursor-pointer" href="#download">
+          Start Strong
+        </a>
+</div>
+</div>
+</section>
+<!-- END: ThreePillarFeaturesSection -->
+<!-- BEGIN: SupportSection -->
+<section class="bg-brand-yellow text-black py-20 px-4" data-purpose="human-support">
+<div class="max-w-3xl mx-auto text-center">
+<!-- 08:00 Badge -->
+<div class="inline-block border border-black/40 px-3.5 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-6 hover:bg-black/10 transition-colors duration-200 cursor-default reveal-fade-up">
+        08:00
+      </div>
+<!-- Kicker -->
+<div class="text-xs font-bold uppercase tracking-widest text-neutral-800 mb-2 reveal-fade-up delay-100">
+        We've got your back
+      </div>
+<!-- Heading -->
+<h2 class="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-tight reveal-fade-up delay-150">
+        Around-the-clock<br/>human support
+      </h2>
+<!-- Description -->
+<p class="text-base sm:text-lg font-semibold max-w-xl mx-auto mt-6 text-neutral-900 leading-relaxed reveal-fade-up delay-200">
+        Whether you're new to crypto or an established force, our live-chat support is here to help 24/7. They are battle-tested and endlessly patient—your powerful helping hand on Solana.
+      </p>
+<!-- CTA Action -->
+<div class="mt-8 flex flex-col items-center reveal-fade-up delay-250">
+<span class="text-xs font-bold text-neutral-800 uppercase tracking-wider mb-3">Need help?</span>
+<button class="bg-black text-white text-xs font-bold uppercase tracking-wider px-7 py-3 rounded-full hover:bg-neutral-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out shadow-lg hover:shadow-xl cursor-pointer">
+          Let's talk
+        </button>
+</div>
+</div>
+</section>
+<!-- END: SupportSection -->
+<!-- BEGIN: CommunitySection -->
+<section class="bg-black text-white py-24 px-4 overflow-hidden" data-purpose="community-testimonials">
+<div class="max-w-5xl mx-auto">
+<!-- Heading -->
+<div class="text-center max-w-2xl mx-auto mb-16 reveal-fade-up">
+<span class="text-neutral-500 text-[11px] font-bold uppercase tracking-[0.25em]">Here to serve</span>
+<h2 class="text-3xl sm:text-5xl font-extrabold tracking-tight mt-3">
+          Empowering our people
+        </h2>
+<p class="text-neutral-400 font-medium text-sm sm:text-base mt-4 leading-relaxed">
+          A product is only as strong as its devoted community. We're here to build our wealth, educate and entertain. Join us.
+        </p>
+</div>
+<!-- Testimonial Cards Slider -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Card 1 -->
+<div class="bg-brand-yellow text-black p-5 rounded-2xl flex flex-col justify-between shadow-lg transform md:-rotate-1 hover:rotate-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:brightness-105 cursor-pointer reveal-fade-up delay-100">
+<div>
+<div class="flex items-center space-x-2 mb-3">
+<div class="w-8 h-8 rounded-full bg-neutral-900 text-brand-yellow font-bold flex items-center justify-center text-xs">
+                JD
+              </div>
+<div>
+<div class="text-xs font-bold leading-none">SolDean</div>
+<div class="text-[10px] text-neutral-700">@soldean_x</div>
+</div>
+</div>
+<p class="text-xs font-semibold leading-relaxed">
+              "Solana and I have over 600 txs on <span class="font-bold underline">@solflare_wallet</span>. It is currently my primary wallet. Swaps are the fastest in the game — I can trade memes flawlessly."
+            </p>
+</div>
+<div class="text-[10px] text-neutral-600 font-mono mt-4">OCT 2024 · Web3 User</div>
+</div>
+<!-- Card 2 (Featured Yellow Card) -->
+<div class="bg-brand-yellow text-black p-5 rounded-2xl flex flex-col justify-between shadow-xl ring-2 ring-brand-yellow/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:brightness-105 cursor-pointer reveal-fade-up delay-200">
+<div>
+<div class="flex items-center space-x-2 mb-3">
+<div class="w-8 h-8 rounded-full bg-black text-brand-yellow font-bold flex items-center justify-center text-xs">
+                V
+              </div>
+<div>
+<div class="text-xs font-bold leading-none">Volty</div>
+<div class="text-[10px] text-neutral-700">@kingvolty</div>
+</div>
+</div>
+<p class="text-xs font-semibold leading-relaxed">
+              "I don't own a lot of $SOL, but when I do, it will always be in <span class="font-bold underline">@solflare_wallet</span>. I love this app so much, it's so easy to buy/exchange crypto, and read charts with the amazing UI. Forever wallet."
+            </p>
+</div>
+<div class="text-[10px] text-neutral-600 font-mono mt-4">NOV 2024 · DeFi Trader</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-brand-yellow text-black p-5 rounded-2xl flex flex-col justify-between shadow-lg transform md:rotate-1 hover:rotate-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:brightness-105 cursor-pointer reveal-fade-up delay-300">
+<div>
+<div class="flex items-center space-x-2 mb-3">
+<div class="w-8 h-8 rounded-full bg-neutral-900 text-brand-yellow font-bold flex items-center justify-center text-xs">
+                H
+              </div>
+<div>
+<div class="text-xs font-bold leading-none">Hatsun</div>
+<div class="text-[10px] text-neutral-700">@0xhatsun</div>
+</div>
+</div>
+<p class="text-xs font-semibold leading-relaxed">
+              "Best wallet out there on Solana. Anything else feels clunky. And a shoutout to their support. So secure, so snappy, exactly what you need."
+            </p>
+</div>
+<div class="text-[10px] text-neutral-600 font-mono mt-4">DEC 2024 · Solana Builder</div>
+</div>
+</div>
+<!-- Pagination numeric pills -->
+<div class="flex justify-center items-center space-x-2 mt-10 reveal-fade-up delay-200">
+<button class="w-7 h-7 text-xs font-bold rounded-lg border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-600 hover:scale-105 transition-all duration-200">01</button>
+<button class="w-7 h-7 text-xs font-bold rounded-lg border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-600 hover:scale-105 transition-all duration-200">02</button>
+<button class="w-7 h-7 text-xs font-bold rounded-lg bg-brand-yellow text-black hover:brightness-105 hover:scale-105 transition-all duration-200">03</button>
+<button class="w-7 h-7 text-xs font-bold rounded-lg border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-600 hover:scale-105 transition-all duration-200">04</button>
+<button class="w-7 h-7 text-xs font-bold rounded-lg border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-600 hover:scale-105 transition-all duration-200">05</button>
+</div>
+</div>
+</section>
+<!-- END: CommunitySection -->
+<!-- BEGIN: ManifestoBannerSection -->
+<section class="bg-white text-black py-20 px-4 text-center overflow-hidden border-b border-neutral-200" data-purpose="manifesto-flag">
+<div class="max-w-4xl mx-auto">
+<!-- Slogan -->
+<h2 class="text-3xl sm:text-5xl font-extrabold tracking-tight max-w-xl mx-auto leading-tight reveal-fade-up">
+        In every wallet a kingdom, on every head a crown
+      </h2>
+<p class="text-neutral-600 text-sm sm:text-base font-semibold mt-4 reveal-fade-up delay-100">
+        Master your own crypto destiny with your Solflare wallet.
+      </p>
+<!-- Flying Flag with Solflare 'S' Emblem -->
+<div class="relative mt-12 flex justify-center items-center group cursor-pointer reveal-scale delay-200">
+<!-- Flagpole -->
+<div class="relative w-72 sm:w-96 h-56 flex items-center justify-center">
+<!-- Flag fabric illustration -->
+<div class="w-56 h-40 bg-gradient-to-r from-neutral-100 via-white to-neutral-200 border-2 border-neutral-300 shadow-2xl rounded-r-lg transform -skew-y-3 group-hover:-skew-y-1 group-hover:scale-105 flex items-center justify-center relative overflow-hidden transition-all duration-500 ease-out">
+<!-- Ripple wave lines -->
+<div class="absolute inset-0 bg-gradient-to-r from-black/5 via-transparent to-black/10"></div>
+<!-- Gothic Solflare 'S' on Flag -->
+<span class="font-brand-blackletter text-7xl font-bold text-black select-none transform rotate-3 group-hover:rotate-0 drop-shadow transition-transform duration-300">
+              S
+            </span>
+</div>
+<!-- Flag pole diagonal rod -->
+<div class="absolute right-6 bottom-0 w-1.5 h-64 bg-neutral-400 rotate-12 origin-bottom rounded-full shadow-md"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: ManifestoBannerSection -->
+<!-- BEGIN: Footer -->
+<footer class="bg-black text-white" data-purpose="site-footer">
+<!-- Top Footer Columns -->
+<div class="max-w-6xl mx-auto px-6 pt-16 pb-12">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+<!-- Left Brand info -->
+<div class="lg:col-span-5 space-y-6 reveal-fade-up delay-100">
+<span class="text-neutral-500 text-[11px] font-bold uppercase tracking-widest block">Enter the stronghold</span>
+<h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight max-w-xs">
+            Solflare: the most powerful wallet on Solana
+          </h3>
+<!-- Solflare Yellow Shield Monogram Icon -->
+<div class="w-20 h-20 bg-brand-yellow text-black rounded-2xl flex items-center justify-center shadow-lg font-brand-blackletter text-5xl font-black hover:scale-105 transition-transform duration-200 cursor-default">
+            S
+          </div>
+<!-- Buttons -->
+<div class="flex flex-wrap gap-3 pt-2">
+<a class="bg-brand-yellow text-black font-bold text-xs uppercase px-5 py-2.5 rounded-full hover:bg-brand-yellowHover hover:brightness-105 hover:shadow-[0_6px_20px_rgba(254,222,0,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out cursor-pointer" href="#download">
+              Download now
+            </a>
+<a class="bg-brand-yellow text-black font-bold text-xs uppercase px-5 py-2.5 rounded-full hover:bg-brand-yellowHover hover:brightness-105 hover:shadow-[0_6px_20px_rgba(254,222,0,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out cursor-pointer" href="#access">
+              Access wallet
+            </a>
+</div>
+</div>
+<!-- Right Links Navigation Table -->
+<div class="lg:col-span-7 reveal-fade-up delay-200">
+<!-- Legal / Meta links bar -->
+<div class="flex flex-wrap items-center space-x-6 text-[11px] font-bold uppercase tracking-wider text-neutral-400 pb-6 border-b border-neutral-900">
+<a class="hover:text-white transition-colors duration-200" href="#privacy">Privacy Policy</a>
+<a class="hover:text-white transition-colors duration-200" href="#cookies">Cookies</a>
+<a class="hover:text-white transition-colors duration-200" href="#sitemap">Sitemap</a>
+</div>
+<!-- Links Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-8">
+<!-- Product Column -->
+<div>
+<span class="text-xs font-bold text-neutral-500 uppercase tracking-widest block mb-4">Product</span>
+<ul class="space-y-3 text-sm font-semibold text-neutral-300">
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#overview">Overview <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#features">Essential features <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#security">Security <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#trading">Trading <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#staking">Staking <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+</ul>
+</div>
+<!-- Company Column -->
+<div>
+<span class="text-xs font-bold text-neutral-500 uppercase tracking-widest block mb-4">Company</span>
+<ul class="space-y-3 text-sm font-semibold text-neutral-300">
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#about">About <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#careers">Careers <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#contact">Contact <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+<li><a class="hover:text-brand-yellow transition-colors duration-200 flex justify-between items-center py-1 border-b border-neutral-900 group" href="#newsletter">Newsletter <i class="w-3.5 h-3.5 text-neutral-600 group-hover:text-brand-yellow group-hover:translate-x-0.5 transition-all duration-200" data-lucide="chevron-right"></i></a></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Massive Bold Yellow Bottom Banner -->
+<div class="bg-brand-yellow text-black pt-16 pb-10 px-4 text-center" data-purpose="giant-brand-outro">
+<div class="max-w-5xl mx-auto reveal-fade-up">
+<!-- Giant Gothic Brand Wordmark -->
+<h2 class="font-brand-blackletter text-7xl sm:text-9xl md:text-[13rem] leading-none tracking-tight select-none">
+          Solflare
+        </h2>
+<!-- Creed text -->
+<div class="mt-4 space-y-1">
+<p class="text-[11px] sm:text-xs font-black uppercase tracking-[0.2em] text-neutral-900">
+            The Stronghold of the Free
+          </p>
+<p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-neutral-800">
+            Population 3,000,000+ · Est 2021
+          </p>
+<p class="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-black pt-2">
+            Hold Strong
+          </p>
+</div>
+<!-- Copyright Note -->
+<div class="mt-12 text-[10px] font-bold text-neutral-800 uppercase tracking-widest">
+          Copyright © 2025 Solflare. All rights reserved.
+        </div>
+</div>
+</div>
+</footer>
+<!-- END: Footer -->
+<!-- Scroll Reveal Observer Script -->
+<script data-purpose="scroll-reveal-observer">
+  document.addEventListener('DOMContentLoaded', () => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const revealElements = document.querySelectorAll('.reveal-fade-up, .reveal-scale');
+
+    if (prefersReducedMotion || !('IntersectionObserver' in window)) {
+      revealElements.forEach(el => el.classList.add('is-visible'));
+      return;
+    }
+
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px 0px -50px 0px',
+      threshold: 0.12
+    };
+
+    const revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    revealElements.forEach(el => revealObserver.observe(el));
+  });
+</script>
+<!-- Lucide Script Initialization -->
+<script data-purpose="lucide-icons-init">
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  </script>
+</body></html>
