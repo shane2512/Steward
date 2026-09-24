@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
 try {
@@ -9,6 +10,22 @@ try {
 const config: NextConfig = {
   // the dev overlay sits on top of the design preview's screenshots
   devIndicators: false,
+  // Without this, Next's output file tracer (which decides what a Vercel serverless function
+  // actually ships with) only walks apps/web's own tree and misses packages that live in the
+  // pnpm workspace root's node_modules/.pnpm store — exactly the externalized packages below.
+  // Symptom without this: builds fine, then 500s at runtime with "Cannot find module
+  // '@coinbase/agentkit'" because the function was deployed without it.
+  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
+  // outputFileTracingRoot alone still didn't pick these up: @coinbase/agentkit and @base-org/account
+  // are dependencies of packages/wallet (a transpiled workspace package), not of apps/web itself, so
+  // the tracer never resolves the require() calls that packages/wallet's inlined code makes to them.
+  // Force them in explicitly, along with their own transitive deps that live in the shared pnpm store.
+  outputFileTracingIncludes: {
+    '/api/**': [
+      '../../node_modules/.pnpm/@coinbase+agentkit@*/**',
+      '../../node_modules/.pnpm/@base-org+account@*/**',
+    ],
+  },
   transpilePackages: [
     '@steward/shared',
     '@steward/db',
