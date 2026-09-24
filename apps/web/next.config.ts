@@ -10,22 +10,33 @@ try {
 const config: NextConfig = {
   // the dev overlay sits on top of the design preview's screenshots
   devIndicators: false,
-  // Without this, Next's output file tracer (which decides what a Vercel serverless function
-  // actually ships with) only walks apps/web's own tree and misses packages that live in the
-  // pnpm workspace root's node_modules/.pnpm store — exactly the externalized packages below.
-  // Symptom without this: builds fine, then 500s at runtime with "Cannot find module
-  // '@coinbase/agentkit'" because the function was deployed without it.
-  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
-  // outputFileTracingRoot alone still didn't pick these up: @coinbase/agentkit and @base-org/account
-  // are dependencies of packages/wallet (a transpiled workspace package), not of apps/web itself, so
-  // the tracer never resolves the require() calls that packages/wallet's inlined code makes to them.
-  // Force them in explicitly, along with their own transitive deps that live in the shared pnpm store.
-  outputFileTracingIncludes: {
-    '/api/**': [
-      '../../node_modules/.pnpm/@coinbase+agentkit@*/**',
-      '../../node_modules/.pnpm/@base-org+account@*/**',
-    ],
-  },
+  // Output file tracing (below) only matters for Vercel's per-route serverless packaging — a
+  // persistent-process host like Render needs none of it (node_modules is just there at runtime),
+  // and force-tracing two full SDK trees across ~30 API routes is expensive enough at build time to
+  // OOM a constrained build container. Gate it behind Vercel's own build-time env var.
+  ...(process.env.VERCEL
+    ? {
+        // Without this, Next's output file tracer only walks apps/web's own tree and misses
+        // packages that live in the pnpm workspace root's node_modules/.pnpm store — exactly the
+        // externalized packages below. Symptom without this: builds fine, then 500s at runtime
+        // with "Cannot find module '@coinbase/agentkit'" because the function shipped without it.
+        outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
+        // outputFileTracingRoot alone still didn't pick these up: @coinbase/agentkit and
+        // @base-org/account are dependencies of packages/wallet (a transpiled workspace package),
+        // not of apps/web itself, so the tracer never resolves the require() calls packages/wallet's
+        // inlined code makes to them. Force them in explicitly, transitive deps included.
+        outputFileTracingIncludes: {
+          '/api/**': [
+            '../../node_modules/.pnpm/@coinbase+agentkit@*/**',
+            '../../node_modules/.pnpm/@base-org+account@*/**',
+          ],
+        },
+      }
+    : {}),
+  // Reduces peak build memory: each parallel worker independently loads the same heavy SDKs
+  // (CDP, AgentKit, viem, wagmi) while collecting page data, and constrained build containers
+  // (e.g. Render's free/starter tier) can OOM under the default worker count.
+  experimental: { cpus: 1 },
   transpilePackages: [
     '@steward/shared',
     '@steward/db',
