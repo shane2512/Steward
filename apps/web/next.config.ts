@@ -17,7 +17,10 @@ const config: NextConfig = {
     '@steward/reasoning',
     '@steward/context',
   ],
-  serverExternalPackages: ['pg', 'pino', '@coinbase/cdp-sdk'],
+  // 'jose' (ESM-only) is @coinbase/cdp-sdk's JWT auth dep. Next's build-time page-data collection
+  // does a raw require() of externalized packages, and cdp-sdk's own require()/dynamic-import() of
+  // jose race each other (ERR_REQUIRE_ESM_RACE_CONDITION) unless jose is externalized the same way.
+  serverExternalPackages: ['pg', 'pino', '@coinbase/cdp-sdk', 'jose'],
   // The CDP SDK drags in Solana/x402 packages whose versions do not line up when webpack bundles
   // them. It only ever runs on the server, so keep it (and them) out of the bundle.
   webpack: (cfg, { isServer }) => {

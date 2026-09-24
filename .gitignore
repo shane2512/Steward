@@ -30,3 +30,5 @@ coverage/
 
 # third-party reference art (never commit)
 docs/design/Photos/
+
+.vercel/
